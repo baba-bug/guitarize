@@ -69,3 +69,13 @@ def build_tex(tmp_path: Path):
         return load_score(alphatab.build(src, tmp_path / "build", name)["json"])
 
     return _build
+
+
+def capo4_bar12_leadsheet() -> dict:
+    """真实歌曲 capo 4 第 12 小节的样子：实际 D#/G（capo 4 下指法调 B/D#：空弦 B 填充 + 4 弦 1 品低音），
+    第 2 拍的旋律 G4 弹在 2 弦（填充的弦），反拍 G#4 是空弦 E 延续过第 3 拍，第 4 拍 C#5。"""
+    mel = [(1.0, 2 / 3, 67), (5 / 3, 4 / 3, 68), (3.0, 4 / 3, 73)]
+    return {"key": "B", "mode": "major", "tempo_bpm": 167.0, "feel": "shuffle", "beats_per_bar": 4,
+            "bars": [{"bar": 1, "section": "サビ", "t_start": 0.0, "t_end": 1.44,
+                      "chords": [{"beat": 1, "dur_beats": 4, "label": "D#/G", "confidence": "high"}],
+                      "melody": [{"start_beats": s, "dur_beats": d, "midi": m, "conf": 1.0} for s, d, m in mel]}]}
