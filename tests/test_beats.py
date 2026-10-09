@@ -40,3 +40,25 @@ def test_time_beat_mapping_roundtrip_and_extrapolation():
     assert float(beat_to_time(bj, 0.0)) == pytest.approx(-0.4)
     assert float(time_to_beat(bj, beat_to_time(bj, 7.25))) == pytest.approx(7.25)
     assert time_to_beat(bj, np.array([0.1, 0.35])).tolist() == pytest.approx([1.0, 1.5])
+
+
+def test_positions_with_shift_keeps_strict_cycle():
+    from guitarize.analyze.beats import positions_with_shift
+
+    ev = np.zeros(14)
+    ev[[0, 4, 8, 10]] = 5.0
+    pos = positions_with_shift(ev, shift=1)
+    assert all((b - a) % 4 == 1 for a, b in zip(pos, pos[1:]))
+
+
+def test_positions_with_shift_zero_matches_bar_positions():
+    from guitarize.analyze.beats import positions_with_shift
+
+    ev = np.zeros(14)
+    ev[[0, 4, 8, 10]] = 5.0
+    assert positions_with_shift(ev, shift=0) == bar_positions(ev)
+
+
+def test_short_bar_reported_when_no_pickup():
+    bj = assemble_beats([0.5 * k for k in range(11)], [0, 1, 0, 1, 2, 3, 0, 1, 2, 3, 0], "straight")
+    assert bj["short_bars"] == [1]

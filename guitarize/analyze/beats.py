@@ -58,6 +58,16 @@ def bar_positions(evidence: Sequence[float], beats_per_bar: int = BEATS_PER_BAR,
     return path[::-1]
 
 
+def positions_with_shift(evidence: Sequence[float], shift: int = 0,
+                         beats_per_bar: int = BEATS_PER_BAR) -> list[int]:
+    """shift = 0 时即 bar_positions。shift ≠ 0 时改用严格 4 拍循环（禁止短小节，罚分极大），
+    再整体旋转 shift 位，避免在含短小节的序列上旋转破坏小节结构。"""
+    if shift == 0:
+        return bar_positions(evidence, beats_per_bar)
+    pos = bar_positions(evidence, beats_per_bar, short_penalty=1e9)
+    return [(p + shift) % beats_per_bar for p in pos]
+
+
 def window_max(prob: np.ndarray, times: Sequence[float], fps: float = BEAT_FPS, half: float = 0.05) -> np.ndarray:
     out = np.zeros(len(times))
     for i, t in enumerate(times):
@@ -103,7 +113,9 @@ def assemble_beats(beat_times: Sequence[float], positions: Sequence[int], feel: 
         t_start = first["t"] - (first["beat"] - 1) * ibi
         t_end = firsts[numbers[k + 1]]["t"] if k + 1 < len(numbers) else beats[-1]["t"] + ibi
         bars.append({"bar": n, "t_start": round(t_start, 4), "t_end": round(t_end, 4), "beats": counts[n]})
-    short = [b["bar"] for b in bars[1:-1] if b["beats"] < beats_per_bar]
+    # 弱起小节（pad > 0）不算短小节；末尾小节天然不完整，也不算。
+    first_idx = 1 if pad else 0
+    short = [b["bar"] for b in bars[first_idx:-1] if b["beats"] < beats_per_bar]
     return {
         "tempo_bpm": round(60.0 / ibi, 2),
         "feel": feel,
@@ -155,9 +167,7 @@ def track_beats(mix_wav: Path, stems_dir: Path, overrides: dict | None = None) -
     novelty = features.chroma_novelty(features.beat_sync_chroma(harmonic, beats))
     env, et = features.onset_envelope(features.load_mix([Path(stems_dir) / "bass.wav"]))
     bass_onset = features.sample_max(env, et, beats, 0.05)
-    positions = bar_positions(downbeat_evidence(window_max(down_prob, beats), novelty, bass_onset))
-    shift = int(overrides.get("downbeat_shift", 0))
-    if shift:
-        positions = [(p + shift) % BEATS_PER_BAR for p in positions]
+    evidence = downbeat_evidence(window_max(down_prob, beats), novelty, bass_onset)
+    positions = positions_with_shift(evidence, int(overrides.get("downbeat_shift", 0)))
     feel = overrides.get("feel") or features.detect_feel(features.load_mix([Path(stems_dir) / "drums.wav"]), beats)
     return assemble_beats(beats, positions, feel)
