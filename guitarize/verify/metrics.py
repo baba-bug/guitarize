@@ -50,8 +50,8 @@ class BarScore:
 
 
 def f1(hit: int, est: int, found: int, ref: int) -> float | None:
-    if est == 0 and ref == 0:
-        return None
+    if ref == 0:
+        return None  # 参考侧没有可核对的骨架音：召回率无定义，不能记 0 分（est == 0 and ref == 0 同理）
     p = hit / est if est else 0.0
     r = found / ref if ref else 0.0
     return 0.0 if p + r == 0 else 2 * p * r / (p + r)
@@ -156,15 +156,17 @@ def score_melody(score: Score, leadsheet: dict, bars: list[BarScore]) -> None:
     ref_all = sorted((m for b in leadsheet["bars"][:n] for m in b.get("melody", [])), key=lambda m: m["start_beats"])
     mask = skeleton_mask([m["start_beats"] for m in ref_all], [m["dur_beats"] for m in ref_all])
     skel = [m for m, keep in zip(ref_all, mask) if keep]
-    ref_bars = {_bar_of(score, m["start_beats"]) for m in ref_all}
-    est = [e for e in score.melody(voice=0) if _bar_of(score, e.start) in ref_bars and _bar_of(score, e.start) is not None]
+    ref_bars = {_bar_of(score, m["start_beats"]) for m in ref_all} - {None}
+    # 匹配用被评分小节内的全部编配旋律音，这样落在邻小节（无参考旋律）的同名音也能覆盖参考骨架音；
+    # “该小节有参考旋律”的过滤只用于精确率一侧的计数
+    est = [e for e in score.melody(voice=0) if (_bar_of(score, e.start) is not None and _bar_of(score, e.start) < n)]
 
     hits = _match([(e.start, e.midi) for e in est], [(m["start_beats"], m["midi"]) for m in ref_all])
     founds = _match([(m["start_beats"], m["midi"]) for m in skel], [(e.start, e.midi) for e in est])
 
     for i, e in enumerate(est):
         bi = _bar_of(score, e.start)
-        if bi is None or bi >= n:
+        if bi not in ref_bars:
             continue
         bs, pos = bars[bi], e.start - score.bars[bi].start + 1
         bs.mel_est += 1
@@ -293,7 +295,9 @@ def score_bars(score: Score, leadsheet: dict | None, arr: str, synth_wav: Path |
     return bars
 
 
-def summarize(bars: list[BarScore], violations: list, th: Thresholds, arr: str) -> dict:
+def summarize(bars: list[BarScore], violations: list, th: Thresholds, arr: str,
+              arrangement_bars: int | None = None, reference_bars: int | None = None,
+              has_reference: bool = True) -> dict:
     ct = sum(b.chord_total for b in bars)
     ca = sum(b.chord_agree for b in bars)
     hit, est = sum(b.mel_hit for b in bars), sum(b.mel_est for b in bars)
@@ -305,6 +309,15 @@ def summarize(bars: list[BarScore], violations: list, th: Thresholds, arr: str) 
     marks = sum(len(b.mark_issues) for b in bars)
     target = th.chord_strum if arr == "strum" else th.chord_finger
     checks = {"playability": not violations, "chord": chord is None or chord >= target}
+    # 没有任何东西被核对（无参考，或参考和弦全是低置信 / 没有旋律）时不能算通过
+    if not has_reference:
+        checks["reference"] = False
+    elif arr == "finger":
+        checks["reference"] = ct > 0 and ref > 0
+    else:
+        checks["reference"] = ct > 0
+    if arrangement_bars is not None and reference_bars is not None:
+        checks["bar_count"] = arrangement_bars == reference_bars
     if arr == "strum":
         checks["chord_marks"] = marks == 0
     if arr == "finger":
@@ -319,6 +332,10 @@ def summarize(bars: list[BarScore], violations: list, th: Thresholds, arr: str) 
         "harmonic_similarity": float(np.mean(hs)) if hs else None,
         "rhythm_correlation": float(np.mean(rc)) if rc else None,
         "low_conf_beats": sum(len(b.low_conf_beats) for b in bars),
+        "scored_beats": ct,
+        "melody_ref_notes": ref,
+        "arrangement_bars": arrangement_bars,
+        "reference_bars": reference_bars,
         "chord_mark_issues": marks,
         "chord_target": target,
         "melody_target": th.melody_f1 if arr == "finger" else None,
@@ -335,6 +352,9 @@ def problem_bars(bars: list[BarScore], violations: list, th: Thresholds, arr: st
         if b.chord_ratio is not None and b.chord_ratio < th.bar_chord_flag:
             bad.add(b.bar)
         if arr == "finger" and b.mel_f1 is not None and b.mel_f1 < th.bar_melody_flag:
+            bad.add(b.bar)
+        # 参考小节没有骨架音时 mel_f1 为 None，但编配旋律音仍要有足够比例命中参考
+        if arr == "finger" and b.mel_ref == 0 and b.mel_est > 0 and b.mel_hit / b.mel_est < th.bar_melody_flag:
             bad.add(b.bar)
         if b.harmonic_sim is not None and b.harmonic_sim < th.bar_harmonic_flag:
             bad.add(b.bar)

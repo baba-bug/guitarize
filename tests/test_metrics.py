@@ -118,3 +118,113 @@ def test_strum_vector_and_pearson(demo_scores):
     assert v[5] == pytest.approx(0.6) and v[0] == 1.0
     assert metrics.pearson(v, v) == pytest.approx(1.0)
     assert metrics.pearson(np.ones(12), v) is None
+
+
+# ---------- 评审修复轮 1 ----------
+
+def _bare_leadsheet(melody_by_bar: dict[int, list[dict]], nbars: int = 8) -> dict:
+    """只保留指定小节的旋律、清空所有和弦的参考谱，用来单独考核旋律逻辑。"""
+    ls = demo_leadsheet()
+    ls["bars"] = ls["bars"][:nbars]
+    for i, b in enumerate(ls["bars"]):
+        b["chords"] = []
+        b["melody"] = melody_by_bar.get(i, [])
+    return ls
+
+
+def _note(start: float, dur: float, midi: int = 64) -> dict:
+    return {"start_beats": start, "dur_beats": dur, "midi": midi, "conf": 1.0}
+
+
+def test_bar_count_mismatch_fails_summary(demo_scores):
+    score, _ = demo_scores["finger"]
+    ls = demo_leadsheet()
+    ls["bars"] = ls["bars"][:4]
+    bars = metrics.score_bars(score, ls, "finger")
+    assert len(bars) == 4  # 逐小节评分仍按较短的一方截断
+    s = metrics.summarize(bars, [], Thresholds(), "finger", arrangement_bars=len(score.bars), reference_bars=4)
+    assert (s["arrangement_bars"], s["reference_bars"]) == (8, 4)
+    assert s["checks"]["bar_count"] is False and s["pass"] is False
+
+
+def test_bar_count_match_passes_and_is_optional(demo_scores):
+    score, _ = demo_scores["finger"]
+    bars = metrics.score_bars(score, demo_leadsheet(), "finger")
+    s = metrics.summarize(bars, [], Thresholds(), "finger", arrangement_bars=8, reference_bars=8)
+    assert s["checks"]["bar_count"] is True and s["pass"] is True
+    s = metrics.summarize(bars, [], Thresholds(), "finger")
+    assert "bar_count" not in s["checks"]
+    assert s["arrangement_bars"] is None and s["reference_bars"] is None
+
+
+def test_no_reference_never_passes(demo_scores):
+    score, _ = demo_scores["finger"]
+    bars = metrics.score_bars(score, None, "finger")
+    s = metrics.summarize(bars, [], Thresholds(), "finger", has_reference=False)
+    assert s["checks"]["reference"] is False and s["pass"] is False
+
+
+def test_all_low_confidence_reference_never_passes(demo_scores):
+    score, _ = demo_scores["strum"]
+    ls = demo_leadsheet()
+    for b in ls["bars"]:
+        for c in b["chords"]:
+            c["confidence"] = "low"
+    bars = metrics.score_bars(score, ls, "strum")
+    s = metrics.summarize(bars, [], Thresholds(), "strum")
+    assert s["scored_beats"] == 0 and s["chord_agreement"] is None
+    assert s["checks"]["reference"] is False and s["pass"] is False
+
+
+def test_reference_check_counts_scored_material(demo_scores):
+    fscore, _ = demo_scores["finger"]
+    s = metrics.summarize(metrics.score_bars(fscore, demo_leadsheet(), "finger"), [], Thresholds(), "finger")
+    assert s["scored_beats"] == 32 and s["melody_ref_notes"] > 0 and s["checks"]["reference"] is True
+    ls = demo_leadsheet()
+    for b in ls["bars"]:
+        b["melody"] = []  # 指弹但参考里没有任何旋律：没有东西可核对
+    s = metrics.summarize(metrics.score_bars(fscore, ls, "finger"), [], Thresholds(), "finger")
+    assert s["melody_ref_notes"] == 0 and s["checks"]["reference"] is False and s["pass"] is False
+
+
+def test_f1_none_when_no_reference_notes():
+    assert metrics.f1(1, 1, 0, 0) is None  # 参考没有骨架音：召回率无定义
+    assert metrics.f1(0, 3, 0, 0) is None
+    assert metrics.f1(0, 0, 0, 2) == 0.0   # 有参考音但编配一个都没弹：仍是 0
+
+
+def test_bar_with_only_non_skeleton_reference_not_penalised(build_tex):
+    from conftest import TEX_HEAD
+
+    # 参考第 1 个音必为骨架音，所以非骨架音放在第 2 小节：4.5 拍、半拍长、前一个音刚结束 → 非骨架
+    ls = _bare_leadsheet({0: [_note(3.0, 1.0)], 1: [_note(4.5, 0.5)]}, nbars=2)
+    score = build_tex(':4 r r r 0.1 |\n:8 r 0.1 :4 r :2 r |', head=TEX_HEAD)
+    bars = metrics.score_bars(score, ls, "finger")
+    assert (bars[1].mel_ref, bars[1].mel_est, bars[1].mel_hit) == (0, 1, 1)
+    assert bars[1].mel_f1 is None
+    assert metrics.problem_bars(bars, [], Thresholds(), "finger") == []
+
+
+def test_bar_with_only_non_skeleton_reference_flags_wrong_notes(build_tex):
+    from conftest import TEX_HEAD
+
+    ls = _bare_leadsheet({0: [_note(3.0, 1.0)], 1: [_note(4.5, 0.5)]}, nbars=2)
+    score = build_tex(':4 r r r 0.1 |\n:8 r 1.1 :4 r :2 r |', head=TEX_HEAD)  # 第 2 小节弹成 F 而不是 E
+    bars = metrics.score_bars(score, ls, "finger")
+    assert (bars[1].mel_ref, bars[1].mel_est, bars[1].mel_hit) == (0, 1, 0)
+    assert bars[1].mel_f1 is None
+    assert metrics.problem_bars(bars, [], Thresholds(), "finger") == [2]
+
+
+def test_skeleton_note_matched_by_arrangement_note_in_unreferenced_next_bar(build_tex):
+    from conftest import TEX_HEAD
+
+    # 参考第 1 小节只有 3+2/3 拍处一个骨架音（全曲第一个音，必为骨架音）；第 2 小节没有参考旋律。
+    # 编配在第 2 小节 4.0 拍弹同名音，距离 1/3 拍，在容差内，应当算作覆盖。
+    ls = _bare_leadsheet({0: [_note(3 + 2 / 3, 1 / 3)]}, nbars=2)
+    score = build_tex(':1 r |\n:1 0.1 |', head=TEX_HEAD)
+    bars = metrics.score_bars(score, ls, "finger")
+    assert bars[0].mel_ref == 1 and bars[0].mel_found == bars[0].mel_ref
+    assert not any("漏掉骨架音" in x for x in bars[0].mel_issues)
+    # 无参考旋律的第 2 小节不计入精确率
+    assert (bars[1].mel_est, bars[1].mel_hit, bars[1].mel_ref) == (0, 0, 0)
