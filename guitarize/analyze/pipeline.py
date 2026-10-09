@@ -55,7 +55,7 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
         else:
             tonic, mode, r = estimate_key(cb.mean(axis=1))
         web = parse_webchart(paths.webchart_txt.read_text(encoding="utf-8")) if paths.webchart_txt.exists() else None
-        chords = reference_chords(cb, beats, web)
+        chords = reference_chords(cb, beats, web, key_pcs=scale_pcs(tonic, mode))
         chords["key"] = {"tonic": tonic, "mode": mode, "r": r}
         _write(paths.chords_json, chords)
     if "melody" in steps or "leadsheet" in steps:

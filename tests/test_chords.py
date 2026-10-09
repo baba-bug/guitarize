@@ -1,8 +1,9 @@
 import numpy as np
 
 from guitarize import theory
-from guitarize.analyze.chords import (LABELS, align_webchart, reference_chords, same_chord,
-                                      template_track, vote_beat)
+from guitarize.analyze.chords import (LABELS, align_webchart, power_quality_table, reference_chords,
+                                      resolve_power, same_chord, template_track, vote_beat)
+from guitarize.analyze.key import scale_pcs
 from guitarize.analyze.webchart import WebBar
 
 
@@ -75,3 +76,17 @@ def test_all_n_web_bar_accepted_when_consecutive():
     assert by_bar[2]["label"] == "N" and by_bar[2]["confidence"] == "medium"
     assert by_bar[2]["votes"]["web"] == "N"
     assert by_bar[1]["confidence"] == "high" and by_bar[3]["confidence"] == "high"
+
+
+def test_power_quality_table_and_resolve():
+    web = [WebBar([(l, 1.0)]) for l in ["B", "E", "G#m", "C#", "C#m7", "C#7", "B5"]]
+    assert power_quality_table(web) == {11: "", 4: "", 8: "m", 1: ""}
+    major = scale_pcs("B", "major")
+    assert resolve_power("G#5", {}, major, "G#") == "G#m"
+    assert resolve_power("E5", {4: ""}, None, "Em") == "E"
+    assert resolve_power("A5", {}, major, "Am") == "Am"
+
+
+def test_vote_quality_disagreement_is_medium():
+    assert vote_beat("Bm", 0.9, "B5", {11: ""}, None)[:2] == ("B", "medium")
+    assert vote_beat("G#", 0.9, "G#m")[:2] == ("G#m", "medium")

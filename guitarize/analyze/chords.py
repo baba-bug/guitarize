@@ -13,7 +13,7 @@ MIN_ALIGN_SIM = 0.5
 CONFIDENT_POSTERIOR = 0.7
 
 
-def template_track(cb: np.ndarray, stay: float = 0.9, temperature: float = 8.0) -> tuple[list[str], np.ndarray]:
+def template_track(cb: np.ndarray, stay: float = 0.5, temperature: float = 12.0) -> tuple[list[str], np.ndarray]:
     """cb: (12, n) 单位化逐拍色度 → 逐拍标签（Viterbi 路径）及该标签的边缘后验概率（前向-后向）。"""
     log_e = temperature * (_TEMPLATES @ cb)
     log_e = log_e - logsumexp(log_e, axis=0, keepdims=True)
@@ -136,7 +136,42 @@ def same_chord(a: str, b: str) -> bool:
     return theory.majmin(a) == theory.majmin(b)
 
 
-def vote_beat(audio: str, posterior: float, web: str | None) -> tuple[str, str, dict]:
+def power_quality_table(web: list[WebBar]) -> dict[int, str]:
+    """根音 pc → "" (大三) / "m" (小三)：取网上谱里同根非强力和弦的多数性质；平票不收录。"""
+    counts: dict[tuple[int, bool], int] = {}
+    for bar in web:
+        for label, _ in bar.chords:
+            if label == "N" or POWER_RE.match(label):
+                continue
+            root = _root(label)
+            if root is None:
+                continue
+            is_min = theory.majmin(label).endswith(":min")
+            counts[(root, is_min)] = counts.get((root, is_min), 0) + 1
+    table = {}
+    for (root, is_min), c in counts.items():
+        other = counts.get((root, not is_min), 0)
+        if c > other:
+            table[root] = "m" if is_min else ""
+    return table
+
+
+def resolve_power(label: str, table: dict[int, str], key_pcs: set[int] | None, audio: str) -> str:
+    """强力和弦 → 带大小三的标签：网上谱同根多数性质 → 调内三和弦性质 → 音频模板的性质。"""
+    root = _root(label)
+    if root in table:
+        quality = table[root]
+    elif key_pcs is not None and root in key_pcs and (root + 4) % 12 in key_pcs and (root + 7) % 12 in key_pcs:
+        quality = ""
+    elif key_pcs is not None and root in key_pcs and (root + 3) % 12 in key_pcs and (root + 7) % 12 in key_pcs:
+        quality = "m"
+    else:
+        quality = "m" if audio.endswith("m") else ""
+    return theory.pc_name(root) + quality
+
+
+def vote_beat(audio: str, posterior: float, web: str | None, power_table: dict[int, str] | None = None,
+              key_pcs: set[int] | None = None) -> tuple[str, str, dict]:
     """返回 (标签, 置信度, 各方投票)。web=None 表示该拍没有可用的网上和弦（N=1）。"""
     votes = {"template": audio}
     if web is None:
@@ -144,14 +179,15 @@ def vote_beat(audio: str, posterior: float, web: str | None) -> tuple[str, str, 
     votes["web"] = web
     if web == "N":
         return "N", "medium", votes
-    if same_chord(audio, web):
-        if POWER_RE.match(web):
-            return theory.pc_name(_root(web)) + ("m" if audio.endswith("m") else ""), "high", votes
-        return web, "high", votes
-    return web, "low", votes
+    w = resolve_power(web, power_table or {}, key_pcs, audio) if POWER_RE.match(web) else web
+    if _root(w) == _root(audio):
+        # 音频的大/小三判断对失真强力和弦不可靠：采用网上谱性质，但该拍降为 medium
+        return w, ("high" if theory.majmin(w) == theory.majmin(audio) else "medium"), votes
+    return w, "low", votes
 
 
-def reference_chords(cb: np.ndarray, beats_json: dict, web: list[WebBar] | None = None) -> dict:
+def reference_chords(cb: np.ndarray, beats_json: dict, web: list[WebBar] | None = None,
+                    key_pcs: set[int] | None = None) -> dict:
     """cb: 与 beats_json["beats"] 一一对应的逐拍色度 (12, n)。"""
     labels, post = template_track(cb)
     beats = beats_json["beats"]
@@ -159,13 +195,17 @@ def reference_chords(cb: np.ndarray, beats_json: dict, web: list[WebBar] | None 
     numbers = sorted({b["bar"] for b in beats})
     web_at: list[str | None] = [None] * len(beats)
     alignment = None
+    power_table: dict[int, str] = {}
     if web:
+        power_table = power_quality_table(web)
         vecs = []
         for n in numbers:
             idx = [i for i, b in enumerate(beats) if b["bar"] == n]
             v = cb[:, idx].mean(axis=1)
             vecs.append(v / (np.linalg.norm(v) + 1e-9))
         alignment = align_webchart(np.stack(vecs), web)
+        t = alignment["transpose"]  # 网上谱整体移调后，强力和弦性质表也要同步移调
+        power_table = {(r + t) % 12: q for r, q in power_table.items()}
         for k, n in enumerate(numbers):
             wb = web[alignment["index"][k]]
             all_n = all(c == "N" for c, _ in wb.chords)
@@ -177,7 +217,7 @@ def reference_chords(cb: np.ndarray, beats_json: dict, web: list[WebBar] | None 
                     web_at[i] = web_label_at(wb, (b["beat"] - 1) / bpb, alignment["transpose"])
     segments: list[dict] = []
     for i, b in enumerate(beats):
-        label, conf, votes = vote_beat(labels[i], float(post[i]), web_at[i])
+        label, conf, votes = vote_beat(labels[i], float(post[i]), web_at[i], power_table, key_pcs)
         last = segments[-1] if segments else None
         if (last and last["bar"] == b["bar"] and last["label"] == label and last["confidence"] == conf
                 and last["votes"] == votes and last["beat"] + last["dur_beats"] == b["beat"]):
