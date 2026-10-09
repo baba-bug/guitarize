@@ -86,14 +86,24 @@ def voice_bar_tokens(items: Sequence[Item], feel: str) -> list[str]:
     return tokens
 
 
+def _one_line(text: str) -> str:
+    """换行 / 制表符换成空格：名字只占一行（小节注释和字符串都不会被截断）。"""
+    return " ".join(str(text).replace("\t", " ").splitlines())
+
+
+def quote(text: str) -> str:
+    """alphaTex 字符串字面量：反斜杠写成两个、双引号前加反斜杠（alphaTab 1.8.4 已验证这两种转义）。"""
+    return '"' + _one_line(text).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def header(title: str, tempo: float, capo: int, feel: str, staff: str,
            chords: dict[str, Sequence[int | None]] | None = None) -> str:
-    lines = [f'\\title "{title.replace(chr(34), chr(39))}"', f"\\tempo {int(round(tempo))}", '\\track "Guitar"',
+    lines = [f"\\title {quote(title)}", f"\\tempo {int(round(tempo))}", '\\track "Guitar"',
              "\\instrument 25", f"\\staff {{{staff}}}", f"\\tuning {STANDARD_TUNING}"]
     if capo:
         lines.append(f"\\capo {capo}")
     for name, frets in (chords or {}).items():
-        lines.append(f'\\chord "{name}" ' + " ".join("x" if f is None else str(f) for f in frets))
+        lines.append(f"\\chord {quote(name)} " + " ".join("x" if f is None else str(f) for f in frets))
     lines.append("\\ts 4 4")
     if feel == "shuffle":
         lines.append("\\tf triplet-8th")
@@ -101,8 +111,8 @@ def header(title: str, tempo: float, capo: int, feel: str, staff: str,
 
 
 def bar_line(tokens: Sequence[str], number: int, section: str | None = None) -> str:
-    label = f"// bar {number}" + (f" [{section}]" if section else "")
-    prefix = f'\\section "{section}" ' if section else ""
+    label = f"// bar {number}" + (f" [{_one_line(section)}]" if section else "")
+    prefix = f"\\section {quote(section)} " if section else ""
     return f"{label}\n{prefix}{' '.join(tokens)} |"
 
 

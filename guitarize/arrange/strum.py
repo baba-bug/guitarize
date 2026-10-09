@@ -52,7 +52,7 @@ def bar_tokens(chords: list[str], pattern: str, shapes: dict[str, Voicing],
                 n += 1
             label = slot_chord[k]
             v = shapes[label]
-            effects = ([f'ch "{v.name}"'] if label != last else []) + ["su" if slots[k] == "U" else "sd"]
+            effects = ([f"ch {atex.quote(v.name)}"] if label != last else []) + ["su" if slots[k] == "U" else "sd"]
             items.append(atex.Item(k * 0.5, n * 0.5, _notes(v, slots[k]), effects, dead=slots[k] == "x"))
             last = label
         k += n
