@@ -1,4 +1,4 @@
-"""谱面模型：把 Node 端导出的 JSON 变成带演奏时间（已应用 swing）的事件序列。"""
+"""谱面模型：把 Node 端导出的 JSON 变成带演奏时间（已应用 alphaTab 的成对摇摆）的事件序列。"""
 from __future__ import annotations
 
 import json
@@ -22,7 +22,7 @@ class Event:
     """某声部里的一拍（alphaTab 的 Beat）。"""
     bar: int              # 0-based
     voice: int
-    start: float          # 演奏时间（拍，已应用 swing）
+    start: float          # 演奏时间（拍，已应用摇摆）
     dur: float
     written_start: float  # 记谱位置（拍）
     written_dur: float
@@ -60,15 +60,31 @@ class Sounding:
     voice: int
 
 
-def swing(beats: float, feel: str) -> float:
-    """三连音感觉：每拍前半（直八分）拉长到 2/3，后半压缩到 1/3。"""
+def performed_times(beats: list[tuple[float, float, int]], feel: str) -> list[tuple[float, float]]:
+    """一个声部、一个小节内各拍的演奏时间：(小节内演奏起点, 演奏时值)，单位拍。
+
+    对应 alphaTab MidiFileGenerator 的三连音感觉：只有「成对」的八分音符才摇摆——
+    前一个是恰好一个八分、起点落在四分音符边界、且紧跟着同声部的下一拍也恰好是一个八分
+    （休止符也算一拍）。这一对播成 2/3 + 1/3 拍；其余拍（切分、连音、三连音等）按记谱播放。
+    输入 (记谱起点, 记谱时值, 连音组数)，起点为小节内偏移（拍）。
+    """
+    out = [(s, d) for s, d, _ in beats]
     if feel != "triplet8th":
-        return beats
-    whole = int(beats // 1)
-    frac = beats - whole
-    if frac <= 0.5:
-        return whole + frac * 4 / 3
-    return whole + 2 / 3 + (frac - 0.5) * 2 / 3
+        return out
+    tol = 1e-6
+
+    def is_eighth(i: int) -> bool:
+        return beats[i][2] == 1 and abs(beats[i][1] - 0.5) < tol
+
+    for i in range(len(beats) - 1):
+        s = beats[i][0]
+        if not (is_eighth(i) and is_eighth(i + 1)):
+            continue
+        if abs(s - round(s)) > tol or abs(beats[i + 1][0] - (s + 0.5)) > tol:
+            continue
+        out[i] = (s, 2 / 3)
+        out[i + 1] = (s + 2 / 3, 1 / 3)
+    return out
 
 
 @dataclass
@@ -147,14 +163,9 @@ def load_score(path: Path) -> Score:
         feel = b["triplet_feel"]
         bars.append(Bar(b["index"], bar_start, b["duration"] / TPQ, b["section"], feel))
         for vi, voice in enumerate(b["voices"]):
-            for bt in voice:
-                ws = bar_start + bt["start"] / TPQ
-                wd = bt["duration"] / TPQ
-                if bt["tuplet"] == 1:
-                    ps, pe = swing(ws, feel), swing(ws + wd, feel)
-                else:
-                    ps, pe = ws, ws + wd
+            raw = [(bt["start"] / TPQ, bt["duration"] / TPQ, bt["tuplet"]) for bt in voice]
+            for bt, (rs, rd, _), (ps, pd) in zip(voice, raw, performed_times(raw, feel)):
                 notes = tuple(Note(n["string"], n["fret"], n["midi"], n["tie"], n["dead"]) for n in bt["notes"])
-                events.append(Event(b["index"], vi, ps, pe - ps, ws, wd, notes,
+                events.append(Event(b["index"], vi, bar_start + ps, pd, bar_start + rs, rd, notes,
                                     bt["chord"], bt["pick"], bt["brush"], bt["rest"]))
     return Score(data["title"], float(data["tempo"]), int(data["capo"]), list(data["tuning"]), bars, events)
