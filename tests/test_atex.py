@@ -70,3 +70,26 @@ def test_names_with_quotes_and_backslashes_build(tmp_path):
     score = load_score(alphatab.build(src, tmp_path / "b", "q")["json"])
     assert score.title == 'C:\\songs "x"'
     assert score.bars[0].section == 'Outro "end"\\'
+
+
+def test_tied_item_continues_only_its_notes():
+    # 和弦里只有低音接着响：先写整个和弦，再用连音线只延续 4 弦
+    items = [atex.Item(0, 1, [(2, 0), (4, 1)]), atex.Item(1, 1, [(4, 1)], tie=True), atex.Item(2, 2, [])]
+    assert atex.voice_bar_tokens(items, "straight") == ["(0.2 1.4).4", "-.4.4", "r.2"]
+
+
+def test_tied_item_in_shuffle_is_split_but_not_an_onset(tmp_path):
+    # 反拍上的连音线延续没有起音：不触发八分对切分；被别的反拍起音切开时，各片段仍是连音线
+    items = [atex.Item(0, 1.5, [(2, 0), (4, 1)]), atex.Item(1.5, 2.5, [(4, 1)], tie=True)]
+    assert atex.voice_bar_tokens(items, "shuffle") == ["(0.2 1.4).4 {d}", "-.4.2", "-.4.8"]
+    items = [atex.Item(0, 1.5, [(2, 0), (4, 1)]), atex.Item(1.5, 1.0, [(4, 1)], tie=True), atex.Item(2.5, 1.5, [(1, 3)])]
+    tokens = atex.voice_bar_tokens(items, "shuffle")
+    assert tokens == ["(0.2 1.4).4 {d}", "-.4.8", "-.4.8", "3.1.8", "-.1.4"]
+    head = atex.header("T", 120, 0, "shuffle", "tabs")
+    src = tmp_path / "t.atex"
+    src.write_text(atex.document(head, [[atex.bar_line(tokens, 1)]]), encoding="utf-8")
+    score = load_score(alphatab.build(src, tmp_path / "b", "t")["json"])
+    from guitarize.config import load_profile
+    from guitarize.verify.playability import check_playability
+    assert check_playability(score, load_profile("intermediate"), "finger") == []
+    assert [round(a.start, 3) for a in score.attacks()] == [0.0, 2.667]

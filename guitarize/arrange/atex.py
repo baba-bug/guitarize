@@ -48,41 +48,43 @@ def beat_tokens(notes: Sequence[tuple[int, int]], length: float, effects: Iterab
 
 @dataclass
 class Item:
-    """一个声部一小节里的一个音 / 和弦 / 休止（小节内记谱位置，拍）。"""
+    """一个声部一小节里的一个音 / 和弦 / 休止（小节内记谱位置，拍）。
+    tie=True：没有新的起音，notes 是前面某个和弦里接着响的那几个音（连音线延续，可以只是和弦的一部分）。"""
     start: float
     length: float
     notes: list
     effects: Sequence[str] = ()
     dead: bool = False
+    tie: bool = False
 
 
 def split_for_swing(items: Sequence[Item], feel: str) -> list[tuple[Item, bool]]:
     """三连音感觉下 alphaTab 只把"拍点八分 + 紧接的八分"按 shuffle 演奏。
-    对每个发声的反拍起音 p，在 p−0.5、p、p+0.5 处切分覆盖这些位置的音符/休止，使其成为八分对的第二个八分。
-    返回 (片段, 是否为前一片段的延续)；直拍原样返回。"""
+    对每个发声的反拍起音 p（连音线延续不是起音），在 p−0.5、p、p+0.5 处切分覆盖这些位置的音符/休止，
+    使其成为八分对的第二个八分。返回 (片段, 是否为前一片段的延续)；直拍原样返回。"""
     if feel != "shuffle":
         return [(it, False) for it in items]
     cuts: set[float] = set()
     for it in items:
-        if it.notes and abs(it.start % 1 - 0.5) < 1e-6:
+        if it.notes and not it.tie and abs(it.start % 1 - 0.5) < 1e-6:
             cuts |= {it.start - 0.5, it.start, it.start + 0.5}
     out: list[tuple[Item, bool]] = []
     for it in items:
         inner = sorted(c for c in cuts if it.start + 1e-6 < c < it.start + it.length - 1e-6)
         edges = [it.start, *inner, it.start + it.length]
         for k, (a, b) in enumerate(zip(edges, edges[1:])):
-            out.append((Item(a, b - a, it.notes, list(it.effects) if k == 0 else [], it.dead), k > 0))
+            out.append((Item(a, b - a, it.notes, list(it.effects) if k == 0 else [], it.dead, it.tie), k > 0))
     return out
 
 
 def voice_bar_tokens(items: Sequence[Item], feel: str) -> list[str]:
-    """一个声部一小节（items 须首尾相接铺满小节）→ 拍子记号；延续片段写成连音线，闷音 / 休止的延续写成休止。"""
+    """一个声部一小节（items 须首尾相接铺满小节）→ 拍子记号；延续片段与 tie 项写成连音线，闷音 / 休止的延续写成休止。"""
     tokens: list[str] = []
     for piece, cont in split_for_swing(items, feel):
         if cont and (piece.dead or not piece.notes):
             tokens += beat_tokens([], piece.length)
         else:
-            tokens += beat_tokens(piece.notes, piece.length, piece.effects, dead=piece.dead, tie=cont)
+            tokens += beat_tokens(piece.notes, piece.length, piece.effects, dead=piece.dead, tie=cont or piece.tie)
     return tokens
 
 
