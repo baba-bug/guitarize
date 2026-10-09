@@ -52,8 +52,10 @@ class BarScore:
 def f1(hit: int, est: int, found: int, ref: int) -> float | None:
     if ref == 0:
         return None  # 参考侧没有可核对的骨架音：召回率无定义，不能记 0 分（est == 0 and ref == 0 同理）
-    p = hit / est if est else 0.0
-    r = found / ref if ref else 0.0
+    r = found / ref
+    if est == 0:
+        return r  # 本小节没有编配旋律音：精确率无定义，取召回率（骨架音被邻小节的音覆盖也不算问题）
+    p = hit / est
     return 0.0 if p + r == 0 else 2 * p * r / (p + r)
 
 

@@ -190,7 +190,9 @@ def test_reference_check_counts_scored_material(demo_scores):
 def test_f1_none_when_no_reference_notes():
     assert metrics.f1(1, 1, 0, 0) is None  # 参考没有骨架音：召回率无定义
     assert metrics.f1(0, 3, 0, 0) is None
-    assert metrics.f1(0, 0, 0, 2) == 0.0   # 有参考音但编配一个都没弹：仍是 0
+    assert metrics.f1(0, 0, 0, 2) == 0.0   # 有参考音但编配一个都没弹：召回 0，仍是 0
+    assert metrics.f1(0, 0, 2, 2) == 1.0   # 编配这一小节没有旋律音，但参考骨架音都被邻小节的音覆盖：取召回率
+    assert metrics.f1(0, 0, 1, 4) == pytest.approx(0.25)
 
 
 def test_bar_with_only_non_skeleton_reference_not_penalised(build_tex):
@@ -228,3 +230,17 @@ def test_skeleton_note_matched_by_arrangement_note_in_unreferenced_next_bar(buil
     assert not any("漏掉骨架音" in x for x in bars[0].mel_issues)
     # 无参考旋律的第 2 小节不计入精确率
     assert (bars[1].mel_est, bars[1].mel_hit, bars[1].mel_ref) == (0, 0, 0)
+    # 本小节没有编配旋律音（精确率无定义），骨架音都被覆盖 → F1 取召回率 1.0，不该被标成问题小节
+    assert bars[0].mel_est == 0 and bars[0].mel_f1 == 1.0
+    assert metrics.problem_bars(bars, [], Thresholds(), "finger") == []
+
+
+def test_reference_skeleton_but_no_arrangement_melody_is_a_problem(build_tex):
+    from conftest import TEX_HEAD
+
+    ls = _bare_leadsheet({0: [_note(0.0, 1.0), _note(2.0, 1.0)]}, nbars=1)
+    score = build_tex(':1 r |', head=TEX_HEAD)  # 编配这一小节整个休止
+    bars = metrics.score_bars(score, ls, "finger")
+    assert (bars[0].mel_est, bars[0].mel_ref, bars[0].mel_found) == (0, 2, 0)
+    assert bars[0].mel_f1 == 0.0
+    assert metrics.problem_bars(bars, [], Thresholds(), "finger") == [1]
