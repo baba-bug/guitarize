@@ -1,6 +1,8 @@
-"""节拍与小节线：beat_this 拍点 → 补漏拍 / 去多余拍 → HMM 定强拍（4/4，允许个别短小节）→ beats.json。"""
+"""节拍与小节线：beat_this 拍点 → 补漏拍 / 去多余拍 → 按 overrides.tempo_bpm 纠正倍速 / 半速
+→ HMM 定强拍（4/4，允许个别短小节）→ beats.json（含速度稳定性）。"""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Sequence
 
@@ -11,6 +13,10 @@ from . import features
 BEAT_FPS = 50.0          # beat_this 的输出帧率
 SHORT_BAR_PENALTY = 3.0  # 2 或 3 拍短小节的罚分
 BEATS_PER_BAR = 4
+OCTAVE_TOL = 0.08        # 检测速度 / 指定速度 在 2 或 1/2 的 ±8% 内 → 判为倍速 / 半速
+TEMPO_WARN = 0.04        # 与指定速度相差超过 4% → 警告（不改拍点）
+STABILITY_WINDOW = 16    # 局部速度的滑动窗口（拍距个数）
+STABILITY_WARN = 0.06    # 局部速度极差 / 速度 > 6% → 警告
 
 
 def clean_beats(beats: Sequence[float]) -> np.ndarray:
@@ -68,6 +74,66 @@ def positions_with_shift(evidence: Sequence[float], shift: int = 0,
     return [(p + shift) % beats_per_bar for p in pos]
 
 
+def _est_bpm(t: np.ndarray) -> float:
+    return 60.0 / float(np.median(np.diff(t)))
+
+
+def _keep_phase(activation: Sequence[float] | None) -> int:
+    """隔拍删拍时保留哪一相位：拍 / 强拍激活总和更大的一组；平分时取第一个最强拍所在相位；没有激活时取第一拍。"""
+    if activation is None:
+        return 0
+    a = np.asarray(activation, dtype=float)
+    s0, s1 = float(a[0::2].sum()), float(a[1::2].sum())
+    if abs(s0 - s1) > 1e-9:
+        return int(s1 > s0)
+    return int(np.argmax(a)) % 2
+
+
+def apply_tempo_override(beats: Sequence[float], override_bpm: float | None,
+                         activation: Sequence[float] | None = None) -> tuple[np.ndarray, list[str]]:
+    """按 overrides.tempo_bpm 纠正拍点。ratio = 检测速度 / 指定速度：
+    ≈ 2（±8%）→ 隔拍删去（保留 _keep_phase 选中的相位）；≈ 1/2 → 相邻两拍之间插入中点；
+    其它情况拍点不动，相差 > 4% 时给出警告。返回 (拍点, 提示信息)。"""
+    t = np.asarray(beats, dtype=float)
+    if override_bpm is None or len(t) < 3:
+        return t, []
+    target = float(override_bpm)
+    est = _est_bpm(t)
+    ratio = est / target
+    notes: list[str] = []
+    if abs(ratio / 2 - 1) <= OCTAVE_TOL:
+        phase = _keep_phase(activation)
+        t = t[phase::2]
+        notes.append(f"detected {est:.1f} BPM ≈ 2 × overrides.tempo_bpm {target:g}: kept every other beat "
+                     f"(phase {phase})")
+    elif abs(ratio / 0.5 - 1) <= OCTAVE_TOL:
+        t = np.sort(np.r_[t, (t[:-1] + t[1:]) / 2])
+        notes.append(f"detected {est:.1f} BPM ≈ 1/2 × overrides.tempo_bpm {target:g}: inserted midpoints")
+    off = abs(_est_bpm(t) - target) / target
+    if off > TEMPO_WARN:
+        kept = "corrected beats kept" if notes else "beats kept as detected"
+        notes.append(f"warning: beat tempo {_est_bpm(t):.1f} BPM differs from overrides.tempo_bpm {target:g} "
+                     f"by {100 * off:.1f}%; {kept}")
+    return t, notes
+
+
+def tempo_stability(beats: Sequence[float], window: int = STABILITY_WINDOW) -> dict:
+    """滑动窗口（window 个拍距）内的平均速度 → 局部速度的最小 / 最大值与变异系数。拍不够一个窗口时用全长。"""
+    t = np.asarray(beats, dtype=float)
+    w = min(window, len(t) - 1)
+    local = 60.0 * w / (t[w:] - t[:-w])
+    return {"local_min_bpm": round(float(local.min()), 2), "local_max_bpm": round(float(local.max()), 2),
+            "cv": round(float(local.std() / local.mean()), 4)}
+
+
+def stability_warning(stability: dict, tempo_bpm: float) -> str | None:
+    spread = (stability["local_max_bpm"] - stability["local_min_bpm"]) / tempo_bpm
+    if spread <= STABILITY_WARN:
+        return None
+    return (f"warning: tempo unstable: local tempo {stability['local_min_bpm']:g}–{stability['local_max_bpm']:g} "
+            f"BPM ({100 * spread:.1f}% of {tempo_bpm:g}); a fixed-tempo score will drift from the recording")
+
+
 def window_max(prob: np.ndarray, times: Sequence[float], fps: float = BEAT_FPS, half: float = 0.05) -> np.ndarray:
     out = np.zeros(len(times))
     for i, t in enumerate(times):
@@ -118,6 +184,7 @@ def assemble_beats(beat_times: Sequence[float], positions: Sequence[int], feel: 
     short = [b["bar"] for b in bars[first_idx:-1] if b["beats"] < beats_per_bar]
     return {
         "tempo_bpm": round(60.0 / ibi, 2),
+        "tempo_stability": tempo_stability(t),
         "feel": feel,
         "time_signature": [beats_per_bar, 4],
         "pickup_beats": pickup,
@@ -160,9 +227,13 @@ def track_beats(mix_wav: Path, stems_dir: Path, overrides: dict | None = None) -
     overrides = overrides or {}
     raw, _ = File2Beats(checkpoint_path="final0", device="cpu", dbn=False)(str(mix_wav))
     signal, sr = load_audio(str(mix_wav))
-    _, down_logits = Audio2Frames(checkpoint_path="final0", device="cpu")(signal, sr)
+    beat_logits, down_logits = Audio2Frames(checkpoint_path="final0", device="cpu")(signal, sr)
+    beat_prob = torch.sigmoid(torch.as_tensor(beat_logits)).numpy()
     down_prob = torch.sigmoid(torch.as_tensor(down_logits)).numpy()
     beats = clean_beats(raw)
+    # 先纠正倍速 / 半速，之后的强拍证据、小节线、律动都在纠正后的拍上计算
+    beats, notes = apply_tempo_override(beats, overrides.get("tempo_bpm"),
+                                        window_max(beat_prob, beats) + window_max(down_prob, beats))
     harmonic = features.load_mix([Path(stems_dir) / "harmonic.wav"])
     novelty = features.chroma_novelty(features.beat_sync_chroma(harmonic, beats))
     env, et = features.onset_envelope(features.load_mix([Path(stems_dir) / "bass.wav"]))
@@ -170,4 +241,8 @@ def track_beats(mix_wav: Path, stems_dir: Path, overrides: dict | None = None) -
     evidence = downbeat_evidence(window_max(down_prob, beats), novelty, bass_onset)
     positions = positions_with_shift(evidence, int(overrides.get("downbeat_shift", 0)))
     feel = overrides.get("feel") or features.detect_feel(features.load_mix([Path(stems_dir) / "drums.wav"]), beats)
-    return assemble_beats(beats, positions, feel)
+    out = assemble_beats(beats, positions, feel)
+    notes.append(stability_warning(out["tempo_stability"], out["tempo_bpm"]))
+    for note in filter(None, notes):
+        print(f"[beats] {note}", file=sys.stderr)
+    return out

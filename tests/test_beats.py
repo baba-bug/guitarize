@@ -62,3 +62,69 @@ def test_positions_with_shift_zero_matches_bar_positions():
 def test_short_bar_reported_when_no_pickup():
     bj = assemble_beats([0.5 * k for k in range(11)], [0, 1, 0, 1, 2, 3, 0, 1, 2, 3, 0], "straight")
     assert bj["short_bars"] == [1]
+
+
+def _bars_after_override(times, activation, override):
+    """模拟 track_beats 的顺序：先按 override 纠正拍点，再在纠正后的拍上定小节线。"""
+    from guitarize.analyze.beats import apply_tempo_override
+
+    fixed, notes = apply_tempo_override(times, override, activation)
+    ev = np.zeros(len(fixed))
+    ev[::4] = 1.0  # 纠正后每 4 拍一个强拍
+    return fixed, notes, assemble_beats(fixed, bar_positions(ev), "straight")
+
+
+def test_tempo_override_halves_double_time_beats():
+    true = 0.1 + 0.5 * np.arange(32)               # 120 BPM，8 小节
+    detected = np.sort(np.r_[true, true - 0.25])   # 模型报成 240 BPM，真拍在奇数位
+    activation = np.where(np.isin(detected, true), 1.0, 0.2)
+    fixed, notes, bj = _bars_after_override(detected, activation, 120)
+    assert fixed.tolist() == pytest.approx(true.tolist())
+    assert bj["tempo_bpm"] == 120.0 and len(bj["bars"]) == 8
+    assert notes and "2" in notes[0]
+
+
+def test_tempo_override_doubles_half_time_beats():
+    true = 0.5 * np.arange(32)                     # 120 BPM，8 小节
+    detected = true[::2]                           # 模型报成 60 BPM
+    fixed, notes, bj = _bars_after_override(detected, None, 120)
+    assert fixed.tolist() == pytest.approx(true[:-1].tolist())
+    assert bj["tempo_bpm"] == 120.0 and len(bj["bars"]) == 8
+    assert notes
+
+
+def test_tempo_override_small_difference_keeps_beats():
+    from guitarize.analyze.beats import apply_tempo_override
+
+    t = 60 / 123.6 * np.arange(40)                 # 比 override 快 3%
+    fixed, notes = apply_tempo_override(t, 120, None)
+    assert np.array_equal(fixed, t) and notes == []
+    t5 = 60 / 126 * np.arange(40)                  # 快 5%：保留拍点但警告
+    fixed5, notes5 = apply_tempo_override(t5, 120, None)
+    assert np.array_equal(fixed5, t5) and len(notes5) == 1 and "5.0%" in notes5[0]
+    assert apply_tempo_override(t, None, None)[0] is t
+
+
+def test_tempo_override_phase_tie_uses_first_strong_beat():
+    from guitarize.analyze.beats import apply_tempo_override
+
+    t = 0.25 * np.arange(16)
+    act = np.zeros(16)
+    act[[1, 2]] = 1.0                              # 两个相位总和相同：取第一个最强拍（下标 1）所在相位
+    fixed, _ = apply_tempo_override(t, 120, act)
+    assert fixed.tolist() == pytest.approx(t[1::2].tolist())
+
+
+def test_tempo_stability_recorded_and_warned():
+    from guitarize.analyze.beats import stability_warning
+
+    steady = assemble_beats([0.5 * k for k in range(40)], [k % 4 for k in range(40)], "straight")
+    stab = steady["tempo_stability"]
+    assert set(stab) == {"local_min_bpm", "local_max_bpm", "cv"}
+    assert stab["local_min_bpm"] == stab["local_max_bpm"] == 120.0 and stab["cv"] == 0.0
+    assert stability_warning(stab, steady["tempo_bpm"]) is None
+    ibi = np.linspace(0.5, 0.42, 63)               # 渐快 120 → 143 BPM
+    drift = assemble_beats(np.r_[0, np.cumsum(ibi)], [k % 4 for k in range(64)], "straight")
+    s = drift["tempo_stability"]
+    assert s["local_max_bpm"] - s["local_min_bpm"] > 10
+    assert "unstable" in stability_warning(s, drift["tempo_bpm"])
