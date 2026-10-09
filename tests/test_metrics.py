@@ -276,3 +276,32 @@ def test_beat_label():
     assert beat_label(2 + 1 / 3) == "3+⅓"
     assert beat_label(0.25) == "1e" and beat_label(3.75) == "4a"
     assert beat_label(0.4) == "1.40"
+
+
+def _bar1_chords(*segs):
+    ls = demo_leadsheet()
+    ls["bars"][0]["chords"] = [{"beat": b, "dur_beats": d, "label": lab, "confidence": conf, "votes": {conf: lab}}
+                               for b, d, lab, conf in segs]
+    return ls
+
+
+def test_manual_confidence_beats_are_scored_like_high(demo_scores):
+    score, _ = demo_scores["strum"]
+    # 第 1 小节原谱是 C：人工标 C 的 4 拍全部计分且一致；标 Am 的 4 拍计分且不一致（不会被当低置信排除）
+    bars = metrics.score_bars(score, _bar1_chords((1, 4, "C", "manual")), "strum")
+    assert (bars[0].chord_agree, bars[0].chord_total, bars[0].low_conf_beats) == (4, 4, [])
+    bars = metrics.score_bars(score, _bar1_chords((1, 4, "Am", "manual")), "strum")
+    assert (bars[0].chord_agree, bars[0].chord_total, bars[0].low_conf_beats) == (0, 4, [])
+    assert "参考 Am" in bars[0].chord_issues[0]
+    # 与 high 的计分完全一样
+    high = metrics.score_bars(score, _bar1_chords((1, 4, "Am", "high")), "strum")
+    assert (high[0].chord_agree, high[0].chord_total, high[0].chord_issues) == \
+           (bars[0].chord_agree, bars[0].chord_total, bars[0].chord_issues)
+
+
+def test_manual_n_beats_are_skipped(demo_scores):
+    score, _ = demo_scores["strum"]
+    bars = metrics.score_bars(score, _bar1_chords((1, 2, "C", "manual"), (3, 2, "N", "manual")), "strum")
+    assert (bars[0].chord_agree, bars[0].chord_total, bars[0].low_conf_beats) == (2, 2, [])
+    bars = metrics.score_bars(score, _bar1_chords((1, 4, "N", "manual")), "strum")
+    assert (bars[0].chord_agree, bars[0].chord_total, bars[0].low_conf_beats) == (0, 0, [])

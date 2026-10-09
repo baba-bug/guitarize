@@ -75,4 +75,4 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
         _write(paths.melody_json, melody)
     if "leadsheet" in steps:
         melody = _need(paths.melody_json, slug, "melody")
-        _write(paths.leadsheet_json, build_leadsheet(beats, chords, melody, key, cfg.sections))
+        _write(paths.leadsheet_json, build_leadsheet(beats, chords, melody, key, cfg.sections, overrides.get("chords")))

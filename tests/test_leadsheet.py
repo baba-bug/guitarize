@@ -1,4 +1,7 @@
+import copy
+
 import numpy as np
+import pytest
 import soundfile as sf
 
 from guitarize.analyze.leadsheet import build_leadsheet, summary_table
@@ -359,3 +362,228 @@ def test_pipeline_records_melody_key_and_catches_a_later_key_change(tmp_path, mo
     paths.chords_json.write_text(json.dumps(chords), encoding="utf-8")
     with pytest.raises(ValueError, match=rf"melody\.json was computed in {tonic} {mode}; re-run --steps melody"):
         pipeline.run_analysis(paths, cfg, ["leadsheet"])
+
+
+# ---------- overrides.chords：人耳纠正的和弦，在 leadsheet 步骤套用 ----------
+
+def _seg(beat, dur, label):
+    return {"beat": beat, "dur_beats": dur, "label": label, "confidence": "manual", "votes": {"manual": label}}
+
+
+def _override_bar(value, bar=1):
+    ls = build_leadsheet(BEATS, CHORDS, MELODY, ("C", "major"), {}, {bar: value})
+    return ls["bars"][bar - 1]["chords"]
+
+
+@pytest.mark.parametrize("value, expected", [
+    ("N", [_seg(1, 4, "N")]),                                    # 整小节无和弦
+    ("B", [_seg(1, 4, "B")]),                                    # 1 个标签 = 整小节
+    ("E F#", [_seg(1, 2, "E"), _seg(3, 2, "F#")]),               # 2 个标签各 2 拍
+    ("  E   F#  ", [_seg(1, 2, "E"), _seg(3, 2, "F#")]),         # 多余空白无所谓
+    ("C G Am F", [_seg(1, 1, "C"), _seg(2, 1, "G"), _seg(3, 1, "Am"), _seg(4, 1, "F")]),  # 4 个标签各 1 拍
+    ("E N", [_seg(1, 2, "E"), _seg(3, 2, "N")]),
+    ("NC", [_seg(1, 4, "N")]),                                   # N.C. / NC 都归一成 N
+    ("N.C. E", [_seg(1, 2, "N"), _seg(3, 2, "E")]),
+    ("E5", [_seg(1, 4, "E5")]),                                  # 强力和弦
+    ("C#m7/G#", [_seg(1, 4, "C#m7/G#")]),                        # 转位
+    (["C#m7", "C#m7", "F#", "F#"], [_seg(1, 2, "C#m7"), _seg(3, 2, "F#")]),        # 列表 = 逐拍
+    (["C", "G", "G", "C"], [_seg(1, 1, "C"), _seg(2, 2, "G"), _seg(4, 1, "C")]),
+    (["N", "N", "E", "E"], [_seg(1, 2, "N"), _seg(3, 2, "E")]),
+])
+def test_chord_override_value_forms(value, expected):
+    assert _override_bar(value) == expected
+
+
+def test_chord_override_merges_consecutive_equal_labels():
+    assert _override_bar("C C") == [_seg(1, 4, "C")]
+    assert _override_bar("C C C C") == [_seg(1, 4, "C")]
+    assert _override_bar(["F", "F", "F", "F"]) == [_seg(1, 4, "F")]
+    # 只合并相邻的：C G C G 不会合成一段
+    assert [s["label"] for s in _override_bar("C G C G")] == ["C", "G", "C", "G"]
+
+
+def test_chord_override_bar_keys_int_or_numeric_str():
+    for key in (2, "2", " 2 "):
+        ls = build_leadsheet(BEATS, CHORDS, MELODY, ("C", "major"), {}, {key: "E F#"})
+        assert [s["label"] for s in ls["bars"][1]["chords"]] == ["E", "F#"]
+
+
+@pytest.mark.parametrize("bar, shown", [(3, "3"), (0, "0"), (-1, "-1"), ("7", "7"), ("x", "x"), (1.5, "1.5"), (True, "True")])
+def test_chord_override_unknown_bar_names_the_bar(bar, shown):
+    with pytest.raises(ValueError, match=rf"overrides\.chords.*bar {shown}\b"):
+        build_leadsheet(BEATS, CHORDS, MELODY, ("C", "major"), {}, {bar: "C"})
+
+
+def test_chord_override_duplicate_bar_rejected():
+    with pytest.raises(ValueError, match=r"bar 2.*twice"):
+        build_leadsheet(BEATS, CHORDS, MELODY, ("C", "major"), {}, {2: "C", "2": "G"})
+
+
+@pytest.mark.parametrize("value, bad", [("H", "H"), ("C Zz", "Zz"), (["C", "C", "Q#", "C"], "Q#"), ("", "")])
+def test_chord_override_bad_label_names_bar_and_label(value, bad):
+    with pytest.raises(ValueError) as e:
+        build_leadsheet(BEATS, CHORDS, MELODY, ("C", "major"), {}, {2: value})
+    msg = str(e.value)
+    assert "bar 2" in msg and repr(bad) in msg and "overrides.chords" in msg
+
+
+@pytest.mark.parametrize("value", [None, 5, 5.5, True, {"a": "C"}, ["C", None, "C", "C"], ["C", "C", 5, "C"]])
+def test_chord_override_non_label_values_rejected(value):
+    with pytest.raises(ValueError, match=r"overrides\.chords.*bar 2"):
+        build_leadsheet(BEATS, CHORDS, MELODY, ("C", "major"), {}, {2: value})
+
+
+@pytest.mark.parametrize("value", ["C D E", "C D E F G", "C D E F G A B C"])
+def test_chord_override_string_count_must_divide_beats(value):
+    with pytest.raises(ValueError, match=r"bar 2.*labels.*4 beats"):
+        build_leadsheet(BEATS, CHORDS, MELODY, ("C", "major"), {}, {2: value})
+
+
+@pytest.mark.parametrize("value", [["C"], ["C", "G"], ["C", "G", "Am"], ["C", "G", "Am", "F", "C"], []])
+def test_chord_override_list_length_must_equal_beats_per_bar(value):
+    with pytest.raises(ValueError, match=r"bar 2.*4 beats"):
+        build_leadsheet(BEATS, CHORDS, MELODY, ("C", "major"), {}, {2: value})
+
+
+def test_chord_overrides_must_be_a_mapping():
+    with pytest.raises(ValueError, match=r"overrides\.chords must be a mapping"):
+        build_leadsheet(BEATS, CHORDS, MELODY, ("C", "major"), {}, ["C", "G"])
+
+
+def test_chord_override_beats_per_bar_follows_time_signature():
+    beats3 = {**BEATS, "time_signature": [3, 4], "bars": [{**b, "beats": 3} for b in BEATS["bars"]]}
+
+    def build(value):
+        return build_leadsheet(beats3, CHORDS, MELODY, ("C", "major"), {}, {1: value})["bars"][0]["chords"]
+
+    assert build("E F# G") == [_seg(1, 1, "E"), _seg(2, 1, "F#"), _seg(3, 1, "G")]
+    assert build("E") == [_seg(1, 3, "E")]
+    with pytest.raises(ValueError, match=r"bar 1.*3 beats"):
+        build("E F#")           # 2 个标签分不了 3 拍
+    with pytest.raises(ValueError, match=r"bar 1.*3 beats"):
+        build(["E", "F#", "G", "A"])
+
+
+def _four_bar_inputs():
+    beats = {**BEATS, "bars": [{"bar": n, "t_start": 2.0 * (n - 1), "t_end": 2.0 * n, "beats": 4} for n in range(1, 5)]}
+    chords = {"segments": [
+        {"bar": n, "beat": 1, "dur_beats": 4, "label": lab, "confidence": "high", "votes": {"template": lab, "web": lab}}
+        for n, lab in enumerate(["C", "F", "G", "Am"], start=1)]}
+    melody = {"grid": "sixteenth", "notes": [
+        {"start_beats": 4.0 * k, "dur_beats": 1.0, "midi": 60 + k, "out_of_key": False, "conf": 0.9} for k in range(4)]}
+    return beats, chords, melody
+
+
+def test_chord_overrides_change_only_the_named_bars():
+    beats, chords, melody = _four_bar_inputs()
+    frozen = copy.deepcopy(chords)
+    base = build_leadsheet(beats, chords, melody, ("C", "major"), {1: "イントロ"})
+    got = build_leadsheet(beats, chords, melody, ("C", "major"), {1: "イントロ"}, {2: "N", "4": ["Am", "Am", "E", "E"]})
+    assert chords == frozen                                           # 不改输入的 chords.json 内容
+    assert {k: v for k, v in got.items() if k != "bars"} == {k: v for k, v in base.items() if k != "bars"}
+    for n in (0, 2):                                                  # 小节 1、3 原样
+        assert got["bars"][n] == base["bars"][n]
+    for n in (1, 3):                                                  # 小节 2、4 只有 chords 变了
+        assert {k: v for k, v in got["bars"][n].items() if k != "chords"} == \
+               {k: v for k, v in base["bars"][n].items() if k != "chords"}
+    assert got["bars"][1]["chords"] == [_seg(1, 4, "N")]              # 原先的 F（high）整个被替换
+    assert got["bars"][3]["chords"] == [_seg(1, 2, "Am"), _seg(3, 2, "E")]
+    assert all(set(c) == {"beat", "dur_beats", "label", "confidence", "votes"} for b in got["bars"] for c in b["chords"])
+
+
+def test_no_or_empty_chord_overrides_change_nothing():
+    beats, chords, melody = _four_bar_inputs()
+    base = build_leadsheet(beats, chords, melody, ("C", "major"), {})
+    assert build_leadsheet(beats, chords, melody, ("C", "major"), {}, None) == base
+    assert build_leadsheet(beats, chords, melody, ("C", "major"), {}, {}) == base
+
+
+def test_chord_override_notes_go_to_stderr(capsys):
+    beats, chords, melody = _four_bar_inputs()
+    build_leadsheet(beats, chords, melody, ("C", "major"), {}, {"3": "E F#", 4: ["C#m7", "C#m7", "F#", "F#"]})
+    err = capsys.readouterr().err
+    notes = [line for line in err.splitlines() if "overridden" in line]   # 夹具没有签名，另有无关警告
+    assert notes == ["[leadsheet] bar 3 chords overridden: E F#",
+                     "[leadsheet] bar 4 chords overridden: C#m7 C#m7 F# F#"]
+    build_leadsheet(beats, chords, melody, ("C", "major"), {})
+    assert "overridden" not in capsys.readouterr().err
+
+
+def test_chord_override_errors_are_raised_before_any_note(capsys):
+    beats, chords, melody = _four_bar_inputs()
+    with pytest.raises(ValueError, match="bar 9"):
+        build_leadsheet(beats, chords, melody, ("C", "major"), {}, {2: "E", 9: "G"})
+    assert "overridden" not in capsys.readouterr().err
+
+
+def test_chord_override_covers_only_beats_that_exist():
+    beats, chords, melody = _four_bar_inputs()
+    beats["bars"][3]["beats"] = 2                       # 末尾小节只有 2 拍
+    got = build_leadsheet(beats, chords, melody, ("C", "major"), {}, {4: ["Am", "Am", "E", "E"]})
+    assert got["bars"][3]["chords"] == [_seg(1, 2, "Am")]
+    got = build_leadsheet(beats, chords, melody, ("C", "major"), {}, {4: "Am E"})
+    assert got["bars"][3]["chords"] == [_seg(1, 2, "Am")]
+
+
+def test_chord_override_in_a_padded_first_bar_skips_the_pad_beat():
+    beats = _padded_beats()                              # pad 1：第 1 小节只有第 2–4 拍
+    assert beats["bars"][0]["beats"] == 3 and beats["pad_beats"] == 1
+    chords = {"segments": [{"bar": n, "beat": b, "dur_beats": d, "label": "C", "confidence": "high", "votes": {}}
+                           for n, b, d in ((1, 2, 3), (2, 1, 4), (3, 1, 4))]}
+    got = build_leadsheet(beats, chords, MELODY, ("C", "major"), {}, {1: "E F#", 2: "G"})
+    assert got["bars"][0]["chords"] == [_seg(2, 1, "E"), _seg(3, 2, "F#")]   # 第 1 拍（补的休止）没有和弦
+    assert got["bars"][1]["chords"] == [_seg(1, 4, "G")]
+    got = build_leadsheet(beats, chords, MELODY, ("C", "major"), {}, {1: ["A", "B", "B", "B"]})
+    assert got["bars"][0]["chords"] == [_seg(2, 3, "B")]
+
+
+def test_summary_table_marks_manual_chords():
+    beats, chords, melody = _four_bar_inputs()
+    ls = build_leadsheet(beats, chords, melody, ("C", "major"), {}, {2: "E F#"})
+    lines = summary_table(ls, capo=2).splitlines()
+    assert "1:E(D)![manual]" in lines[2] and "3:F#(E)![manual]" in lines[2]
+    assert "votes" not in lines[2] and "template=" not in lines[2]
+    assert "!" not in lines[1] and "[manual]" not in lines[1]           # 没覆盖的小节照旧
+    assert "template=" in summary_table(build_leadsheet(BEATS, CHORDS, MELODY, ("C", "major"), {}))
+
+
+def test_leadsheet_step_applies_chord_overrides_without_touching_chords_json(tmp_path, capsys):
+    import json
+
+    from guitarize.analyze.pipeline import run_analysis
+    from guitarize.config import SongConfig
+    from guitarize.paths import SongPaths
+
+    paths = SongPaths(tmp_path / "song")
+    cfg = SongConfig(slug="song", title="t", artist="a", overrides={"chords": {2: "E F#", "1": "N"}})
+    _write_analysis(paths, chords={**CHORDS, "key": {"tonic": "C", "mode": "major", "r": None}})
+    before = paths.chords_json.read_text(encoding="utf-8")
+    run_analysis(paths, cfg, ["leadsheet"])
+    ls = json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))
+    assert ls["bars"][0]["chords"] == [_seg(1, 4, "N")]
+    assert ls["bars"][1]["chords"] == [_seg(1, 2, "E"), _seg(3, 2, "F#")]
+    assert paths.chords_json.read_text(encoding="utf-8") == before      # 重跑 chords 前后改动都不落到 chords.json
+    assert "[leadsheet] bar 2 chords overridden: E F#" in capsys.readouterr().err
+    # 没有 overrides.chords 的歌：leadsheet 里仍是分析出的和弦
+    run_analysis(paths, SongConfig(slug="song", title="t", artist="a"), ["leadsheet"])
+    ls = json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))
+    assert [c["label"] for c in ls["bars"][1]["chords"]] == ["G", "N"]
+
+
+def test_song_yaml_chord_overrides_round_trip(tmp_path):
+    """song.yaml 里按文档写的各种形式（N、带 # 的标签、流式列表）经 load_song_config 后都能被 build_leadsheet 接受。"""
+    from guitarize.config import load_song_config
+    from guitarize.paths import SongPaths
+
+    paths = SongPaths(tmp_path / "song")
+    paths.root.mkdir()
+    paths.config.write_text(
+        "slug: song\ntitle: t\nartist: a\noverrides:\n  key: C\n  chords:\n"
+        "    1: N              # 整小节\n    2: E F#\n    3: B\n    4: [C#m7, C#m7, F#, F#]\n",
+        encoding="utf-8")
+    cfg = load_song_config(paths)
+    assert cfg.overrides["chords"] == {1: "N", 2: "E F#", 3: "B", 4: ["C#m7", "C#m7", "F#", "F#"]}
+    beats, chords, melody = _four_bar_inputs()
+    got = build_leadsheet(beats, chords, melody, ("C", "major"), {}, cfg.overrides["chords"])
+    assert [[(c["beat"], c["dur_beats"], c["label"]) for c in b["chords"]] for b in got["bars"]] == [
+        [(1, 4, "N")], [(1, 2, "E"), (3, 2, "F#")], [(1, 4, "B")], [(1, 2, "C#m7"), (3, 2, "F#")]]

@@ -63,7 +63,7 @@ def f1(hit: int, est: int, found: int, ref: int) -> float | None:
 # ---------- 和弦 ----------
 
 def _ref_beats(lbar: dict, bpb: int) -> list[tuple[str, str, str]]:
-    """小节内逐拍参考：(majmin, 置信度, 原标签)。"""
+    """小节内逐拍参考：(majmin, 置信度, 原标签)。置信度 high / medium / low / manual（人耳纠正）。"""
     out = [("N", "high", "N")] * bpb
     for seg in lbar.get("chords", []):
         first = int(round(seg["beat"])) - 1
@@ -100,7 +100,7 @@ def score_chords(score: Score, leadsheet: dict, bars: list[BarScore]) -> None:
                 cands = prev or {"N"}  # 空拍：沿用上一拍的余音
             if ref == "N":
                 continue
-            if conf == "low":
+            if conf == "low":  # 只有 low 不计分；manual（overrides.chords）与 high 一样计分，manual 的 N 同样跳过
                 bs.low_conf_beats.append(k + 1)
                 continue
             bs.chord_total += 1

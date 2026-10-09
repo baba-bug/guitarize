@@ -37,6 +37,25 @@ class Thresholds:
 
 @dataclass(frozen=True)
 class SongConfig:
+    """song.yaml 的内容。overrides 是人工覆盖项（分析出错时用人耳纠正，重跑分析后仍然生效）：
+
+    - tempo_bpm / downbeat_shift / feel：beats 步骤（见 analyze/beats.py）
+    - key：调（如 B、F#m），不再用色度推断
+    - chords：人耳纠正的和弦，在 leadsheet 步骤套用（analyze/leadsheet.py 的 build_leadsheet）；
+      不改 chords.json，所以 `--steps leadsheet` 就能生效，重跑 chords 也不会丢。键是 leadsheet 的小节号
+      （1 起；int 或数字字符串），值有三种写法，所指小节原有的和弦整个被替换：
+
+          overrides:
+            chords:
+              19: N                          # 一个标签 = 整小节（N = 无和弦）
+              21: E F#                       # 空格分隔的标签均分小节：2 个各 2 拍，4 个各 1 拍；
+                                             #   个数必须整除每小节拍数（4/4 里写 3 个会报错）
+              16: [C#m7, C#m7, F#, F#]       # YAML 列表 = 逐拍一个标签，长度必须等于每小节拍数
+
+      标签须能被 theory.parse_chord 解析（含转位 C/E 和强力和弦 E5），或写 N / N.C. / NC；相邻同名标签合并成一段。
+      写错的小节号（< 1 或超过总小节数）、标签、个数都会 ValueError，并指出小节号。覆盖后的和弦段
+      confidence 记为 "manual"：评分时按 high 计（manual 的 N 照例跳过），summary 里标 "!" 并写 [manual]。
+    """
     slug: str
     title: str
     artist: str
