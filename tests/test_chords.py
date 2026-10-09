@@ -2,7 +2,7 @@ import numpy as np
 
 from guitarize import theory
 from guitarize.analyze.chords import (LABELS, align_webchart, power_quality_table, reference_chords,
-                                      resolve_power, same_chord, template_track, vote_beat)
+                                      resolve_power, template_track, vote_beat)
 from guitarize.analyze.key import scale_pcs
 from guitarize.analyze.webchart import WebBar
 
@@ -40,8 +40,7 @@ def test_align_webchart_with_jump_and_transpose():
     assert out2["transpose"] == 2 and out2["index"] == [0, 1, 2, 3, 6, 7]
 
 
-def test_same_chord_and_vote():
-    assert same_chord("G#m", "G#5") and same_chord("B", "B/D#") and not same_chord("Em", "D#/G")
+def test_vote_beat():
     assert vote_beat("G#m", 0.9, "G#5")[:2] == ("G#m", "high")
     assert vote_beat("B", 0.9, "B/D#")[:2] == ("B/D#", "high")
     assert vote_beat("Em", 0.9, "D#/G")[:2] == ("D#/G", "low")
@@ -90,3 +89,31 @@ def test_power_quality_table_and_resolve():
 def test_vote_quality_disagreement_is_medium():
     assert vote_beat("Bm", 0.9, "B5", {11: ""}, None)[:2] == ("B", "medium")
     assert vote_beat("G#", 0.9, "G#m")[:2] == ("G#m", "medium")
+
+
+def test_resolve_power_minor_key_and_audio_fallback():
+    minor = scale_pcs("G#", "minor")
+    major_b = scale_pcs("B", "major")
+    assert resolve_power("G#5", {}, minor, "G#") == "G#m"
+    assert resolve_power("E5", {}, minor, "Em") == "E"
+    assert resolve_power("C#5", {}, minor, "C#") == "C#m"
+    assert resolve_power("F5", {}, None, "Fm") == "Fm"
+    assert resolve_power("F5", {}, None, "F") == "F"
+    assert resolve_power("A5", {}, major_b, "F#m") == "A"
+    assert resolve_power("A5", {}, major_b, "Am") == "Am"
+    assert resolve_power("F5", {}, None, "Dm") == "F"
+    assert resolve_power("F5", {}, None, "N") == "F"
+    assert resolve_power("F5", {}, None, "") == "F"
+
+
+def test_reference_chords_rotates_power_table_with_transpose():
+    # 网上谱在 C 调，音频高 2 个半音：Am 的小三性质必须随之移到 B，才能解析 A5 -> Bm
+    truth = ["D"] * 4 + ["A"] * 4 + ["Bm"] * 4 + ["B"] * 4
+    cb = beats_cb(truth)
+    beats_json = {"time_signature": [4, 4],
+                  "beats": [{"t": 0.5 * i, "bar": i // 4 + 1, "beat": i % 4 + 1, "g": i} for i in range(16)]}
+    web = [WebBar([(c, 1.0)]) for c in ["C", "G", "Am", "A5"]]
+    out = reference_chords(cb, beats_json, web)
+    assert out["web_transpose"] == 2
+    last = [s for s in out["segments"] if s["bar"] == 4]
+    assert [(s["label"], s["confidence"]) for s in last] == [("Bm", "medium")]

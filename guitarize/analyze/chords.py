@@ -128,14 +128,6 @@ def _root(label: str) -> int | None:
     return None if parsed is None else parsed[0]
 
 
-def same_chord(a: str, b: str) -> bool:
-    if a == "N" or b == "N":
-        return False
-    if POWER_RE.match(a) or POWER_RE.match(b):
-        return _root(a) == _root(b)
-    return theory.majmin(a) == theory.majmin(b)
-
-
 def power_quality_table(web: list[WebBar]) -> dict[int, str]:
     """根音 pc → "" (大三) / "m" (小三)：取网上谱里同根非强力和弦的多数性质；平票不收录。"""
     counts: dict[tuple[int, bool], int] = {}
@@ -157,7 +149,7 @@ def power_quality_table(web: list[WebBar]) -> dict[int, str]:
 
 
 def resolve_power(label: str, table: dict[int, str], key_pcs: set[int] | None, audio: str) -> str:
-    """强力和弦 → 带大小三的标签：网上谱同根多数性质 → 调内三和弦性质 → 音频模板的性质。"""
+    """强力和弦 → 带大小三的标签：网上谱同根多数性质 → 调内三和弦性质 → 音频模板的性质（仅当音频和弦同根，否则大三）。"""
     root = _root(label)
     if root in table:
         quality = table[root]
@@ -166,7 +158,8 @@ def resolve_power(label: str, table: dict[int, str], key_pcs: set[int] | None, a
     elif key_pcs is not None and root in key_pcs and (root + 3) % 12 in key_pcs and (root + 7) % 12 in key_pcs:
         quality = "m"
     else:
-        quality = "m" if audio.endswith("m") else ""
+        # 调外强力和弦多半是借来的大三和弦（bVII/bVI/bIII）：只有音频和弦同根时才采信其性质，否则默认大三
+        quality = "m" if _root(audio) == root and audio.endswith("m") else ""
     return theory.pc_name(root) + quality
 
 
@@ -181,7 +174,8 @@ def vote_beat(audio: str, posterior: float, web: str | None, power_table: dict[i
         return "N", "medium", votes
     w = resolve_power(web, power_table or {}, key_pcs, audio) if POWER_RE.match(web) else web
     if _root(w) == _root(audio):
-        # 音频的大/小三判断对失真强力和弦不可靠：采用网上谱性质，但该拍降为 medium
+        # 根音一致但大/小三不同：失真的乐队混音里音频模板的大/小三判断不可靠，故采用人工谱的性质，
+        # 该拍仍计分但降为 medium（根音都不一致才是 low）
         return w, ("high" if theory.majmin(w) == theory.majmin(audio) else "medium"), votes
     return w, "low", votes
 
