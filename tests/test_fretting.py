@@ -46,3 +46,9 @@ def test_hand_box_intervals_and_transition():
     assert _transition(((6, 3),), ((2, 1), (5, 3)), 1.0, 3) == 0
     assert _position(((2, 8),), 3) == (5, 8)
     assert _transition(((2, 1),), ((2, 8),), 1.0, 3) == 8.0
+
+
+def test_silently_dropped_fill_is_recorded():
+    ev = assign_frets([FretEvent(0, 60, 50, fill=48)], MID)[0]
+    assert ev.fill_pos is None
+    assert ev.fallback is not None and "fill" in ev.fallback

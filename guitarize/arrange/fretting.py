@@ -112,6 +112,8 @@ def assign_frets(events: list[FretEvent], profile: Profile) -> list[FretEvent]:
             pitches = [p for p in (m, f, b) if p is not None]
             cands = _candidates(pitches, profile) if pitches else [()]
             if cands:
+                if ev.fill is not None and f is None and not (label or "").startswith("drop fill"):
+                    label = f"{label}, fill dropped" if label else "fill dropped"
                 layers.append((cands, (m, f, b), label))
                 break
         else:
