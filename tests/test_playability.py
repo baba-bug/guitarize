@@ -1,3 +1,4 @@
+from conftest import TEX_HEAD
 from guitarize.config import load_profile
 from guitarize.render import alphatab
 from guitarize.verify.model import load_score
@@ -62,3 +63,32 @@ def test_demo_fixtures_clean(demo_song, tmp_path):
     stats = soft_stats(score)
     assert stats[2]["barre"] is True and stats[1]["barre"] is False
     assert stats[2]["chord_marks"] == ["F", "C"]
+
+
+def test_straight_offbeat_in_triplet_feel(build_tex):
+    s = build_tex("\\tf triplet-8th\n:8 0.1 :4 1.1 :8 2.1 :2 3.1 |")
+    vs = check_playability(s, PROFILE, "finger")
+    assert [(v.rule, v.start) for v in vs] == [("straight_offbeat", 0.5), ("straight_offbeat", 1.5)]
+    s = build_tex("\\tf triplet-8th\n0.1.4 {d} 1.1.8 2.1.2 |")
+    assert [(v.rule, v.start) for v in check_playability(s, PROFILE, "finger")] == [("straight_offbeat", 1.5)]
+
+
+def test_paired_offbeat_with_tie_is_ok(build_tex):
+    assert rules(build_tex("\\tf triplet-8th\n:8 0.1 1.1 2.1 -.1 :2 3.1 |")) == []
+
+
+def test_straight_feel_has_no_offbeat_rule(build_tex):
+    assert rules(build_tex(":8 0.1 :4 1.1 :8 2.1 :2 3.1 |")) == []
+
+
+def test_same_string_two_voices(build_tex):
+    s = build_tex("\\voice\n:1 3.1 |\n\\voice\n:1 5.1 |")
+    assert "same_string" in rules(s)
+
+
+def test_max_fret_relative_to_neck_with_capo(build_tex):
+    head = TEX_HEAD + "\\capo 4\n"
+    s = build_tex(":4 11.1 r r r |", head=head)
+    vs = check_playability(s, PROFILE, "finger")
+    assert [v.rule for v in vs] == ["max_fret"] and "变调夹 4" in vs[0].detail
+    assert rules(build_tex(":4 10.1 r r r |", head=head)) == []

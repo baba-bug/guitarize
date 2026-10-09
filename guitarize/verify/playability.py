@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from ..config import Profile
 from .model import Attack, Event, Note, Score
 
+NECK_JOIN_FRET = 14  # 琴颈与琴身相接处的绝对品位（多数民谣吉他）
 EPS = 1e-6  # 浮点容差（拍）：摇摆节奏下相邻一拍的间隔可能算成 0.9999999999999999
 
 
@@ -56,6 +57,22 @@ def _hand_frets(a: Attack, index: tuple[list[Event], list[float], float]) -> lis
     return [f for _, f in sorted(set(fresh + held))]
 
 
+def _straight_offbeats(score: Score) -> list[Violation]:
+    """三连音感觉小节里，写在反拍八分位上却会被 alphaTab 按直拍播放的起音。"""
+    out: list[Violation] = []
+    for e in score.events:
+        bar = score.bars[e.bar]
+        if bar.feel != "triplet8th" or e.rest or e.tuplet != 1:
+            continue
+        if not any(not n.tie for n in e.notes):
+            continue  # 只有连音线延续音，听不到起音
+        rel = e.written_start - bar.start
+        if abs(rel - int(rel) - 0.5) < EPS and abs(e.start - e.written_start) < EPS:
+            out.append(Violation(e.bar + 1, e.written_start, "straight_offbeat",
+                                 "反拍音会按直拍播放：把它和前一个八分写成一对八分音符（剩余时值用连音线接上）"))
+    return out
+
+
 def check_playability(score: Score, profile: Profile, kind: str) -> list[Violation]:
     out: list[Violation] = []
     for (bar, voice), length in sorted(score.voice_lengths().items()):
@@ -63,7 +80,10 @@ def check_playability(score: Score, profile: Profile, kind: str) -> list[Violati
         if abs(length - expected) > 1e-6:
             out.append(Violation(bar + 1, score.bars[bar].start, "bar_length",
                                  f"声部 {voice + 1} 共 {length:g} 拍，应为 {expected:g} 拍"))
+    out += _straight_offbeats(score)
     index = _sounding_index(score)
+    neck_limit = NECK_JOIN_FRET - score.capo
+    max_fret = min(profile.max_fret, neck_limit)
     last: tuple[float, int] | None = None  # (时间, 把位)
     for a in score.attacks():
         bar = a.bar + 1
@@ -77,8 +97,9 @@ def check_playability(score: Score, profile: Profile, kind: str) -> list[Violati
                 out.append(Violation(bar, a.start, "span", f"跨度 {min(hand)}–{max(hand)} 品，超过 {profile.max_span}"))
             if fingers_needed(hand) > profile.max_fingers:
                 out.append(Violation(bar, a.start, "fingers", f"需要 {fingers_needed(hand)} 根手指"))
-        if fr and max(fr) > profile.max_fret:
-            out.append(Violation(bar, a.start, "max_fret", f"最高 {max(fr)} 品，超过 {profile.max_fret}"))
+        if fr and max(fr) > max_fret:
+            note = f"（变调夹 {score.capo} 品，琴颈在绝对 {NECK_JOIN_FRET} 品处并入琴身）" if neck_limit < profile.max_fret else ""
+            out.append(Violation(bar, a.start, "max_fret", f"最高 {max(fr)} 品，超过 {max_fret}{note}"))
         if hand:
             pos = min(hand)
             if last is not None and a.start - last[0] < 1.0 - EPS and abs(pos - last[1]) > profile.max_shift:
