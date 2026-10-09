@@ -78,14 +78,26 @@ def _est_bpm(t: np.ndarray) -> float:
     return 60.0 / float(np.median(np.diff(t)))
 
 
+def _checked_bpm(value) -> float:
+    """overrides.tempo_bpm 必须是正的有限数（BPM）；0、负数、nan / inf、布尔、无法转成数字的 → 明确的 ValueError。"""
+    try:
+        bpm = float(value) if not isinstance(value, bool) else float("nan")
+    except (TypeError, ValueError):
+        bpm = float("nan")
+    if not np.isfinite(bpm) or bpm <= 0:
+        raise ValueError(f"overrides.tempo_bpm must be a positive number (BPM), got {value!r}")
+    return bpm
+
+
 def _keep_phase(activation: Sequence[float] | None) -> int:
-    """隔拍删拍时保留哪一相位：拍 / 强拍激活总和更大的一组；平分时取第一个最强拍所在相位；没有激活时取第一拍。"""
+    """隔拍删拍时保留哪一相位：拍 / 强拍的平均激活更大的一组（拍数为奇数时两组个数不同，不能比总和）；
+    平均相同时取第一个最强拍所在相位；没有激活时取第一拍。"""
     if activation is None:
         return 0
     a = np.asarray(activation, dtype=float)
-    s0, s1 = float(a[0::2].sum()), float(a[1::2].sum())
-    if abs(s0 - s1) > 1e-9:
-        return int(s1 > s0)
+    m0, m1 = float(a[0::2].mean()), float(a[1::2].mean())
+    if abs(m0 - m1) > 1e-9:
+        return int(m1 > m0)
     return int(np.argmax(a)) % 2
 
 
@@ -95,9 +107,11 @@ def apply_tempo_override(beats: Sequence[float], override_bpm: float | None,
     ≈ 2（±8%）→ 隔拍删去（保留 _keep_phase 选中的相位）；≈ 1/2 → 相邻两拍之间插入中点；
     其它情况拍点不动，相差 > 4% 时给出警告。返回 (拍点, 提示信息)。"""
     t = np.asarray(beats, dtype=float)
-    if override_bpm is None or len(t) < 3:
+    if override_bpm is None:
         return t, []
-    target = float(override_bpm)
+    target = _checked_bpm(override_bpm)
+    if len(t) < 3:
+        return t, []
     est = _est_bpm(t)
     ratio = est / target
     notes: list[str] = []

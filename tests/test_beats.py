@@ -128,3 +128,30 @@ def test_tempo_stability_recorded_and_warned():
     s = drift["tempo_stability"]
     assert s["local_max_bpm"] - s["local_min_bpm"] > 10
     assert "unstable" in stability_warning(s, drift["tempo_bpm"])
+
+
+def test_keep_phase_compares_mean_activation_not_sum():
+    from guitarize.analyze.beats import _keep_phase, apply_tempo_override
+
+    # 奇数拍：相位 0 有 3 个拍、相位 1 只有 2 个。总和 2.1 > 1.8，但相位 1 的平均激活（0.9）才更强
+    act = [0.7, 0.9, 0.7, 0.9, 0.7]
+    assert _keep_phase(act) == 1
+    fixed, notes = apply_tempo_override(0.25 * np.arange(5), 120, act)
+    assert fixed.tolist() == pytest.approx((0.25 * np.arange(5))[1::2].tolist()) and "phase 1" in notes[0]
+    assert _keep_phase([0.9, 0.7, 0.9, 0.7, 0.9]) == 0
+    assert _keep_phase(None) == 0
+    # 平均激活相同（都是 0.5；总和 1.5 vs 1.0）：取第一个最强拍（下标 1）所在相位
+    assert _keep_phase([0.5, 0.9, 0.5, 0.1, 0.5]) == 1
+
+
+def test_tempo_override_must_be_a_positive_number():
+    from guitarize.analyze.beats import apply_tempo_override
+
+    t = 0.5 * np.arange(20)
+    for bad in (0, -120, 0.0, "fast", "", True, [120], float("nan"), float("inf")):
+        with pytest.raises(ValueError, match=r"overrides\.tempo_bpm must be a positive number"):
+            apply_tempo_override(t, bad, None)
+    with pytest.raises(ValueError, match="overrides.tempo_bpm"):
+        apply_tempo_override(t[:2], 0, None)       # 拍太少也先校验配置，而不是静默跳过
+    assert apply_tempo_override(t, 120, None)[1] == []
+    assert apply_tempo_override(t, 120.0, None)[1] == [] and apply_tempo_override(t, None, None)[1] == []
