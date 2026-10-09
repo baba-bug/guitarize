@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>なんもねえ · 指弹</title>
+<style>
+  :root { --bg: #fafaf7; --fg: #1d1d1b; --muted: #6b6b66; --accent: #c2410c; --panel: #ffffffee; --line: #ddd; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 -apple-system, "PingFang SC", sans-serif; }
+  header { position: sticky; top: 0; z-index: 10; background: var(--panel); backdrop-filter: blur(6px);
+           border-bottom: 1px solid var(--line); padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  header h1 { font-size: 16px; margin: 0 12px 0 0; }
+  button, select { font: inherit; padding: 4px 10px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { color: var(--muted); font-size: 13px; }
+  #wrap { padding: 8px 16px 80px; }
+  .at-cursor-bar { background: rgba(194, 65, 12, .08); }
+  .at-cursor-beat { background: var(--accent); width: 3px; }
+  .at-highlight * { fill: var(--accent); stroke: var(--accent); }
+  .at-selection div { background: rgba(194, 65, 12, .15); }
+</style>
+</head>
+<body>
+<header>
+  <h1>なんもねえ · 指弹</h1>
+  <button id="play" disabled>▶ 合成音</button>
+  <button id="orig">▶ 原曲（当前小节起）</button>
+  <label>速度 <select id="speed"><option>0.5</option><option>0.75</option><option selected>1</option></select></label>
+  <label><input type="checkbox" id="metro"> 节拍器</label>
+  <label><input type="checkbox" id="loop"> 循环选区</label>
+  <span id="status">加载中…</span>
+</header>
+<div id="wrap"><div id="at"></div></div>
+<audio id="audio" src="../source/original.wav" preload="auto"></audio>
+<script id="tex" type="text/plain">\title "なんもねえ"
+\tempo 167
+\track "Guitar"
+\instrument 25
+\staff {score tabs}
+\tuning (E4 B3 G3 D3 A2 E2)
+\capo 4
+\ts 4 4
+\ks B
+\tf triplet-8th
+\voice
+// bar 1 [イントロ]
+\section "イントロ" r.4 r.8 3.2.8 3.2.4 -.2.8 3.2.8 |
+// bar 2 [サビ]
+\section "サビ" r.2 1.2.4 3.2.4 |
+// bar 3
+0.1.2 0.1.8 0.1.8 -.1.4 |
+// bar 4
+0.1.4 0.1.4 0.1.4 2.1.4 |
+// bar 5
+3.1.2 2.1.4 3.2.4 |
+// bar 6
+0.1.8 3.1.8 -.1.4 3.2.4 1.2.4 |
+// bar 7
+3.2.8 3.1.8 -.1.4 5.3.4 0.3.4 |
+// bar 8
+2.3.4 0.3.4 0.3.4 2.4.4 |
+// bar 9
+3.2.4 1.2.4 3.2.8 3.2.8 -.2.4 |
+// bar 10
+r.2 1.2.4 3.2.4 |
+// bar 11
+0.1.2 0.1.8 0.1.8 -.1.8 0.1.8 |
+// bar 12 · fill cut @2 (same string) · bass cut @2.5 (shift)
+r.4 4.2.8 0.1.8 -.1.4 5.1.4 |
+// bar 13
+r.4 2.1.4 2.1.4 3.2.4 |
+// bar 14
+0.1.8 3.1.8 -.1.8 3.2.8 3.1.4 1.2.4 |
+// bar 15 · fill cut @4 (same string)
+3.2.4 3.1.4 0.2.4 5.3.4 |
+// bar 16
+0.2.8 2.3.8 2.3.2 0.3.4 |
+// bar 17
+r.4 r.8 0.3.8 4.4.4 2.3.4 |
+// bar 18 [間奏]
+\section "間奏" r.4 r.8 0.3.8 -.3.4 {d} r.8 |
+// bar 19
+1.1.4 0.1.2 r.4 |
+// bar 20
+0.3.2 r.2 |
+// bar 21 · hand: riff bar: melody rests
+r.1 |
+// bar 22 [Aメロ] · fill cut @2 (same string)
+\section "Aメロ" r.4 3.2.4 3.2.4 0.2.8 0.1.8 |
+// bar 23 · fill cut @2 (same string)
+r.4 3.2.4 3.2.4 5.3.4 |
+// bar 24
+r.4 r.8 0.1.8 3.2.4 3.2.4 |
+// bar 25
+0.1.4 2.1.4 3.2.2 |
+// bar 26
+r.4 2.1.4 3.1.8 0.1.8 -.1.8 3.1.8 |
+// bar 27
+r.4 0.1.4 3.1.4 5.1.4 |
+// bar 28
+8.1.4 8.1.4 7.1.4 8.1.4 |
+// bar 29 · bass cut @4 (span)
+r.4 r.8 7.1.8 5.1.4 3.1.8 3.1.8 |
+// bar 30 [Bメロ]
+\section "Bメロ" r.4 0.1.4 0.1.8 3.1.8 -.1.4 |
+// bar 31
+5.1.4 3.1.4 5.1.4 7.3.4 |
+// bar 32 · bass+12 @1 · melody cut @3 (span) · bass cut @4 (span)
+10.1.4 10.1.4 r.4 5.1.4 |
+// bar 33
+5.1.8 3.1.8 -.1.4 -.1.8 0.1.8 -.1.4 |
+// bar 34
+5.1.4 3.1.4 4.1.2 |
+// bar 35
+3.1.4 3.1.4 3.1.8 0.1.8 -.1.4 |
+// bar 36
+3.1.4 5.1.4 5.1.4 7.1.4 |
+// bar 37 · melody-12 @2.5
+8.1.4 -.1.8 0.1.8 10.1.4 10.1.4 |
+// bar 38 [サビ]
+\section "サビ" 3.2.2 0.2.4 3.2.4 |
+// bar 39
+0.1.2 0.1.8 0.1.8 -.1.4 |
+// bar 40 · fill cut @2 (same string)
+0.1.4 4.2.4 0.1.4 3.1.4 |
+// bar 41
+3.1.4 -.1.8 3.1.8 2.1.4 3.2.4 |
+// bar 42
+0.1.4 3.1.4 3.2.4 1.2.8 3.2.8 |
+// bar 43
+r.2 5.3.4 0.3.4 |
+// bar 44
+2.3.4 0.3.4 0.3.4 2.4.4 |
+// bar 45
+3.2.2 3.2.4 4.2.8 3.2.8 |
+// bar 46
+r.2 1.2.4 3.2.4 |
+// bar 47
+0.1.2 0.1.4 0.1.4 |
+// bar 48 · bass cut @4 (span)
+r.4 r.8 0.1.8 -.1.4 5.1.4 |
+// bar 49
+3.1.2 2.1.4 3.2.4 |
+// bar 50
+0.1.8 3.1.8 -.1.4 3.2.4 1.2.4 |
+// bar 51
+3.2.4 3.1.8 0.2.8 -.2.4 3.2.4 |
+// bar 52
+0.2.4 2.3.2 r.4 |
+// bar 53
+0.2.2 r.8 2.1.8 3.2.4 |
+// bar 54 [アウトロ]
+\section "アウトロ" 0.1.2 3.2.4 3.1.4 |
+// bar 55
+0.1.4 3.1.8 0.2.8 -.2.8 0.2.8 -.2.4 |
+// bar 56
+5.3.8 2.3.8 -.3.4 {d} r.8 2.3.4 |
+// bar 57
+r.2 0.3.8 2.3.8 -.3.8 2.3.8 |
+// bar 58
+r.8 0.3.8 -.3.4 {d} r.4 {d} |
+// bar 59
+r.8 3.2.8 -.2.4 {d} r.4 {d} |
+// bar 60 · fill cut @1.5 (same string) · melody cut @3 (same string)
+r.8 3.2.8 -.2.4 r.2 |
+// bar 61
+r.2 {d} 3.1.4 |
+// bar 62 · hand: end on G
+0.2.4 5.1.4 3.1.2 |
+\voice
+// bar 1
+r.1 |
+// bar 2
+(0.2 3.6).2 (2.5 3.6).2 |
+// bar 3
+(2.4 3.5).2 (2.4 3.5).2 |
+// bar 4
+(0.2 1.4).2 (0.2 1.4).2 |
+// bar 5
+(0.3 0.6).2 (0.3 0.6).2 |
+// bar 6
+(2.4 3.5).2 (2.4 3.5).2 |
+// bar 7
+(0.3 2.5).2 2.5.2 |
+// bar 8
+(4.5 5.6).2 (4.5 5.6).2 |
+// bar 9
+(1.4 2.5).2 (1.4 2.5).2 |
+// bar 10
+(0.2 3.6).2 (2.5 3.6).2 |
+// bar 11
+(2.4 3.5).2 (2.4 3.5).2 |
+// bar 12
+(0.2 1.4).4 -.4.8 r.8 (0.2 6.5).2 |
+// bar 13
+(0.3 0.6).2 (0.3 0.6).2 |
+// bar 14
+(2.4 3.5).2 (2.4 3.5).2 |
+// bar 15
+(0.3 2.5).2 (0.3 2.5).4 -.5.4 |
+// bar 16
+(3.5 5.6).2 (3.5 5.6).2 |
+// bar 17
+0.4.2 5.5.2 |
+// bar 18
+(2.5 3.6).2 (2.5 3.6).2 |
+// bar 19 · hand: riff (bass)
+r.2 0.6.4 {tu 3} 2.6.4 {tu 3} 0.4.4 {tu 3} |
+// bar 20 · hand: riff (bass)
+3.6.2 0.6.4 {tu 3} 3.6.4 {tu 3} 0.6.4 {tu 3} |
+// bar 21 · hand: riff (bass)
+3.5.4 2.4.8 0.3.8 0.4.4 4.4.8 2.3.8 |
+// bar 22
+(0.2 3.6).4 -.6.4 (2.5 3.6).2 |
+// bar 23
+(0.2 3.6).4 -.6.4 (2.5 3.6).2 |
+// bar 24
+(4.4 5.5).2 (4.4 5.5).2 |
+// bar 25
+(4.4 5.5).2 (4.4 5.5).2 |
+// bar 26
+(0.3 0.6).2 (0.3 0.6).2 |
+// bar 27
+(0.3 0.6).2 (0.3 0.6).2 |
+// bar 28
+(8.3 7.6).2 (8.3 7.6).2 |
+// bar 29
+(8.3 7.6).2 (4.2 7.6).4 r.4 |
+// bar 30
+(2.4 3.5).2 (2.4 3.5).2 |
+// bar 31
+(4.4 5.5).2 (4.4 5.5).2 |
+// bar 32
+(0.2 0.3).2 (2.3 1.6).4 r.4 |
+// bar 33
+(0.3 0.6).2 (0.3 0.6).2 |
+// bar 34
+(6.3 0.5).2 (2.2 0.5).2 |
+// bar 35
+(4.2 2.5).2 (1.4 2.5).2 |
+// bar 36
+(0.3 3.5).2 (0.3 8.6).2 |
+// bar 37 · hand: break
+(9.5 10.6).4 (9.5 10.6).4 r.2 |
+// bar 38
+(4.3 3.6).2 (2.5 3.6).2 |
+// bar 39
+(2.4 3.5).2 (2.4 3.5).2 |
+// bar 40
+(0.2 1.4).4 -.4.4 (0.2 1.4).2 |
+// bar 41
+(0.3 0.6).2 (0.3 0.6).2 |
+// bar 42
+(2.4 3.5).2 (2.4 3.5).2 |
+// bar 43
+(0.3 2.5).2 2.5.2 |
+// bar 44
+(4.5 5.6).2 (4.5 5.6).2 |
+// bar 45
+(1.4 2.5).2 (1.4 2.5).2 |
+// bar 46
+(0.2 3.6).2 (2.5 3.6).2 |
+// bar 47
+(2.4 3.5).2 (2.4 3.5).2 |
+// bar 48
+(0.2 1.4).2 (0.2 1.4).4 r.4 |
+// bar 49
+(0.3 0.6).2 (0.3 0.6).2 |
+// bar 50
+(2.4 3.5).2 (2.4 3.5).2 |
+// bar 51
+(0.3 2.5).2 (0.3 2.5).2 |
+// bar 52
+(4.5 5.6).2 (4.5 5.6).2 |
+// bar 53
+(1.4 2.5).2 (1.4 2.5).2 |
+// bar 54
+(2.4 3.5).2 (2.4 3.5).2 |
+// bar 55
+(0.3 2.5).2 (0.3 2.5).2 |
+// bar 56
+(4.5 5.6).2 (4.5 5.6).2 |
+// bar 57
+(4.4 5.5).2 0.4.2 |
+// bar 58
+(2.5 3.6).2 (2.5 3.6).2 |
+// bar 59 · hand: riff (bass)
+r.2 0.6.4 {tu 3} 2.6.4 {tu 3} 0.4.4 {tu 3} |
+// bar 60 · hand: riff (bass)
+3.6.2 0.6.4 {tu 3} 3.6.4 {tu 3} 0.6.4 {tu 3} |
+// bar 61 · hand: riff (bass)
+3.5.4 2.4.8 0.3.8 0.4.4 4.4.8 2.3.8 |
+// bar 62 · hand: final hit
+r.4 (0.4 2.5 3.6).2 {d} |
+</script>
+<script>window.BAR_TIMES = [[-0.26, 1.2], [1.2, 2.66], [2.66, 4.08], [4.08, 5.54], [5.54, 6.98], [6.98, 8.44], [8.44, 9.86], [9.86, 11.3], [11.3, 12.76], [12.76, 14.2], [14.2, 15.64], [15.64, 17.08], [17.08, 18.54], [18.54, 19.98], [19.98, 21.44], [21.44, 22.88], [22.88, 24.32], [24.32, 25.76], [25.76, 27.18], [27.18, 28.64], [28.64, 30.1], [30.1, 31.56], [31.56, 33.0], [33.0, 34.44], [34.44, 35.88], [35.88, 37.34], [37.34, 38.78], [38.78, 40.22], [40.22, 41.66], [41.66, 43.12], [43.12, 44.56], [44.56, 46.0], [46.0, 47.46], [47.46, 48.9], [48.9, 50.36], [50.36, 51.8], [51.8, 53.24], [53.24, 54.7], [54.7, 56.14], [56.14, 57.58], [57.58, 59.02], [59.02, 60.48], [60.48, 61.9], [61.9, 63.36], [63.36, 64.8], [64.8, 66.26], [66.26, 67.7], [67.7, 69.14], [69.14, 70.6], [70.6, 72.04], [72.04, 73.48], [73.48, 74.92], [74.92, 76.36], [76.36, 77.82], [77.82, 79.28], [79.28, 80.72], [80.72, 82.14], [82.14, 83.58], [83.58, 85.04], [85.04, 86.48], [86.48, 87.94], [87.94, 89.4]];</script>
+<script src="../../../tools/alphatab/node_modules/@coderline/alphatab/dist/alphaTab.js"></script>
+<script>
+  const base = "../../../tools/alphatab/node_modules/@coderline/alphatab/dist/";
+  const api = new alphaTab.AlphaTabApi(document.getElementById("at"), {
+    core: { fontDirectory: base + "font/" },
+    player: {
+      playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
+      soundFont: base + "soundfont/sonivox.sf2",
+      scrollElement: document.scrollingElement,
+    },
+  });
+  const status = document.getElementById("status");
+  const audio = document.getElementById("audio");
+  const playBtn = document.getElementById("play");
+  const origBtn = document.getElementById("orig");
+  let currentBar = 0;
+
+  api.tex(document.getElementById("tex").textContent);
+  api.playerReady.on(() => {
+    playBtn.disabled = false;
+    status.textContent = "就绪：点音符选定小节，拖选可设置循环区";
+  });
+  api.error.on((e) => { status.textContent = "出错：" + e.message; });
+  api.beatMouseDown.on((beat) => { currentBar = beat.voice.bar.index; });
+  api.playedBeatChanged.on((beat) => { currentBar = beat.voice.bar.index; });
+
+  playBtn.onclick = () => { audio.pause(); origBtn.textContent = "▶ 原曲（当前小节起）"; api.playPause(); };
+  document.getElementById("speed").onchange = (e) => {
+    const v = parseFloat(e.target.value);
+    api.playbackSpeed = v;
+    audio.playbackRate = v;
+  };
+  document.getElementById("metro").onchange = (e) => { api.metronomeVolume = e.target.checked ? 1 : 0; };
+  document.getElementById("loop").onchange = (e) => { api.isLooping = e.target.checked; };
+
+  if (!window.BAR_TIMES.length) {
+    origBtn.disabled = true;
+    origBtn.title = "缺少原曲小节时间（leadsheet.json）";
+  }
+  origBtn.onclick = () => {
+    if (!audio.paused) {
+      audio.pause();
+      origBtn.textContent = "▶ 原曲（当前小节起）";
+      return;
+    }
+    api.pause();
+    const t = window.BAR_TIMES[Math.min(currentBar, window.BAR_TIMES.length - 1)];
+    audio.currentTime = t[0];
+    audio.play();
+    origBtn.textContent = "⏸ 原曲";
+  };
+</script>
+</body>
+</html>
