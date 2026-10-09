@@ -210,9 +210,10 @@ def assemble_beats(beat_times: Sequence[float], positions: Sequence[int], feel: 
 
 
 def beats_signature(beats_json: dict) -> dict:
-    """chords.json / melody.json 记下产出时 beats.json 的拍数、补拍和弱起，用来发现 beats 重跑后的过期文件。"""
+    """chords.json / melody.json 记下产出时 beats.json 的拍数、补拍、弱起和律动（feel 决定旋律的量化格），
+    用来发现 beats 重跑后的过期文件。"""
     return {"n_beats": len(beats_json["beats"]), "pad_beats": beats_json["pad_beats"],
-            "pickup_beats": beats_json["pickup_beats"]}
+            "pickup_beats": beats_json["pickup_beats"], "feel": beats_json["feel"]}
 
 
 def _axis(beats_json: dict) -> tuple[np.ndarray, np.ndarray]:

@@ -10,16 +10,33 @@ _MARK = {"high": "", "medium": "?", "low": "??"}
 
 
 def check_signatures(beats: dict, chords: dict, melody: dict) -> None:
-    """chords.json / melody.json 记下的 beats_signature 与当前 beats.json 不符 → 报错；旧文件没有签名 → 只警告。"""
+    """chords.json / melody.json 记下的 beats_signature 与当前 beats.json 不符 → 报错；
+    旧文件没有签名、或签名缺字段（如还没有 feel）→ 只警告，并只比较双方都有的字段。"""
     sig = beats_signature(beats)
     for name, data, step in (("chords.json", chords, "chords"), ("melody.json", melody, "melody")):
         got = data.get("beats_signature")
         if got is None:
             print(f"[leadsheet] warning: {name} has no beats_signature (older file); cannot tell whether it matches "
                   f"beats.json — re-run --steps {step} if beats changed", file=sys.stderr)
-        elif got != sig:
+            continue
+        if any(got[k] != sig[k] for k in got.keys() & sig.keys()):
             raise ValueError(f"{name} was computed from an older beats.json; re-run --steps {step} "
                              f"({name} {got} vs beats.json {sig})")
+        missing = sorted(sig.keys() - got.keys())
+        if missing:
+            print(f"[leadsheet] warning: {name} beats_signature has no {', '.join(missing)} (older file); cannot tell "
+                  f"whether that matches beats.json — re-run --steps {step} if beats changed", file=sys.stderr)
+
+
+def check_melody_key(melody: dict, key: tuple[str, str]) -> None:
+    """melody.json 记下的量化调（旋律音按它吸附 / 标调外）与 leadsheet 要用的调不同 → 报错；旧文件没有记 → 只警告。"""
+    got = melody.get("key")
+    if not (isinstance(got, dict) and "tonic" in got and "mode" in got):
+        print(f"[leadsheet] warning: melody.json has no key (older file); cannot tell whether it was computed in "
+              f"{key[0]} {key[1]} — re-run --steps melody if the key changed", file=sys.stderr)
+    elif (theory.pc(got["tonic"]), got["mode"]) != (theory.pc(key[0]), key[1]):
+        raise ValueError(f"melody.json was computed in {got['tonic']} {got['mode']}; re-run --steps melody "
+                         f"(the leadsheet will use {key[0]} {key[1]})")
 
 
 def build_leadsheet(beats: dict, chords: dict, melody: dict, key: tuple[str, str], sections: dict[int, str]) -> dict:
@@ -29,6 +46,7 @@ def build_leadsheet(beats: dict, chords: dict, melody: dict, key: tuple[str, str
                          "Only if the downbeat phase was mis-detected (bar lines off by a beat or two) is "
                          "overrides.downbeat_shift the fix; then re-run --steps beats")
     check_signatures(beats, chords, melody)
+    check_melody_key(melody, key)
     bpb = beats["time_signature"][0]
     by_bar: dict[int, list[dict]] = {}
     for s in chords["segments"]:

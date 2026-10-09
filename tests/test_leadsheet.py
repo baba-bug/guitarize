@@ -152,7 +152,7 @@ def test_short_bar_message_says_unsupported_not_shift():
     assert "mis-detected" in msg and "downbeat_shift" in msg
 
 
-SIG = {"n_beats": 0, "pad_beats": 0, "pickup_beats": 0}
+SIG = {"n_beats": 0, "pad_beats": 0, "pickup_beats": 0, "feel": "straight"}
 
 
 def test_stale_chords_or_melody_rejected():
@@ -168,6 +168,37 @@ def test_stale_chords_or_melody_rejected():
     ls = build_leadsheet(BEATS, {**CHORDS, "beats_signature": SIG}, {**MELODY, "beats_signature": SIG},
                          ("C", "major"), {})
     assert len(ls["bars"]) == 2
+
+
+def test_signature_includes_feel():
+    import pytest
+
+    from guitarize.analyze.beats import beats_signature
+
+    assert beats_signature(BEATS) == SIG
+    # feel 变了（beats 重跑后直拍 ↔ shuffle）：melody 的量化格（十六分 / 三连音）都已过期
+    shuffled, shuffle_sig = {**BEATS, "feel": "shuffle"}, {**SIG, "feel": "shuffle"}
+    with pytest.raises(ValueError, match=r"chords\.json was computed from an older beats\.json; re-run --steps chords"):
+        build_leadsheet(shuffled, {**CHORDS, "beats_signature": SIG}, {**MELODY, "beats_signature": shuffle_sig},
+                        ("C", "major"), {})
+    with pytest.raises(ValueError, match=r"melody\.json was computed from an older beats\.json; re-run --steps melody"):
+        build_leadsheet(shuffled, {**CHORDS, "beats_signature": shuffle_sig}, {**MELODY, "beats_signature": SIG},
+                        ("C", "major"), {})
+
+
+def test_signature_without_feel_only_warns(capsys):
+    old_sig = {k: v for k, v in SIG.items() if k != "feel"}  # feel 加进签名之前写出的文件
+    ls = build_leadsheet(BEATS, {**CHORDS, "beats_signature": old_sig}, {**MELODY, "beats_signature": old_sig},
+                         ("C", "major"), {})
+    assert len(ls["bars"]) == 2
+    err = capsys.readouterr().err
+    assert "chords.json" in err and "melody.json" in err and "feel" in err
+    # 没有 feel 但其它字段对不上：照样报错
+    import pytest
+
+    with pytest.raises(ValueError, match=r"chords\.json was computed from an older beats\.json"):
+        build_leadsheet(BEATS, {**CHORDS, "beats_signature": {**old_sig, "n_beats": 99}},
+                        {**MELODY, "beats_signature": old_sig}, ("C", "major"), {})
 
 
 def test_missing_signature_only_warns(capsys):
@@ -203,7 +234,7 @@ def test_pipeline_stamps_beats_signature(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "extract_melody", lambda wav, bj, pcs: {"grid": "sixteenth", "notes": []})
     pipeline.run_analysis(paths, cfg, ["chords", "melody", "leadsheet"])
     sig = beats_signature(beats)
-    assert sig == {"n_beats": 11, "pad_beats": 1, "pickup_beats": 3}
+    assert sig == {"n_beats": 11, "pad_beats": 1, "pickup_beats": 3, "feel": "straight"}
     for path in (paths.chords_json, paths.melody_json):
         assert json.loads(path.read_text(encoding="utf-8"))["beats_signature"] == sig
 
@@ -239,7 +270,7 @@ def test_padded_leadsheet_lines_up_with_verify_metrics(tmp_path):
 
     chords = {"segments": [seg(1, 2, 3, "G"), seg(2, 1, 1, "C"), seg(2, 2, 3, "F"), seg(3, 1, 4, "G")],
               "key": {"tonic": "C", "mode": "major", "r": None}, "beats_signature": sig}
-    melody = {"grid": "sixteenth", "beats_signature": sig, "notes": [
+    melody = {"grid": "sixteenth", "beats_signature": sig, "key": {"tonic": "C", "mode": "major"}, "notes": [
         {"start_beats": s, "dur_beats": d, "midi": m, "out_of_key": False, "conf": 0.9}
         for s, d, m in ((1.0, 2.0, 67), (3.0, 1.0, 71), (4.0, 1.0, 72), (5.0, 3.0, 69), (8.0, 4.0, 71))]}
     paths, cfg = _paths_cfg(tmp_path)
@@ -265,3 +296,66 @@ def test_padded_leadsheet_lines_up_with_verify_metrics(tmp_path):
     bars = metrics.score_bars(score, leadsheet, "finger")
     assert (bars[1].chord_agree, bars[1].chord_total) == (3, 4)
     assert bars[1].chord_issues[0].startswith("拍 1：参考 Am")
+
+
+def _sig_chords_melody(**melody_extra):
+    return {**CHORDS, "beats_signature": SIG}, {**MELODY, "beats_signature": SIG, **melody_extra}
+
+
+def test_melody_computed_in_another_key_is_rejected():
+    import pytest
+
+    chords, melody = _sig_chords_melody(key={"tonic": "G", "mode": "major"})
+    with pytest.raises(ValueError, match=r"melody\.json was computed in G major; re-run --steps melody"):
+        build_leadsheet(BEATS, chords, melody, ("C", "major"), {})
+    with pytest.raises(ValueError, match=r"melody\.json was computed in G major; re-run --steps melody"):
+        build_leadsheet(BEATS, chords, melody, ("G", "minor"), {})  # 同主音不同调式也算不同
+    ls = build_leadsheet(BEATS, chords, melody, ("G", "major"), {})
+    assert (ls["key"], ls["mode"]) == ("G", "major")
+    flat, melody_flat = _sig_chords_melody(key={"tonic": "Bb", "mode": "minor"})  # 升降号写法不同不算不同
+    assert build_leadsheet(BEATS, flat, melody_flat, ("A#", "minor"), {})["key"] == "A#"
+
+
+def test_melody_without_key_only_warns(capsys):
+    chords, melody = _sig_chords_melody()
+    ls = build_leadsheet(BEATS, chords, melody, ("C", "major"), {})
+    assert len(ls["bars"]) == 2
+    err = capsys.readouterr().err
+    assert "melody.json" in err and "no key" in err and "--steps melody" in err
+    chords, melody = _sig_chords_melody(key={"tonic": "C", "mode": "major"})
+    build_leadsheet(BEATS, chords, melody, ("C", "major"), {})
+    assert capsys.readouterr().err == ""
+
+
+def test_pipeline_records_melody_key_and_catches_a_later_key_change(tmp_path, monkeypatch):
+    import json
+
+    import pytest
+
+    from guitarize import theory
+    from guitarize.analyze import pipeline
+
+    paths, cfg = _paths_cfg(tmp_path)
+    beats = _padded_beats()
+    _write_analysis(paths, beats=beats)
+    cb = np.zeros((12, 11))
+    cb[list(theory.chord_tones("C")), :] = 1 / np.sqrt(3)
+    monkeypatch.setattr(pipeline.features, "load_mix", lambda wavs: np.zeros(10))
+    monkeypatch.setattr(pipeline.features, "beat_sync_chroma", lambda y, times: cb)
+    seen = []
+    monkeypatch.setattr(pipeline, "extract_melody",
+                        lambda wav, bj, pcs: seen.append(pcs) or {"grid": "sixteenth", "notes": []})
+    pipeline.run_analysis(paths, cfg, ["chords", "melody", "leadsheet"])
+    chords = json.loads(paths.chords_json.read_text(encoding="utf-8"))
+    melody = json.loads(paths.melody_json.read_text(encoding="utf-8"))
+    tonic, mode = pipeline.chosen_key(chords)
+    assert melody["key"] == {"tonic": tonic, "mode": mode}
+    assert seen == [pipeline.scale_pcs(tonic, mode)]
+
+    # 之后 chords.json 的调变了（例如改了 overrides.key 重跑 chords），只重跑 leadsheet → 报错并指明要重跑 melody
+    other = "G" if (tonic, mode) != ("G", "major") else "D"
+    chords["key"] = {"tonic": other, "mode": "major", "r": None}
+    chords.pop("key_from_chords", None)
+    paths.chords_json.write_text(json.dumps(chords), encoding="utf-8")
+    with pytest.raises(ValueError, match=rf"melody\.json was computed in {tonic} {mode}; re-run --steps melody"):
+        pipeline.run_analysis(paths, cfg, ["leadsheet"])
