@@ -23,12 +23,29 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(name, help=help_text)
         p.add_argument("slug")
         p.add_argument("--arr", choices=ARRS, required=True)
+    p = sub.add_parser("new", help="新建一首歌的 song.yaml")
+    p.add_argument("slug")
+    p.add_argument("--title", required=True)
+    p.add_argument("--artist", required=True)
+    p = sub.add_parser("acquire", help="获取音源并标准化为 source/original.wav（下载前须征得用户同意）")
+    p.add_argument("slug")
+    src = p.add_mutually_exclusive_group(required=True)
+    src.add_argument("--url")
+    src.add_argument("--raw", type=Path)
+    p.add_argument("--trim", type=float, nargs=2, metavar=("START", "END"))
+    p = sub.add_parser("arrange", help="生成编配草稿 arrangements/<arr>.atex")
+    p.add_argument("slug")
+    p.add_argument("--arr", choices=ARRS, required=True)
+    p.add_argument("--capo", type=int)
+    p.add_argument("--force", action="store_true")
     p = sub.add_parser("serve", help="从仓库根目录起本地 HTTP 服务，用于打开交互谱")
     p.add_argument("--port", type=int, default=8765)
     args = ap.parse_args(argv)
 
     if args.cmd == "serve":
         return _serve(args.port)
+    if args.cmd == "new":
+        return _new(SongPaths.for_slug(args.slug, args.songs_dir), args.title, args.artist)
     paths = SongPaths.for_slug(args.slug, args.songs_dir)
     cfg = load_song_config(paths)
     if args.cmd == "render":
@@ -42,6 +59,38 @@ def main(argv: list[str] | None = None) -> int:
         out = run_verify(paths, cfg, args.arr)
         print((out / "report.md").read_text(encoding="utf-8"))
         print(f"报告目录：{out}")
+    elif args.cmd == "acquire":
+        from .acquire import acquire
+
+        print(acquire(paths, url=args.url, raw=args.raw, trim=tuple(args.trim) if args.trim else None))
+    elif args.cmd == "arrange":
+        from .arrange.pipeline import arrange
+
+        target, option = arrange(paths, cfg, args.arr, capo=args.capo, force=args.force)
+        names = ", ".join(f"{k}→{v.name}" for k, v in option.shapes.items())
+        print(f"{target}\ncapo {option.capo}（代价 {option.cost}）：{names}")
+    return 0
+
+
+SONG_TEMPLATE = """slug: {slug}
+title: {title}
+artist: {artist}
+version: tv
+level: intermediate
+arrangements: [strum, finger]
+outputs: [html, pdf, txt]
+source: {{url: null, kind: null, trim: null}}
+reference_charts: []
+overrides: {{}}
+"""
+
+
+def _new(paths: SongPaths, title: str, artist: str) -> int:
+    if paths.config.exists():
+        raise FileExistsError(paths.config)
+    paths.root.mkdir(parents=True, exist_ok=True)
+    paths.config.write_text(SONG_TEMPLATE.format(slug=paths.slug, title=title, artist=artist), encoding="utf-8")
+    print(paths.config)
     return 0
 
 
