@@ -19,3 +19,6 @@ __pycache__/
 scripts/.setup.log
 .superpowers/
 *.egg-info/
+
+# 校验色度图（由原曲分轨计算，体积大且可再生）
+songs/*/reports/**/plots/

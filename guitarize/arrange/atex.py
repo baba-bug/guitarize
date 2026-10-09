@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Sequence
 
+from .. import theory
+
 # (拍数, alphaTex 时值码, 是否附点)，从大到小
 DURATIONS = [(4.0, 1, False), (3.0, 2, True), (2.0, 2, False), (1.5, 4, True), (1.0, 4, False),
              (0.75, 8, True), (0.5, 8, False), (0.25, 16, False)]
@@ -98,8 +100,24 @@ def quote(text: str) -> str:
     return '"' + _one_line(text).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+# 调号名：按惯用写法（五度圈里升降号更少的一边）；alphaTab 不认 A#、D# 大调这类名字
+_MAJOR_KS = ("C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
+_MINOR_KS = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "Bb", "B")
+
+
+def key_signature(tonic: str, mode: str) -> str:
+    """原调（实际音高，五线谱按实际音高记谱，与变调夹无关）→ alphaTex \\ks 的调名。"""
+    pc = theory.pc(tonic)
+    return _MINOR_KS[pc] + "minor" if mode == "minor" else _MAJOR_KS[pc]
+
+
+def leadsheet_key(leadsheet: dict) -> tuple[str, str] | None:
+    """leadsheet 的原调 (主音, 大 / 小调)；没有记调时不写调号。"""
+    return (leadsheet["key"], leadsheet.get("mode", "major")) if leadsheet.get("key") else None
+
+
 def header(title: str, tempo: float, capo: int, feel: str, staff: str,
-           chords: dict[str, Sequence[int | None]] | None = None) -> str:
+           chords: dict[str, Sequence[int | None]] | None = None, key: tuple[str, str] | None = None) -> str:
     lines = [f"\\title {quote(title)}", f"\\tempo {int(round(tempo))}", '\\track "Guitar"',
              "\\instrument 25", f"\\staff {{{staff}}}", f"\\tuning {STANDARD_TUNING}"]
     if capo:
@@ -107,6 +125,8 @@ def header(title: str, tempo: float, capo: int, feel: str, staff: str,
     for name, frets in (chords or {}).items():
         lines.append(f"\\chord {quote(name)} " + " ".join("x" if f is None else str(f) for f in frets))
     lines.append("\\ts 4 4")
+    if key is not None:
+        lines.append(f"\\ks {key_signature(*key)}")
     if feel == "shuffle":
         lines.append("\\tf triplet-8th")
     return "\n".join(lines) + "\n"

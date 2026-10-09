@@ -452,7 +452,7 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
     remark(cut_same_string(v1, v2))
     remark(cut_crossings(v1, v2))
     sections = [b.get("section") for b in leadsheet["bars"]]
-    head = atex.header(title, leadsheet["tempo_bpm"], capo, feel, "score tabs")
+    head = atex.header(title, leadsheet["tempo_bpm"], capo, feel, "score tabs", key=atex.leadsheet_key(leadsheet))
 
     def render() -> str:
         lines1 = _voice_lines(n_bars, [p for it in v1 for p in it.pieces()], sections, feel)

@@ -56,6 +56,28 @@ def test_document_builds_with_alphatab(tmp_path):
     assert [n.midi for n in score.melody(0)] == [71]
 
 
+def test_key_signature_names_follow_convention():
+    # 只用升号的调名要换成惯用的降号调号（alphaTab 不认 A#、D# 大调这类名字）
+    assert atex.key_signature("B", "major") == "B"
+    assert atex.key_signature("A#", "major") == "Bb"
+    assert atex.key_signature("D#", "major") == "Eb"
+    assert atex.key_signature("F#", "major") == "F#"
+    assert atex.key_signature("G#", "minor") == "G#minor"
+    assert atex.key_signature("A#", "minor") == "Bbminor"
+    assert atex.key_signature("D#", "minor") == "D#minor"
+    assert atex.key_signature("Bb", "major") == "Bb"
+
+
+def test_header_key_signature_builds(tmp_path):
+    for tonic, mode in [("B", "major"), ("A#", "major"), ("D#", "major"), ("A#", "minor"), ("C", "minor")]:
+        head = atex.header("T", 120, 4, "shuffle", "score tabs", key=(tonic, mode))
+        assert f"\\ks {atex.key_signature(tonic, mode)}" in head
+        src = tmp_path / f"k-{tonic}-{mode}.atex"
+        src.write_text(atex.document(head, [[atex.bar_line(["0.1.1"], 1)]]), encoding="utf-8")
+        alphatab.build(src, tmp_path / "b", src.stem)  # 调号名不被 alphaTab 接受时这里会抛 AlphaTexError
+    assert "\\ks" not in atex.header("T", 120, 0, "straight", "tabs")
+
+
 def test_quote_escapes_strings():
     assert atex.quote('Outro "end"') == '"Outro \\"end\\""'
     assert atex.quote("a\\b") == '"a\\\\b"'

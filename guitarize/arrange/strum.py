@@ -213,7 +213,7 @@ def generate_strum(leadsheet: dict, capo: int, profile: Profile, patterns: list[
             tokens, prev = bar_tokens(chords[i], PATTERNS[patterns[i]], shapes, prev, feel, muted)
             lines.append(atex.bar_line(tokens, i + 1, b.get("section")))
         diagrams = {v.name: v.frets for v in shapes.values()}
-        head = atex.header(title, leadsheet["tempo_bpm"], capo, feel, "tabs", diagrams)
+        head = atex.header(title, leadsheet["tempo_bpm"], capo, feel, "tabs", diagrams, key=atex.leadsheet_key(leadsheet))
         return atex.document(head, [lines])
 
     text = render()
