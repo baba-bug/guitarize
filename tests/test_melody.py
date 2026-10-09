@@ -120,3 +120,23 @@ def test_tidy_notes_drops_notes_before_bar_one():
     from guitarize.analyze.melody import tidy_notes
 
     assert _sd(tidy_notes([N(-1.0, 1.0, 64), N(0.0, 1.0, 65)])) == [(0.0, 1.0, 65)]
+
+
+def test_quantize_and_merge_never_overlap_on_triplet_grid():
+    # 三连音格上起点与时值分别四舍五入会累积误差（0.6667 + 0.6667 = 1.3334 > 1.3333）：
+    # 时值必须取 round(end) - round(start)，合并滑音后也不能与相邻音重叠
+    slot_pitch = [None, None, 64, 64, 61, 62, 62, 64, 64]  # 每格音高；61 = C#，C 大调外
+    pos = np.arange(len(slot_pitch) * 20) / 60
+    midi = np.array([np.nan if slot_pitch[i // 20] is None else slot_pitch[i // 20] for i in range(len(pos))])
+    notes = quantize(pos, midi, np.ones_like(midi), np.array([]), C_MAJOR, slot=1 / 3)
+    merged = merge_glides(notes)
+    for got in (notes, merged):
+        for a, b in zip(got, got[1:]):
+            assert a["start_beats"] + a["dur_beats"] <= b["start_beats"] + 1e-9
+    assert _sd(merged) == [(0.6667, 0.6666, 64), (1.3333, 1.0, 62), (2.3333, 0.6667, 64)]
+
+
+def test_merge_glides_fall_off_ends_where_glide_ended():
+    # 前一个音的终点与滑音起点只在 1e-3 容差内相接：合并后的终点取滑音的终点，而不是两段时值相加
+    got = merge_glides([N(2.0, 0.6667, 66), N(2.6663, 0.3337, 67, True), N(3.0, 1.0, 71)])
+    assert _sd(got) == [(2.0, 1.0, 66), (3.0, 1.0, 71)]

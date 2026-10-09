@@ -74,9 +74,14 @@ def quantize(beat_pos: np.ndarray, midi: np.ndarray, periodicity: np.ndarray, on
         else:
             cur = {"_start": k, "_end": k + 1, "midi": p, "out_of_key": out, "_conf": [conf]}
             notes.append(cur)
-    return [{"start_beats": round(n["_start"] * slot, 4), "dur_beats": round((n["_end"] - n["_start"]) * slot, 4),
+    # 起点、终点各自取 4 位小数，时值 = 终点 − 起点：三连音格上分别舍入起点和时值会让相邻音重叠 1e-4
+    return [{"start_beats": round(n["_start"] * slot, 4), "dur_beats": _span(n["_start"] * slot, n["_end"] * slot),
              "midi": n["midi"], "out_of_key": n["out_of_key"], "conf": round(float(np.mean(n["_conf"])), 3)}
             for n in notes]
+
+
+def _span(start: float, end: float) -> float:
+    return round(round(end, 4) - round(start, 4), 4)
 
 
 def fix_octaves(notes: list[dict], window: int = 3) -> list[dict]:
@@ -106,12 +111,12 @@ def merge_glides(notes: list[dict]) -> list[dict]:
         if n["out_of_key"] and n["dur_beats"] <= GLIDE_MAX_BEATS:
             nxt = work[i + 1] if i + 1 < len(work) else None
             if nxt is not None and abs(n["start_beats"] + n["dur_beats"] - nxt["start_beats"]) <= 1e-3 and ok(n, nxt):
-                nxt["dur_beats"] = round(nxt["start_beats"] + nxt["dur_beats"] - n["start_beats"], 4)
+                nxt["dur_beats"] = _span(n["start_beats"], nxt["start_beats"] + nxt["dur_beats"])
                 nxt["start_beats"] = round(n["start_beats"], 4)
                 continue
             prev = out[-1] if out else None
             if prev is not None and abs(prev["start_beats"] + prev["dur_beats"] - n["start_beats"]) <= 1e-3 and ok(n, prev):
-                prev["dur_beats"] = round(prev["dur_beats"] + n["dur_beats"], 4)
+                prev["dur_beats"] = _span(prev["start_beats"], n["start_beats"] + n["dur_beats"])
                 continue
         out.append(n)
     return out
