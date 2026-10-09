@@ -2,7 +2,9 @@
 
 组合规则：音高从高到低依次放在编号严格递增的弦上（旋律在上、低音在下）；按弦跨度 ≤ max_span，品位 ≤ max_fret。
 静态代价：把位越高越贵、跨度越大越贵、7 品以上加罚、空弦减分、旋律不在 1–3 弦加罚。
-转移代价：把位移动的品数 ×（1 + 1/时间间隔）。
+转移代价：手型框移动的品数 ×（1 + 1/时间间隔）；一拍以内最低品移动超过 max_shift（校验的换把硬规则）再罚 1000。
+全空弦组合不占把位：Viterbi 状态带上"路径上最近一次按弦的手型框"，空弦事件原样继承，下一次按弦的转移代价
+按它计算（时间间隔仍取相邻两个事件之差：校验会把空弦起音时仍按着的低音算进手型，按相邻间隔算更保守）。
 音高从高到低必须是 旋律 > 填充 > 低音。某时刻无解时按顺序降级：低音降八度 → 低音升八度 → 去掉填充 →
 （去掉填充后）低音降 / 升八度 → 去掉低音 → 旋律升八度 → 旋律降八度，并记录在 fallback。
 """
@@ -61,12 +63,18 @@ def _position(combo: tuple, span: int) -> tuple[int, int] | None:
     return max(1, max(fretted) - span), min(fretted)
 
 
-def _transition(a: tuple, b: tuple, gap: float, span: int) -> float:
-    pa, pb = _position(a, span), _position(b, span)
+HARD = 1000.0  # 违反校验硬规则的转移罚分（不设为无穷：总要有一条路径）
+
+
+def _transition(pa: tuple[int, int] | None, pb: tuple[int, int] | None, gap: float, profile: Profile) -> float:
+    """手型框 pa → pb 的代价；任一为 None（尚无按弦）不计。框的 hi 就是最低按弦品，与校验的把位定义一致。"""
     if pa is None or pb is None:
         return 0.0
     dist = max(0, pa[0] - pb[1], pb[0] - pa[1])
-    return dist * (1.0 + 1.0 / max(gap, 0.25))
+    cost = dist * (1.0 + 1.0 / max(gap, 0.25))
+    if gap < 1.0 - 1e-6 and abs(pa[1] - pb[1]) > profile.max_shift:
+        cost += HARD
+    return cost
 
 
 def _ordered(m: int | None, f: int | None, b: int | None) -> tuple[int | None, int | None, int | None]:
@@ -118,24 +126,32 @@ def assign_frets(events: list[FretEvent], profile: Profile) -> list[FretEvent]:
                 break
         else:
             layers.append(([()], (None, None, None), "dropped"))
+    span = profile.max_span
+    # 状态 = (候选下标, 手型框)；全空弦候选继承前驱状态的手型框，每种来路各成一个状态
+    states = [[(k, _position(c, span)) for k, c in enumerate(layers[0][0])]]
     cost = [_static(c, layers[0][1][0] is not None) for c in layers[0][0]]
     back = []
     for i in range(1, len(layers)):
         gap = events[i].start - events[i - 1].start
-        prev = layers[i - 1][0]
-        new, bp = [], []
-        for c in layers[i][0]:
-            k = min(range(len(prev)), key=lambda j: cost[j] + _transition(prev[j], c, gap, profile.max_span))
-            new.append(cost[k] + _transition(prev[k], c, gap, profile.max_span) + _static(c, layers[i][1][0] is not None))
-            bp.append(k)
-        cost = new
-        back.append(bp)
-    k = min(range(len(cost)), key=cost.__getitem__)
-    path = [k]
+        cands, used, _ = layers[i]
+        best: dict[tuple, tuple[float, int]] = {}  # 状态 → (累计代价, 前驱状态下标)
+        for k, c in enumerate(cands):
+            own, static = _position(c, span), _static(c, used[0] is not None)
+            for j, (_, hand) in enumerate(states[-1]):
+                key = (k, hand if own is None else own)
+                total = cost[j] + _transition(hand, own, gap, profile) + static
+                if key not in best or total < best[key][0]:
+                    best[key] = (total, j)
+        states.append(list(best))
+        cost = [best[st][0] for st in states[-1]]
+        back.append([best[st][1] for st in states[-1]])
+    s = min(range(len(cost)), key=cost.__getitem__)
+    path = [s]
     for bp in reversed(back):
         path.append(bp[path[-1]])
     path.reverse()
-    for ev, (cands, used, label), k in zip(events, layers, path):
+    for ev, (cands, used, label), layer, s in zip(events, layers, states, path):
+        k = layer[s][0]
         positions = iter(cands[k])
         ev.melody_pos, ev.fill_pos, ev.bass_pos = (next(positions) if p is not None else None for p in used)
         ev.fallback = label

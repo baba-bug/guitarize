@@ -43,9 +43,32 @@ def test_hand_box_intervals_and_transition():
     assert _position(((6, 3),), 3) == (1, 3)
     assert _position(((2, 1), (5, 3)), 3) == (1, 1)
     assert _position(((1, 0), (2, 0)), 3) is None
-    assert _transition(((6, 3),), ((2, 1), (5, 3)), 1.0, 3) == 0
+    assert _transition(_position(((6, 3),), 3), _position(((2, 1), (5, 3)), 3), 1.0, MID) == 0
     assert _position(((2, 8),), 3) == (5, 8)
-    assert _transition(((2, 1),), ((2, 8),), 1.0, 3) == 8.0
+    assert _transition((1, 1), (5, 8), 1.0, MID) == 8.0
+    assert _transition(None, (5, 8), 0.5, MID) == 0
+
+
+def test_shift_rule_is_a_hard_cost_within_one_beat():
+    # 最低品 1 → 6（差 5 > max_shift 4）：一拍以内是校验硬规则，代价 +1000；一拍及以上只按距离计
+    assert _transition((1, 1), (3, 6), 0.5, MID) >= 1000
+    assert _transition((1, 1), (3, 6), 1.0, MID) < 1000
+    assert _transition((1, 1), (2, 5), 0.5, MID) < 1000     # 差 4 不超限
+
+
+def test_open_only_event_keeps_previous_hand_position():
+    # 12 品 → 空弦 → A4：空弦音不占把位，手仍在 12 品附近，应选 2 弦 10 品而不是 1 弦 5 品
+    evs = assign_frets([FretEvent(0, 76, None), FretEvent(1, 64, None), FretEvent(2, 69, None)], MID)
+    assert [e.melody_pos for e in evs] == [(1, 12), (1, 0), (2, 10)]
+
+
+def test_no_hard_shift_across_open_melody_note():
+    # 评审回归（capo 4 第 48 小节）：B7/D# 低音 D#3，反拍空弦旋律，第 3 拍再弹低音，第 4 拍旋律要 5 品。
+    # 旧代价模型：4 弦 1 品 →（空弦，代价 0）→ 5 弦 6 品，半拍内 1→6 换把违规。空弦音继承手型后不能这样跳。
+    evs = assign_frets([FretEvent(0, None, 51, fill=59), FretEvent(1.5, 64, None),
+                        FretEvent(2, None, 51, fill=59), FretEvent(3, 69, None)], MID)
+    assert evs[1].melody_pos == (1, 0)
+    assert abs(evs[0].bass_pos[1] - evs[2].bass_pos[1]) <= MID.max_shift
 
 
 def test_silently_dropped_fill_is_recorded():
