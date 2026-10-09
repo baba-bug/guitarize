@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from guitarize.analyze.melody import fix_octaves, quantize, snap_to_key
+from guitarize.analyze.melody import fix_octaves, merge_glides, quantize, snap_to_key
 
 C_MAJOR = {0, 2, 4, 5, 7, 9, 11}
 
@@ -44,3 +44,58 @@ def test_quantize_empty_input_returns_no_notes():
 def test_fix_octaves_keeps_legitimate_leap():
     notes = [{"midi": m} for m in [60, 60, 60, 70, 60, 60, 60]]
     assert [n["midi"] for n in fix_octaves(notes)] == [60, 60, 60, 70, 60, 60, 60]
+
+
+def N(start, dur, midi, out=False):
+    return {"start_beats": start, "dur_beats": dur, "midi": midi, "out_of_key": out, "conf": 0.9}
+
+
+def _sd(notes):
+    return [(n["start_beats"], n["dur_beats"], n["midi"]) for n in notes]
+
+
+def test_merge_glides_scoop_into_next():
+    got = merge_glides([N(1.0, 0.3333, 67, True), N(1.3333, 0.6667, 68)])
+    assert _sd(got) == [(1.0, 1.0, 68)]
+    assert got[0]["conf"] == 0.9
+
+
+def test_merge_glides_fall_off_into_previous():
+    got = merge_glides([N(2.0, 1.0, 66), N(3.0, 0.3333, 67, True)])
+    assert _sd(got) == [(2.0, 1.3333, 66)]
+
+
+def test_merge_glides_prefers_next():
+    got = merge_glides([N(1.0, 0.3333, 66), N(1.3333, 0.3333, 67, True), N(1.6667, 0.3333, 68)])
+    assert _sd(got) == [(1.0, 0.3333, 66), (1.3333, 0.6667, 68)]
+
+
+def test_merge_glides_not_adjacent_unchanged():
+    notes = [N(0.0, 0.3333, 66), N(0.6667, 0.3333, 67, True), N(1.3333, 0.3333, 68)]
+    assert merge_glides(notes) == notes
+
+
+def test_merge_glides_too_far_unchanged():
+    notes = [N(1.0, 0.3333, 62, True), N(1.3333, 0.6667, 70)]
+    assert merge_glides(notes) == notes
+
+
+def test_merge_glides_long_note_unchanged():
+    notes = [N(1.0, 0.6667, 67, True), N(1.6667, 0.6667, 68)]
+    assert merge_glides(notes) == notes
+
+
+def test_merge_glides_out_of_key_neighbour_does_not_absorb():
+    notes = [N(1.0, 0.3333, 67, True), N(1.3333, 0.3333, 68, True)]
+    assert merge_glides(notes) == notes
+
+
+def test_merge_glides_empty():
+    assert merge_glides([]) == []
+
+
+def test_merge_glides_does_not_mutate_input():
+    notes = [N(1.0, 0.3333, 67, True), N(1.3333, 0.6667, 68)]
+    snapshot = [dict(n) for n in notes]
+    merge_glides(notes)
+    assert notes == snapshot

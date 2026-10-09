@@ -11,6 +11,8 @@ SR = 16000
 HOP = 160
 VOICED_PERIODICITY = 0.45
 SNAP_SEMITONES = 0.75
+GLIDE_MAX_BEATS = 1 / 3 + 1e-3
+GLIDE_MAX_SEMITONES = 2
 
 
 def vocal_pitch(vocals_wav: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -89,6 +91,30 @@ def fix_octaves(notes: list[dict], window: int = 3) -> list[dict]:
     return out
 
 
+def merge_glides(notes: list[dict]) -> list[dict]:
+    """调外短音（≤ 1/3 拍）若紧贴一个相距 ≤ 2 半音的调内音，视为滑音/倚音并入该音：
+    优先并入紧随其后的音（起点提前到滑音起点），否则并入紧挨在前的音（时值延长）。
+    其它调外音保留（可能是真正的经过音或蓝调音）。"""
+    def ok(g: dict, t: dict) -> bool:
+        return not t["out_of_key"] and abs(g["midi"] - t["midi"]) <= GLIDE_MAX_SEMITONES
+
+    work = [dict(n) for n in notes]
+    out: list[dict] = []
+    for i, n in enumerate(work):
+        if n["out_of_key"] and n["dur_beats"] <= GLIDE_MAX_BEATS:
+            nxt = work[i + 1] if i + 1 < len(work) else None
+            if nxt is not None and abs(n["start_beats"] + n["dur_beats"] - nxt["start_beats"]) <= 1e-3 and ok(n, nxt):
+                nxt["dur_beats"] = round(nxt["start_beats"] + nxt["dur_beats"] - n["start_beats"], 4)
+                nxt["start_beats"] = round(n["start_beats"], 4)
+                continue
+            prev = out[-1] if out else None
+            if prev is not None and abs(prev["start_beats"] + prev["dur_beats"] - n["start_beats"]) <= 1e-3 and ok(n, prev):
+                prev["dur_beats"] = round(prev["dur_beats"] + n["dur_beats"], 4)
+                continue
+        out.append(n)
+    return out
+
+
 def extract_melody(vocals_wav: Path, beats_json: dict, key_pcs: set[int]) -> dict:
     import librosa
 
@@ -97,5 +123,5 @@ def extract_melody(vocals_wav: Path, beats_json: dict, key_pcs: set[int]) -> dic
     onsets = librosa.onset.onset_detect(y=y, sr=SR, hop_length=HOP, units="time")
     slot = 1 / 3 if beats_json.get("feel") == "shuffle" else 1 / 4
     notes = quantize(time_to_beat(beats_json, times), midi, per, time_to_beat(beats_json, onsets), key_pcs, slot)
-    notes = [n for n in fix_octaves(notes) if n["start_beats"] >= 0]
+    notes = merge_glides([n for n in fix_octaves(notes) if n["start_beats"] >= 0])
     return {"grid": "triplet8" if slot == 1 / 3 else "sixteenth", "notes": notes}
