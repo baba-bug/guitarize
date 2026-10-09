@@ -1,10 +1,13 @@
 """可弹性检查：硬规则（违反即不合格）+ 软统计（只报告）。"""
 from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 
 from ..config import Profile
-from .model import Attack, Score
+from .model import Attack, Event, Note, Score
+
+EPS = 1e-6  # 浮点容差（拍）：摇摆节奏下相邻一拍的间隔可能算成 0.9999999999999999
 
 
 @dataclass(frozen=True)
@@ -28,6 +31,31 @@ def _fretted(a: Attack) -> list[int]:
     return [n.fret for n in a.notes if n.fret > 0 and not n.dead]
 
 
+def _sounding_index(score: Score) -> tuple[list[Event], list[float], float]:
+    evs = sorted((e for e in score.events if not e.rest), key=lambda e: e.start)
+    return evs, [e.start for e in evs], max((e.dur for e in evs), default=0.0)
+
+
+def _held(index: tuple[list[Event], list[float], float], t: float) -> list[Note]:
+    """t 时刻仍在发声的有品非闷音（含连音线延续音），用二分缩小扫描范围。"""
+    evs, starts, max_dur = index
+    lo = bisect_left(starts, t - max_dur - EPS)
+    hi = bisect_right(starts, t + EPS)
+    out: list[Note] = []
+    for e in evs[lo:hi]:
+        if t < e.start + e.dur - EPS:
+            out.extend(n for n in e.notes if n.fret > 0 and not n.dead)
+    return out
+
+
+def _hand_frets(a: Attack, index: tuple[list[Event], list[float], float]) -> list[int]:
+    """按住的手形：本拍新拨的有品音 + 仍在发声的有品音；被新拨的同弦旧音让位。"""
+    fresh = [(n.string, n.fret) for n in a.notes if n.fret > 0 and not n.dead]
+    fresh_strings = {s for s, _ in fresh}
+    held = [(n.string, n.fret) for n in _held(index, a.start) if n.string not in fresh_strings]
+    return [f for _, f in sorted(set(fresh + held))]
+
+
 def check_playability(score: Score, profile: Profile, kind: str) -> list[Violation]:
     out: list[Violation] = []
     for (bar, voice), length in sorted(score.voice_lengths().items()):
@@ -35,6 +63,7 @@ def check_playability(score: Score, profile: Profile, kind: str) -> list[Violati
         if abs(length - expected) > 1e-6:
             out.append(Violation(bar + 1, score.bars[bar].start, "bar_length",
                                  f"声部 {voice + 1} 共 {length:g} 拍，应为 {expected:g} 拍"))
+    index = _sounding_index(score)
     last: tuple[float, int] | None = None  # (时间, 把位)
     for a in score.attacks():
         bar = a.bar + 1
@@ -42,15 +71,17 @@ def check_playability(score: Score, profile: Profile, kind: str) -> list[Violati
         if len(strings) != len(set(strings)):
             out.append(Violation(bar, a.start, "same_string", f"同一弦同时两个音：{sorted(strings)}"))
         fr = _fretted(a)
-        if fr:
-            if max(fr) - min(fr) > profile.max_span:
-                out.append(Violation(bar, a.start, "span", f"跨度 {min(fr)}–{max(fr)} 品，超过 {profile.max_span}"))
-            if fingers_needed(fr) > profile.max_fingers:
-                out.append(Violation(bar, a.start, "fingers", f"需要 {fingers_needed(fr)} 根手指"))
-            if max(fr) > profile.max_fret:
-                out.append(Violation(bar, a.start, "max_fret", f"最高 {max(fr)} 品，超过 {profile.max_fret}"))
-            pos = min(fr)
-            if last is not None and a.start - last[0] < 1.0 and abs(pos - last[1]) > profile.max_shift:
+        hand = _hand_frets(a, index)
+        if hand:
+            if max(hand) - min(hand) > profile.max_span:
+                out.append(Violation(bar, a.start, "span", f"跨度 {min(hand)}–{max(hand)} 品，超过 {profile.max_span}"))
+            if fingers_needed(hand) > profile.max_fingers:
+                out.append(Violation(bar, a.start, "fingers", f"需要 {fingers_needed(hand)} 根手指"))
+        if fr and max(fr) > profile.max_fret:
+            out.append(Violation(bar, a.start, "max_fret", f"最高 {max(fr)} 品，超过 {profile.max_fret}"))
+        if hand:
+            pos = min(hand)
+            if last is not None and a.start - last[0] < 1.0 - EPS and abs(pos - last[1]) > profile.max_shift:
                 out.append(Violation(bar, a.start, "shift",
                                      f"{a.start - last[0]:.2f} 拍内换把 {last[1]}→{pos} 品"))
             last = (a.start, pos)

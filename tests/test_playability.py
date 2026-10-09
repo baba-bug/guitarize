@@ -32,6 +32,14 @@ def test_slow_shift_ok(build_tex):
     assert rules(build_tex(":4 1.1 8.1 r r |")) == []
 
 
+def test_swung_one_beat_gap_is_not_fast_shift(build_tex):
+    assert rules(build_tex("\\tf triplet-8th\n:8 r 1.1 r 8.1 :2 r |")) == []
+
+
+def test_held_note_counts_for_span(build_tex):
+    assert rules(build_tex(":4 (1.5 0.1) (-.5 8.1) r r |")) == ["span"]
+
+
 def test_plucks_only_for_finger_without_strum(build_tex):
     s = build_tex(":4 (0.1 0.2 0.3 2.4 3.5) r r r |")
     assert rules(s, "finger") == ["plucks"]
