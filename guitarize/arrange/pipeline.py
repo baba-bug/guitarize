@@ -10,7 +10,7 @@ from ..config import SongConfig, load_profile
 from ..paths import SongPaths
 from ..verify.metrics import onset_slots
 from .capo import CapoOption, choose_capo
-from .finger import generate_finger
+from .finger import generate_finger, section_bars
 from .patterns import DEFAULT, choose_pattern, slots_per_beat
 from .strum import beat_chords, generate_strum
 
@@ -52,8 +52,9 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
         raise FileExistsError(f"{target} exists; edit it directly or pass --force to regenerate")
     leadsheet = json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))
     profile = load_profile(cfg.level)
-    melody = [m["midi"] for b in leadsheet["bars"] for m in b["melody"]] if arr == "finger" else []
-    options = choose_capo(chord_beats(leadsheet), profile, melody)
+    notes = [(m["start_beats"], m["midi"]) for b in leadsheet["bars"] for m in b["melody"]]
+    melody = sorted(notes) if arr == "finger" else []
+    options = choose_capo(chord_beats(leadsheet), profile, melody, section_bars=section_bars(leadsheet))
     wanted = capo if capo is not None else cfg.overrides.get("capo")
     if wanted is None:
         chosen = options[0]

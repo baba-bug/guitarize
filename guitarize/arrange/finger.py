@@ -30,6 +30,11 @@ def written_position(perf: float, feel: str) -> float:
     return round(perf * 2) / 2
 
 
+def section_bars(leadsheet: dict) -> list[int]:
+    """带段落标记的小节（0-based）。"""
+    return [i for i, b in enumerate(leadsheet["bars"]) if b.get("section")]
+
+
 def skeleton_notes(leadsheet: dict, profile: Profile) -> list[tuple[float, int]]:
     notes = sorted((m for b in leadsheet["bars"] for m in b["melody"]), key=lambda m: m["start_beats"])
     mask = skeleton_mask([m["start_beats"] for m in notes], [m["dur_beats"] for m in notes])
