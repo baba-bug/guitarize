@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 
@@ -21,3 +22,12 @@ def test_build_error_reports_diagnostics(tmp_path):
     src.write_text(TEX_HEAD + ":4 0.9 |", encoding="utf-8")
     with pytest.raises(alphatab.AlphaTexError, match="out of range"):
         alphatab.build(src, tmp_path / "b", "bad")
+
+
+def test_build_syntax_error_reports_message_and_location(tmp_path):
+    src = tmp_path / "bad.atex"
+    src.write_text(TEX_HEAD + ":4 {d} 0.1 |", encoding="utf-8")
+    with pytest.raises(alphatab.AlphaTexError) as exc:
+        alphatab.build(src, tmp_path / "b", "bad")
+    assert "Unrecognized property" in str(exc.value)
+    assert re.search(r"L\d+:\d+", str(exc.value))

@@ -91,11 +91,16 @@ async function main() {
   try {
     score = alphaTab.importer.ScoreLoader.loadAlphaTex(readFileSync(inPath, 'utf8'), settings);
   } catch (e) {
-    const inner = e.inner ?? e;
-    const lines = [`alphaTex 解析失败: ${inPath}`, String(inner)];
+    const inner = e.cause ?? e.inner ?? e;
+    const lines = [`alphaTex 解析失败: ${inPath}`];
+    const HINT = 0; // AlphaTexDiagnosticsSeverity.Hint：只是建议，不算错误
     if (typeof inner.iterateDiagnostics === 'function') {
-      for (const d of inner.iterateDiagnostics()) lines.push(`- ${d.message ?? JSON.stringify(d)}`);
+      for (const d of inner.iterateDiagnostics()) {
+        if (d.severity === HINT) continue;
+        lines.push(`L${d.start?.line ?? '?'}:${d.start?.col ?? '?'} ${d.message ?? JSON.stringify(d)}`);
+      }
     }
+    if (lines.length === 1) lines.push(String(inner));
     console.error(lines.join('\n'));
     process.exit(2);
   }
