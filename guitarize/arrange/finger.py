@@ -1,10 +1,12 @@
 """指弹编配草稿：旋律骨架（voice 1）+ 低音与填充（voice 2），指法由 Viterbi 分配。
-给出自检（与 verify 同一套可弹性检查）时按违规逐轮修补：截短仍按着的音、去掉填充 / 低音。
+给出自检（与 verify 同一套可弹性检查）时按违规逐轮修补：截短仍按着的音、去掉填充 / 低音；
+换把找不到 t 时可修的音时，改在前一个起音处修，最后才把旋律音移八度。
 每处指法降级与修补都写进该小节的 `// bar N` 注释，方便审阅。"""
 from __future__ import annotations
 
+import copy
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Iterable
 
 import numpy as np
@@ -129,20 +131,21 @@ def bass_events(leadsheet: dict, capo: int, profile: Profile) -> list[tuple[floa
     return out
 
 
-def _voice_lines(n_bars: int, items: list[tuple[float, float, list]], sections: list[str | None],
+def _voice_lines(n_bars: int, items: list[tuple[float, float, list, bool]], sections: list[str | None],
                  feel: str) -> list[str]:
-    """items：(记谱位置, 时值, [(弦, 品) 或 None, ...])；按小节铺满（空隙补休止），Shuffle 下按八分对切分。"""
+    """items：(记谱位置, 时值, [(弦, 品)], 是否连音线延续)（见 Placed.pieces）；按小节铺满（空隙补休止），
+    Shuffle 下按八分对切分。"""
     by_bar: dict[int, list] = {}
-    for pos, dur, where in sorted(items, key=lambda x: x[0]):
-        by_bar.setdefault(int(pos // 4), []).append((pos, dur, where))
+    for item in sorted(items, key=lambda x: x[0]):
+        by_bar.setdefault(int(item[0] // 4), []).append(item)
     lines = []
     for i in range(n_bars):
         t, end, bar_items = i * 4.0, i * 4.0 + 4.0, []
-        for pos, dur, where in by_bar.get(i, []):
+        for pos, dur, notes, tie in by_bar.get(i, []):
             if pos > t + 1e-6:
                 bar_items.append(atex.Item(t - i * 4.0, pos - t, []))
             dur = min(dur, end - pos)
-            bar_items.append(atex.Item(pos - i * 4.0, dur, [w for w in where if w is not None]))
+            bar_items.append(atex.Item(pos - i * 4.0, dur, notes, tie=tie))
             t = pos + dur
         if t < end - 1e-6:
             bar_items.append(atex.Item(t - i * 4.0, end - t, []))
@@ -152,14 +155,41 @@ def _voice_lines(n_bars: int, items: list[tuple[float, float, list]], sections: 
 
 @dataclass
 class Placed:
-    """声部里的一个音 / 和弦（记谱位置、时值，拍）。where：voice 1 为 [旋律]，voice 2 为 [填充, 低音]；None = 不弹。"""
+    """声部里的一个音 / 和弦（记谱位置、时值，拍）。where：voice 1 为 [旋律]，voice 2 为 [填充, 低音]；None = 不弹。
+    stop：where 下标 → 这个音单独提前止音的位置（其余的音接着响，渲染成连音线延续）。moved：修补时已移过八度。"""
     pos: float
     dur: float
     where: list
+    stop: dict = field(default_factory=dict)
+    moved: bool = False
+
+    def end(self, k: int) -> float:
+        return min(self.stop.get(k, self.pos + self.dur), self.pos + self.dur)
+
+    def sounding(self, t: float) -> list[int]:
+        """起音早于 t、t 时仍在发声的音（where 下标）。"""
+        if self.pos >= t - EPS:
+            return []
+        return [k for k, w in enumerate(self.where) if w is not None and t < self.end(k) - EPS]
 
     def holds(self, t: float) -> bool:
-        """起音早于 t、t 时仍在发声。"""
-        return self.pos < t - EPS and t < self.pos + self.dur - EPS
+        return bool(self.sounding(t))
+
+    def cut(self, t: float) -> None:
+        """整体截止到 t。"""
+        self.dur = t - self.pos
+
+    def pieces(self) -> list[tuple[float, float, list, bool]]:
+        """→ [(位置, 时值, [(弦, 品)], 是否连音线延续)]：在单独止音处切开，后面的片段只留还在响的音、写成连音线；
+        都不响了写休止。"""
+        end = self.pos + self.dur
+        notes = [k for k, w in enumerate(self.where) if w is not None]
+        edges = sorted({self.pos, end} | {self.end(k) for k in notes if self.pos + EPS < self.end(k) < end - EPS})
+        out = []
+        for a, b in zip(edges, edges[1:]):
+            on = [self.where[k] for k in notes if self.end(k) > a + EPS]
+            out.append((a, b - a, on, bool(on) and a > self.pos + EPS))
+        return out
 
 
 def _at(t: float) -> str:
@@ -170,17 +200,32 @@ def _strings(it: Placed) -> set[int]:
     return {w[0] for w in it.where if w is not None}
 
 
+def _cut_note(it: Placed, k: int, t: float) -> None:
+    """只让 where[k] 在 t 止音；剩下的音都比它先停时整体截短。"""
+    it.stop[k] = t
+    it.dur = max(it.end(j) for j, w in enumerate(it.where) if w is not None) - it.pos
+    it.stop = {j: e for j, e in it.stop.items() if e < it.pos + it.dur - EPS}
+
+
 def cut_same_string(v1: list[Placed], v2: list[Placed]) -> list[tuple[float, str]]:
-    """同一根弦不能一边按住一边再弹：低音 / 填充持续期间有旋律音弹在它的弦上 → 截止到这个旋律音；
-    旋律音持续期间有低音 / 填充弹在它的弦上 → 旋律截止到该处。返回 (记谱位置, 说明)。"""
+    """同一根弦不能一边按住一边再弹：低音 / 填充持续期间有旋律音弹在它的弦上 → 只截这根弦上的音（"fill cut" /
+    "bass cut"），另一个音接着响（写成连音线延续）；旋律音持续期间有低音 / 填充弹在它的弦上 → 旋律截止到该处。
+    返回 (记谱位置, 说明)。"""
     out = []
-    for held, other, name in ((v2, v1, "bass cut"), (v1, v2, "melody cut")):
-        for it in held:
-            hit = min((o.pos for o in other if it.holds(o.pos) and _strings(it) & _strings(o)), default=None)
+    for it in v2:
+        for k, name in ((0, "fill cut"), (1, "bass cut")):
+            w = it.where[k]
+            hit = None if w is None else min((o.pos for o in v1 if k in it.sounding(o.pos) and w[0] in _strings(o)),
+                                             default=None)
             if hit is not None:
-                it.dur = hit - it.pos
+                _cut_note(it, k, hit)
                 out.append((hit, f"{name} {_at(hit)} (same string)"))
-    return out
+    for it in v1:
+        hit = min((o.pos for o in v2 if it.holds(o.pos) and _strings(it) & _strings(o)), default=None)
+        if hit is not None:
+            it.cut(hit)
+            out.append((hit, f"melody cut {_at(hit)} (same string)"))
+    return sorted(out)
 
 
 def _pitch(w: tuple[int, int]) -> int:
@@ -192,13 +237,11 @@ def cut_crossings(v1: list[Placed], v2: list[Placed]) -> list[tuple[float, str]]
     低音 / 填充持续期间有旋律音不比它高出 3 个半音 → 截止到这个旋律音。返回 (记谱位置, 说明)。"""
     out = []
     for it in v2:
-        top = max((_pitch(w) for w in it.where if w is not None), default=None)
-        if top is None:
-            continue
-        hit = min((o.pos for o in v1 if it.holds(o.pos) and o.where[0] is not None
-                   and _pitch(o.where[0]) - top < FILL_GAP), default=None)
+        hit = min((o.pos for o in v1 if o.where[0] is not None
+                   and any(_pitch(o.where[0]) - _pitch(it.where[k]) < FILL_GAP for k in it.sounding(o.pos))),
+                  default=None)
         if hit is not None:
-            it.dur = hit - it.pos
+            it.cut(hit)
             out.append((hit, f"bass cut {_at(hit)} (crossing)"))
     return out
 
@@ -207,37 +250,164 @@ def _fretted(w: tuple[int, int] | None) -> bool:
     return w is not None and w[1] > 0
 
 
+def _attacked(items: list[Placed], t: float) -> list[Placed]:
+    return [it for it in items if abs(it.pos - t) < EPS and any(w is not None for w in it.where)]
+
+
+def hand(v1: list[Placed], v2: list[Placed], t: float) -> list[int]:
+    """t 时手上按着的品（记谱时间），与校验的 _hand_frets 同一模型：t 时新拨的有品音 + 之前起音、仍在发声的有品音，
+    新拨的有品音所在的弦上旧音让位。空表示没有把位。"""
+    fresh = {w for it in _attacked(v1 + v2, t) for w in it.where if _fretted(w)}
+    strings = {s for s, _ in fresh}
+    held = {it.where[k] for it in v1 + v2 for k in it.sounding(t)
+            if _fretted(it.where[k]) and it.where[k][0] not in strings}
+    return sorted(f for _, f in fresh | held)
+
+
+def previous_hand(v1: list[Placed], v2: list[Placed], t: float) -> float | None:
+    """t 之前最近一个手上有按弦音的起音：校验的换把规则拿 t 的把位和它比。"""
+    onsets = {it.pos for it in v1 + v2 if it.pos < t - EPS and _attacked([it], it.pos)}
+    return next((o for o in sorted(onsets, reverse=True) if hand(v1, v2, o)), None)
+
+
+def jump(v1: list[Placed], v2: list[Placed], t: float) -> int:
+    """模型里 t 的换把幅度：t 的把位（最低按弦品）与 1 拍以内前一个把位之差；t 没有把位、或 1 拍内没有前一个把位则为 0。
+    记谱时间与演奏时间对"相隔是否不到 1 拍"的判断一致（起音都在八分格上，Shuffle 的反拍成对后移）。"""
+    here, prev = hand(v1, v2, t), previous_hand(v1, v2, t)
+    if not here or prev is None or t - prev > 1 - EPS:
+        return 0
+    return abs(here[0] - hand(v1, v2, prev)[0])
+
+
+def _cut_held(items: list[Placed], t: float) -> bool:
+    """截短第一个 t 之前起音、t 时仍有按弦音在响的音 / 和弦。"""
+    for it in items:
+        if any(_fretted(it.where[k]) for k in it.sounding(t)):
+            it.cut(t)
+            return True
+    return False
+
+
+def _drop(v2: list[Placed], t: float, k: int) -> bool:
+    """去掉 t 时起音的按弦填充（k = 0）或按弦低音（k = 1）。"""
+    for it in v2:
+        if abs(it.pos - t) < EPS and _fretted(it.where[k]):
+            it.where[k] = None
+            return True
+    return False
+
+
+Step = tuple[float, str, Callable[[list[Placed], list[Placed]], bool]]   # (修补位置, 说明, 动作(v1, v2) → 是否做了)
+
+
+def _steps_at(t: float) -> list[Step]:
+    """t 时的修补顺序：截短仍按着的低音 / 填充 → 截短仍按着的旋律 → 去掉 t 时起音的填充 → 去掉 t 时起音的低音。"""
+    return [(t, "bass cut", lambda v1, v2: _cut_held(v2, t)), (t, "melody cut", lambda v1, v2: _cut_held(v1, t)),
+            (t, "drop fill", lambda v1, v2: _drop(v2, t, 0)), (t, "drop bass", lambda v1, v2: _drop(v2, t, 1))]
+
+
+def _shift_steps(t: float, prev: float | None) -> list[Step]:
+    """换把的修补顺序：先截短（t 时的两步，再是前一个手上有音的起音 prev 时仍按着的低音 / 填充），
+    再去音（t 起音的填充、低音，然后 prev 起音的填充、低音）。"""
+    at_t = _steps_at(t)
+    if prev is None:
+        return at_t
+    return (at_t[:2] + [(prev, "bass cut", lambda v1, v2: _cut_held(v2, prev))] + at_t[2:]
+            + [(prev, "drop fill", lambda v1, v2: _drop(v2, prev, 0)),
+               (prev, "drop bass", lambda v1, v2: _drop(v2, prev, 1))])
+
+
 def _repair_at(v1: list[Placed], v2: list[Placed], t: float) -> str | None:
-    for it in v2:
-        if it.holds(t) and any(_fretted(w) for w in it.where):
-            it.dur = t - it.pos
-            return "bass cut"
-    for it in v2:
-        if abs(it.pos - t) < EPS:
-            for k, name in ((0, "drop fill"), (1, "drop bass")):
-                if _fretted(it.where[k]):
-                    it.where[k] = None
-                    return name
-    for it in v1:
-        if it.holds(t) and _fretted(it.where[0]):
-            it.dur = t - it.pos
-            return "melody cut"
-    return None
+    return next((name for _, name, act in _steps_at(t) if act(v1, v2)), None)
 
 
-def repair(v1: list[Placed], v2: list[Placed], violations: Iterable[Violation], feel: str) -> list[tuple[float, str]]:
-    """按自检违规修补（就地修改 v1 / v2）。Violation.start 是演奏时间，先换回记谱位置 t。
-    每个 t 每轮只修一处，依次尝试：1. 截短 t 之前起音、t 时仍按着的低音 / 填充；2. 去掉 t 时起音的填充，没有则去掉低音；
-    3. 截短 t 时仍按着的旋律音。只动按弦音（空弦不占手型），只修手型类规则。返回 (t, 说明)；空表示无可修。"""
-    done, seen = [], set()
+def _melody_room(it: Placed, w: tuple[int, int], v2: list[Placed]) -> bool:
+    """旋律音换到 w 后，它发声期间响着的低音 / 填充不和它同弦、且都比它低至少 FILL_GAP 个半音。"""
+    start, end = it.pos, it.pos + it.dur
+    for o in v2:
+        for k, x in enumerate(o.where):
+            if x is not None and o.pos < end - EPS and o.end(k) > start + EPS:
+                if x[0] == w[0] or _pitch(w) - _pitch(x) < FILL_GAP:
+                    return False
+    return True
+
+
+def _move_octave(v1: list[Placed], v2: list[Placed], t: float, prev: float,
+                 max_fret: int) -> tuple[float, str] | None:
+    """(b) 最后一招：t 与 prev 之间的换把只涉及两个旋律音（没有低音 / 填充）时，把其中一个移八度（±12），
+    选让跳动缩得最多的那个（落到空弦则没有把位），品位须在 max_fret 以内。每个音最多移一次。返回 (位置, 说明)。"""
+    here, there = hand(v1, v2, t), hand(v1, v2, prev)
+    b = next((it for it in _attacked(v1, t) if _fretted(it.where[0])), None)
+    a = next((it for it in v1 if _fretted(it.where[0]) and (abs(it.pos - prev) < EPS or it.holds(prev))), None)
+    if a is None or b is None or here != [b.where[0][1]] or there != [a.where[0][1]]:
+        return None
+    old = abs(here[0] - there[0])
+    best = None
+    for it, other in ((b, a), (a, b)):
+        if it.moved:
+            continue
+        for shift in (12, -12):
+            pitch = _pitch(it.where[0]) + shift
+            for s in range(1, 7):
+                w = (s, pitch - OPEN_STRINGS[s - 1])
+                if not 0 <= w[1] <= max_fret or not _melody_room(it, w, v2):
+                    continue
+                dist = abs(w[1] - other.where[0][1]) if w[1] > 0 else 0
+                key = (dist, max(0, s - 3), w[1])
+                if dist < old and (best is None or key < best[0]):
+                    best = (key, it, w, shift)
+    if best is None:
+        return None
+    _, it, w, shift = best
+    it.where[0], it.moved = w, True
+    return it.pos, f"melody{shift:+d}"
+
+
+def _repair_shift(v1: list[Placed], v2: list[Placed], t: float, max_fret: int,
+                  touched: set[float]) -> tuple[float, str] | None:
+    """按 _shift_steps 的顺序，先取第一个能让模型里的跳动（jump）变小的一步；都不能时取第一个做得了的
+    （为后面的步骤让路）；什么都做不了时 (b) 移旋律八度。前一个起音本轮已经改过的留到下一轮。"""
+    prev = previous_hand(v1, v2, t)
+    if prev is not None and prev in touched:
+        return None
+    old, first = jump(v1, v2, t), None
+    for at, name, act in _shift_steps(t, prev):
+        trial = copy.deepcopy((v1, v2))
+        if not act(*trial):
+            continue
+        if jump(*trial, t) < old:
+            act(v1, v2)
+            return at, name
+        first = first or (at, name, act)
+    if first is not None:
+        first[2](v1, v2)
+        return first[0], first[1]
+    return None if prev is None else _move_octave(v1, v2, t, prev, max_fret)
+
+
+def repair(v1: list[Placed], v2: list[Placed], violations: Iterable[Violation], feel: str,
+           max_fret: int) -> list[tuple[float, str]]:
+    """按自检违规修补（就地修改 v1 / v2）。Violation.start 是演奏时间，先换回记谱位置 t。每个 t 每轮只修一处：
+    - 跨度 / 手指数：依次 1. 截短 t 之前起音、t 时仍按着的低音 / 填充；2. 截短 t 时仍按着的旋律音；
+      3. 去掉 t 时起音的填充；4. 再去掉低音。
+    - 换把：同样的顺序，但截短之后先截短前一个手上有音的起音 t′ 时仍按着的低音 / 填充（宁可截短也不丢新起音），
+      去音之后再去掉 t′ 起音的填充、低音；优先取能缩小跳动的一步（见 _repair_shift），
+      都做不了时 (b) 把 t 或 t′ 的旋律音移八度（melody±12）。
+    只动按弦音（空弦不占手型），只修手型类规则。返回 (修补位置, 说明)；空表示无可修。"""
+    done, seen, touched = [], set(), set()
     for v in violations:
         t = written_position(v.start, feel)
         if v.rule not in HAND_RULES or t in seen:
             continue
         seen.add(t)
-        what = _repair_at(v1, v2, t)
-        if what:
-            done.append((t, f"{what} {_at(t)} ({v.rule})"))
+        if v.rule == "shift":
+            found = _repair_shift(v1, v2, t, max_fret, touched)
+        else:
+            what = _repair_at(v1, v2, t)
+            found = (t, what) if what else None
+        if found:
+            touched.add(found[0])
+            done.append((found[0], f"{found[1]} {_at(found[0])} ({v.rule})"))
     return done
 
 
@@ -285,8 +455,8 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
     head = atex.header(title, leadsheet["tempo_bpm"], capo, feel, "score tabs")
 
     def render() -> str:
-        lines1 = _voice_lines(n_bars, [(it.pos, it.dur, it.where) for it in v1], sections, feel)
-        lines2 = _voice_lines(n_bars, [(it.pos, it.dur, it.where) for it in v2], [None] * n_bars, feel)
+        lines1 = _voice_lines(n_bars, [p for it in v1 for p in it.pieces()], sections, feel)
+        lines2 = _voice_lines(n_bars, [p for it in v2 for p in it.pieces()], [None] * n_bars, feel)
         return atex.document(head, [annotate(lines1, remarks), lines2])
 
     text = render()
@@ -294,7 +464,7 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
         found = check(text)
         if not found:
             break
-        done = repair(v1, v2, found, feel)
+        done = repair(v1, v2, found, feel, profile.max_fret)
         if not done:
             break
         remark(done)

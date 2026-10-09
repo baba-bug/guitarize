@@ -1,4 +1,5 @@
 import pytest
+from conftest import capo4_bar12_leadsheet
 
 from guitarize.arrange import finger
 from guitarize.arrange.finger import (bass_events, generate_finger, melody_floor, melody_line, place_fill,
@@ -153,3 +154,43 @@ def test_repair_rounds_are_capped(monkeypatch):
 
     generate_finger(leadsheet(), 4, MID, "T", check=check)
     assert len(calls) == 1
+
+
+def _voice2_bar(text, n):
+    return text.split("\\voice")[2].split(f"// bar {n}\n")[1].splitlines()[0]
+
+
+def test_fill_cut_keeps_the_bass_ringing_as_a_tie():
+    text = generate_finger(capo4_bar12_leadsheet(), 4, MID, "T")
+    assert _bar_comment(text, 1) == "// bar 1 [サビ] · fill cut @2 (same string)"
+    assert _voice2_bar(text, 1) == "(0.2 1.4).4 -.4.4 (0.2 6.5).2 |"   # 填充截在第 2 拍，低音接着响到第 3 拍
+
+
+def test_shift_with_nothing_at_t_is_repaired_at_the_previous_attack():
+    # (a)：第 3 拍的新低音（5 弦 6 品）那一刻没有可截、可去的（旋律、填充都是空弦）。
+    # 前一个起音（第 2 拍反拍）时第 1 拍的低音还按着 → 截到那里，第 3 拍的低音保留
+    calls = []
+
+    def check(text):
+        calls.append(text)
+        return [Violation(1, 2.0, "shift", "0.33 拍内换把 1→6 品")] if len(calls) == 1 else []
+
+    text = generate_finger(capo4_bar12_leadsheet(), 4, MID, "T", check=check)
+    assert len(calls) == 2
+    assert _bar_comment(text, 1) == "// bar 1 [サビ] · fill cut @2 (same string) · bass cut @2.5 (shift)"
+    assert _voice2_bar(text, 1) == "(0.2 1.4).4 -.4.8 r.8 (0.2 6.5).2 |"
+
+
+def test_shift_between_two_melody_notes_moves_one_an_octave():
+    # (b)：D5 只能在 1 弦 10 品，G4 在 2 弦 8 品，没有低音 / 填充。校验说这里换把 → G4 降八度落到 3 弦空弦
+    ls = _sheet([_bar(0, None, "N", [(0, 1, 74), (1, 1, 67), (2, 2, 65)])])
+    calls = []
+
+    def check(text):
+        calls.append(text)
+        return [Violation(1, 1.0, "shift", "x")] if len(calls) == 1 else []
+
+    text = generate_finger(ls, 0, MID, "T", check=check)
+    assert calls[0].split("// bar 1\n")[1].splitlines()[0] == "10.1.4 8.2.4 6.2.2 |"
+    assert _bar_comment(text, 1) == "// bar 1 · melody-12 @2 (shift)"
+    assert text.split("// bar 1 · melody-12 @2 (shift)\n")[1].splitlines()[0] == "10.1.4 0.3.4 6.2.2 |"
