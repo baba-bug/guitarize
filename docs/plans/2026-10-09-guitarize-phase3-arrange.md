@@ -18,7 +18,9 @@
 - alphaTex 写法（已在 1.8.4 验证）：行内时值 `3.1.4`、`(0.1 1.2).8 {sd}`、休止 `r.2`、附点 `{d}`、和弦连音线 `(-.1 -.2).4`、闷音 `(x.6 x.5).4`、`\section "名" ` 写在小节第一个拍子前、`\voice` 分声部、`// 注释`、`\tuning (E4 B3 G3 D3 A2 E2)`；**不写** `.` 分隔符。
 - 每个小节行前写 `// bar N [段落]` 注释，方便逐小节修改。
 - 难度档参数只从 `profiles.yaml` 读（intermediate：max_span 3、max_fingers 4、max_fret 12、max_shift 4、allow_barre true、melody_max_per_beat 2、bass_on_beat3 true）。
-- 生成器产出的草稿必须 0 可弹性违规（用 Phase 1 `check_playability` 测）。
+- 生成器产出的草稿必须 0 可弹性违规（用 Phase 1 `check_playability` 测；含 Phase 1 收尾新增的 `straight_offbeat` 规则）。
+- **Shuffle 记谱约定（Phase 1 收尾裁决）**：alphaTab 只把"拍点上的八分 + 紧接的八分"这一对按 2/3 + 1/3 演奏。所以三连音感觉的小节里，每个发声的反拍起音都必须是这样一对里的第二个八分：用 `atex.split_for_swing` 在 p−0.5、p、p+0.5 处切分，余下时值用连音线（休止直接拆分）。
+- **品位上限（Phase 1 收尾裁决）**：有效上限 = `min(profile.max_fret, NECK_JOIN_FRET − capo)`，`NECK_JOIN_FRET = 14` 从 `guitarize.verify.playability` 导入；选变调夹和生成指型、指法都用这个有效上限。
 - 获取阶段：只下载用户确认过的来源；不破解任何加密格式（.ncm 等）；音频只存在 `songs/<slug>/source/`（不入 git）。
 
 ## 文件结构（Phase 3）
@@ -49,7 +51,7 @@ tests/test_atex.py test_shapes.py test_strum.py test_fretting.py test_finger.py 
 - Test: `tests/test_atex.py`
 
 **Interfaces:**
-- Produces: `DURATIONS`、`STANDARD_TUNING`、`split_beats(length) -> list[(code, dotted)]`、`notes_token(notes, tie=False, dead=False) -> str`、`beat_tokens(notes, length, effects=(), dead=False) -> list[str]`、`header(title, tempo, capo, feel, staff, chords=None) -> str`、`bar_line(tokens, number, section=None) -> str`、`document(head, voices) -> str`
+- Produces: `DURATIONS`、`STANDARD_TUNING`、`split_beats(length) -> list[(code, dotted)]`、`notes_token(notes, tie=False, dead=False) -> str`、`beat_tokens(notes, length, effects=(), dead=False, tie=False) -> list[str]`、`Item(start, length, notes, effects=(), dead=False)`（小节内记谱位置，notes 空 = 休止）、`split_for_swing(items, feel) -> list[(Item, is_continuation)]`、`voice_bar_tokens(items, feel) -> list[str]`、`header(title, tempo, capo, feel, staff, chords=None) -> str`、`bar_line(tokens, number, section=None) -> str`、`document(head, voices) -> str`
 
 - [ ] **Step 1: 写失败测试 `tests/test_atex.py`**
 
@@ -80,6 +82,24 @@ def test_tokens():
     assert atex.beat_tokens([], 1.5) == ["r.4 {d}"]
 
 
+def test_split_for_swing_pairs_offbeat_onsets(tmp_path):
+    items = [atex.Item(0, 1, [(1, 3)]), atex.Item(1, 0.5, []), atex.Item(1.5, 2.5, [(1, 5)], ["sd"])]
+    pieces = atex.split_for_swing(items, "shuffle")
+    assert [(p.start, p.length, cont) for p, cont in pieces] == [(0, 1, False), (1, 0.5, False), (1.5, 0.5, False), (2.0, 2.0, True)]
+    assert pieces[2][0].effects == ["sd"] and pieces[3][0].effects == []
+    assert atex.split_for_swing(items, "straight") == [(it, False) for it in items]
+    tokens = atex.voice_bar_tokens(items, "shuffle")
+    assert tokens == ["3.1.4", "r.8", "5.1.8 {sd}", "-.1.2"]
+    head = atex.header("T", 120, 0, "shuffle", "tabs")
+    src = tmp_path / "s.atex"
+    src.write_text(atex.document(head, [[atex.bar_line(tokens, 1)]]), encoding="utf-8")
+    score = load_score(alphatab.build(src, tmp_path / "b", "s")["json"])
+    from guitarize.config import load_profile
+    from guitarize.verify.playability import check_playability
+    assert check_playability(score, load_profile("intermediate"), "finger") == []
+    assert [round(a.start, 3) for a in score.attacks()] == [0.0, 1.667]
+
+
 def test_document_builds_with_alphatab(tmp_path):
     head = atex.header('My "Song"', 168.4, 4, "shuffle", "score tabs", {"G": (3, 0, 0, 0, 2, 3)})
     v1 = [atex.bar_line(atex.beat_tokens([(1, 3)], 4, ['ch "G"']), 1, "サビ")]
@@ -102,9 +122,10 @@ Expected: FAIL（`ModuleNotFoundError: guitarize.arrange`）
 - [ ] **Step 3: 实现 `guitarize/arrange/atex.py`**
 
 ```python
-"""alphaTex 文本生成：时值拆分、拍子记号、文件头、小节行、多声部文档。"""
+"""alphaTex 文本生成：时值拆分、拍子记号、Shuffle 八分对切分、文件头、小节行、多声部文档。"""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Iterable, Sequence
 
 # (拍数, alphaTex 时值码, 是否附点)，从大到小
@@ -137,15 +158,56 @@ def notes_token(notes: Sequence[tuple[int, int]], tie: bool = False, dead: bool 
 
 
 def beat_tokens(notes: Sequence[tuple[int, int]], length: float, effects: Iterable[str] = (),
-                dead: bool = False) -> list[str]:
-    """一个音 / 和弦 / 休止持续 length 拍 → 拍子记号列表。需要多个时值时，后续部分用连音线接上（休止、闷音直接拆分）。"""
+                dead: bool = False, tie: bool = False) -> list[str]:
+    """一个音 / 和弦 / 休止持续 length 拍 → 拍子记号列表。需要多个时值时，后续部分用连音线接上（休止、闷音直接拆分）。
+    tie=True 表示整段都是前一个音的延续（第一个记号也写成连音线）。"""
     out = []
     first = list(effects)
     for i, (code, dotted) in enumerate(split_beats(length)):
         eff = (first if i == 0 else []) + (["d"] if dotted else [])
-        tok = notes_token(notes, tie=i > 0 and bool(notes) and not dead, dead=dead)
+        tok = notes_token(notes, tie=(tie or i > 0) and bool(notes) and not dead, dead=dead)
         out.append(f"{tok}.{code}" + (" {" + " ".join(eff) + "}" if eff else ""))
     return out
+
+
+@dataclass
+class Item:
+    """一个声部一小节里的一个音 / 和弦 / 休止（小节内记谱位置，拍）。"""
+    start: float
+    length: float
+    notes: list
+    effects: Sequence[str] = ()
+    dead: bool = False
+
+
+def split_for_swing(items: Sequence[Item], feel: str) -> list[tuple[Item, bool]]:
+    """三连音感觉下 alphaTab 只把"拍点八分 + 紧接的八分"按 shuffle 演奏。
+    对每个发声的反拍起音 p，在 p−0.5、p、p+0.5 处切分覆盖这些位置的音符/休止，使其成为八分对的第二个八分。
+    返回 (片段, 是否为前一片段的延续)；直拍原样返回。"""
+    if feel != "shuffle":
+        return [(it, False) for it in items]
+    cuts: set[float] = set()
+    for it in items:
+        if it.notes and abs(it.start % 1 - 0.5) < 1e-6:
+            cuts |= {it.start - 0.5, it.start, it.start + 0.5}
+    out: list[tuple[Item, bool]] = []
+    for it in items:
+        inner = sorted(c for c in cuts if it.start + 1e-6 < c < it.start + it.length - 1e-6)
+        edges = [it.start, *inner, it.start + it.length]
+        for k, (a, b) in enumerate(zip(edges, edges[1:])):
+            out.append((Item(a, b - a, it.notes, list(it.effects) if k == 0 else [], it.dead), k > 0))
+    return out
+
+
+def voice_bar_tokens(items: Sequence[Item], feel: str) -> list[str]:
+    """一个声部一小节（items 须首尾相接铺满小节）→ 拍子记号；延续片段写成连音线，闷音 / 休止的延续写成休止。"""
+    tokens: list[str] = []
+    for piece, cont in split_for_swing(items, feel):
+        if cont and (piece.dead or not piece.notes):
+            tokens += beat_tokens([], piece.length)
+        else:
+            tokens += beat_tokens(piece.notes, piece.length, piece.effects, dead=piece.dead, tie=cont)
+    return tokens
 
 
 def header(title: str, tempo: float, capo: int, feel: str, staff: str,
@@ -177,7 +239,7 @@ def document(head: str, voices: Sequence[Sequence[str]]) -> str:
 - [ ] **Step 4: 运行，确认通过**
 
 Run: `$PY -m pytest tests/test_atex.py -v`
-Expected: 3 passed
+Expected: 4 passed
 
 - [ ] **Step 5: Commit**
 
@@ -198,7 +260,7 @@ git commit -m "feat: alphaTex writing helpers"
 - Consumes: `theory.parse_chord / pc_name / transpose_label`；`playability.fingers_needed`；`Profile`
 - Produces:
   - `shapes.OPEN_STRINGS`、`OPEN_SHAPES: dict[str, tuple]`、`Voicing(name, frets, cost, barre=False)`、`sounding(frets) -> list[int]`、`playable(frets, profile) -> bool`、`with_bass(v, bass_pc, profile) -> Voicing | None`、`voicings(label, profile) -> list[Voicing]`（按代价升序；`'N'` → `[]`；没有可弹指型抛 `ValueError`；`'B5'` 按 B 大三处理）
-  - `capo.CapoOption(capo, cost, shapes: dict[实际和弦, Voicing], melody_shift)`、`melody_octave(pitches) -> (shift, out_ratio)`、`choose_capo(chord_beats, profile, melody=(), max_capo=7) -> list[CapoOption]`（按 cost 升序）
+  - `capo.CapoOption(capo, cost, shapes: dict[实际和弦, Voicing], melody_shift)`、`melody_octave(pitches) -> (shift, out_ratio)`、`effective_profile(profile, capo) -> Profile`、`choose_capo(chord_beats, profile, melody=(), max_capo=7) -> list[CapoOption]`（按 cost 升序）
 
 - [ ] **Step 1: 写失败测试 `tests/test_shapes.py`**
 
@@ -385,11 +447,19 @@ from typing import Sequence
 
 import numpy as np
 
+from dataclasses import replace
+
 from .. import theory
 from ..config import Profile
+from ..verify.playability import NECK_JOIN_FRET
 from .shapes import Voicing, voicings
 
 MELODY_LOW, MELODY_HIGH, MELODY_CENTER = 55, 74, 62   # G3–D5，中心 D4（指法调音高）
+
+
+def effective_profile(profile: Profile, capo: int) -> Profile:
+    """变调夹之上可用的品位上限不超过琴颈与琴身交界（14 品）。"""
+    return replace(profile, max_fret=min(profile.max_fret, NECK_JOIN_FRET - capo))
 
 
 @dataclass(frozen=True)
@@ -423,7 +493,7 @@ def choose_capo(chord_beats: dict[str, float], profile: Profile, melody: Sequenc
         cost = 0.0
         for label, beats in chord_beats.items():
             try:
-                v = voicings(theory.transpose_label(label, -capo), profile)[0]
+                v = voicings(theory.transpose_label(label, -capo), effective_profile(profile, capo))[0]
             except ValueError:
                 cost += beats * 5.0
                 continue
@@ -462,7 +532,7 @@ git commit -m "feat: chord voicing library and capo selection"
 - Consumes: `atex`（Task 1）、`shapes.voicings / Voicing`（Task 2）、`theory.transpose_label`
 - Produces:
   - `patterns.PATTERNS: dict[str, str]`（8 个八分格；`D` 下扫、`U` 上扫、`x` 闷音、`-` 延续）、`DEFAULT = "push"`、`slots_per_beat(feel)`、`accent_vector(pattern, feel) -> np.ndarray`（长度 4×slots_per_beat）、`choose_pattern(onset, feel) -> str`
-  - `strum.beat_chords(lbar, bpb=4) -> list[str]`、`strum.bar_tokens(chords, pattern, shapes, prev) -> (tokens, last_label)`、`strum.generate_strum(leadsheet, capo, profile, patterns, title) -> str`（`patterns` 为逐小节节奏型名）
+  - `strum.beat_chords(lbar, bpb=4) -> list[str]`、`strum.bar_tokens(chords, pattern, shapes, prev, feel="straight") -> (tokens, last_label)`、`strum.generate_strum(leadsheet, capo, profile, patterns, title) -> str`（`patterns` 为逐小节节奏型名；内部用 `effective_profile(profile, capo)`）
 
 - [ ] **Step 1: 写失败测试 `tests/test_strum.py`**
 
@@ -582,6 +652,7 @@ from __future__ import annotations
 from .. import theory
 from ..config import Profile
 from . import atex
+from .capo import effective_profile
 from .patterns import PATTERNS
 from .shapes import Voicing, voicings
 
@@ -604,8 +675,9 @@ def _notes(v: Voicing, stroke: str) -> list[tuple[int, int]]:
 
 
 def bar_tokens(chords: list[str], pattern: str, shapes: dict[str, Voicing],
-               prev: str | None) -> tuple[list[str], str | None]:
-    """chords：指法调逐拍和弦（4 个）。换和弦或休止之后的延续格改为下扫；无和弦的格为休止。"""
+               prev: str | None, feel: str = "straight") -> tuple[list[str], str | None]:
+    """chords：指法调逐拍和弦（4 个）。换和弦或休止之后的延续格改为下扫；无和弦的格为休止。
+    Shuffle 下反拍扫弦按八分对切分（atex.voice_bar_tokens）。"""
     slot_chord = [chords[k // 2] for k in range(8)]
     slots = list(pattern)
     for k in range(8):
@@ -613,7 +685,7 @@ def bar_tokens(chords: list[str], pattern: str, shapes: dict[str, Voicing],
             slots[k] = "r"
         elif slots[k] == "-" and (k == 0 or slot_chord[k] != slot_chord[k - 1] or slots[k - 1] == "r"):
             slots[k] = "D"
-    tokens: list[str] = []
+    items: list[atex.Item] = []
     last = prev
     k = 0
     while k < 8:
@@ -621,7 +693,7 @@ def bar_tokens(chords: list[str], pattern: str, shapes: dict[str, Voicing],
         if slots[k] == "r":
             while k + n < 8 and slots[k + n] == "r":
                 n += 1
-            tokens += atex.beat_tokens([], n * 0.5)
+            items.append(atex.Item(k * 0.5, n * 0.5, []))
             last = None
         else:
             while k + n < 8 and slots[k + n] == "-":
@@ -629,13 +701,14 @@ def bar_tokens(chords: list[str], pattern: str, shapes: dict[str, Voicing],
             label = slot_chord[k]
             v = shapes[label]
             effects = ([f'ch "{v.name}"'] if label != last else []) + ["su" if slots[k] == "U" else "sd"]
-            tokens += atex.beat_tokens(_notes(v, slots[k]), n * 0.5, effects, dead=slots[k] == "x")
+            items.append(atex.Item(k * 0.5, n * 0.5, _notes(v, slots[k]), effects, dead=slots[k] == "x"))
             last = label
         k += n
-    return tokens, last
+    return atex.voice_bar_tokens(items, feel), last
 
 
 def generate_strum(leadsheet: dict, capo: int, profile: Profile, patterns: list[str], title: str) -> str:
+    profile = effective_profile(profile, capo)
     bpb = leadsheet.get("beats_per_bar", 4)
     shapes: dict[str, Voicing] = {}
     lines: list[str] = []
@@ -645,7 +718,7 @@ def generate_strum(leadsheet: dict, capo: int, profile: Profile, patterns: list[
         for c in chords:
             if c != "N" and c not in shapes:
                 shapes[c] = voicings(c, profile)[0]
-        tokens, prev = bar_tokens(chords, PATTERNS[patterns[i]], shapes, prev)
+        tokens, prev = bar_tokens(chords, PATTERNS[patterns[i]], shapes, prev, leadsheet.get("feel", "straight"))
         lines.append(atex.bar_line(tokens, i + 1, b.get("section")))
     diagrams = {v.name: v.frets for v in shapes.values()}
     head = atex.header(title, leadsheet["tempo_bpm"], capo, leadsheet.get("feel", "straight"), "tabs", diagrams)
@@ -984,7 +1057,7 @@ from .. import theory
 from ..config import Profile
 from ..skeleton import skeleton_mask
 from . import atex
-from .capo import melody_octave
+from .capo import effective_profile, melody_octave
 from .fretting import FretEvent, assign_frets
 from .strum import beat_chords
 
@@ -1073,27 +1146,29 @@ def bass_events(leadsheet: dict, capo: int, profile: Profile) -> list[tuple[floa
     return out
 
 
-def _voice_lines(n_bars: int, items: list[tuple[float, float, list]], sections: list[str | None]) -> list[str]:
-    """items：(记谱位置, 时值, [(弦, 品) 或 None, ...])；按小节写出，空隙补休止。"""
+def _voice_lines(n_bars: int, items: list[tuple[float, float, list]], sections: list[str | None],
+                 feel: str) -> list[str]:
+    """items：(记谱位置, 时值, [(弦, 品) 或 None, ...])；按小节铺满（空隙补休止），Shuffle 下按八分对切分。"""
     by_bar: dict[int, list] = {}
     for pos, dur, where in sorted(items, key=lambda x: x[0]):
         by_bar.setdefault(int(pos // 4), []).append((pos, dur, where))
     lines = []
     for i in range(n_bars):
-        t, end, tokens = i * 4.0, i * 4.0 + 4.0, []
+        t, end, bar_items = i * 4.0, i * 4.0 + 4.0, []
         for pos, dur, where in by_bar.get(i, []):
             if pos > t + 1e-6:
-                tokens += atex.beat_tokens([], pos - t)
+                bar_items.append(atex.Item(t - i * 4.0, pos - t, []))
             dur = min(dur, end - pos)
-            tokens += atex.beat_tokens([w for w in where if w is not None], dur)
+            bar_items.append(atex.Item(pos - i * 4.0, dur, [w for w in where if w is not None]))
             t = pos + dur
         if t < end - 1e-6:
-            tokens += atex.beat_tokens([], end - t)
-        lines.append(atex.bar_line(tokens, i + 1, sections[i]))
+            bar_items.append(atex.Item(t - i * 4.0, end - t, []))
+        lines.append(atex.bar_line(atex.voice_bar_tokens(bar_items, feel), i + 1, sections[i]))
     return lines
 
 
 def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str) -> str:
+    profile = effective_profile(profile, capo)
     feel = leadsheet.get("feel", "straight")
     n_bars = len(leadsheet["bars"])
     mel = skeleton_notes(leadsheet, profile)
@@ -1118,9 +1193,9 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str) ->
                            for s in starts], profile)
     at = {e.start: e for e in events}
     sections = [b.get("section") for b in leadsheet["bars"]]
-    v1 = _voice_lines(n_bars, [(pos, d, [at[pos].melody_pos]) for pos, d, _ in items], sections)
+    v1 = _voice_lines(n_bars, [(pos, d, [at[pos].melody_pos]) for pos, d, _ in items], sections, feel)
     v2 = _voice_lines(n_bars, [(pos, d, [at[pos].fill_pos, at[pos].bass_pos]) for pos, d, _, _ in bass],
-                      [None] * n_bars)
+                      [None] * n_bars, feel)
     return atex.document(atex.header(title, leadsheet["tempo_bpm"], capo, feel, "score tabs"), [v1, v2])
 ```
 

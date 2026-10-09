@@ -1211,6 +1211,13 @@ def test_build_leadsheet_matches_phase1_contract():
     assert b2["melody"][0]["midi"] == 61
 
 
+def test_build_leadsheet_rejects_short_bars():
+    import pytest
+
+    with pytest.raises(ValueError, match="short bars"):
+        build_leadsheet({**BEATS, "short_bars": [5]}, CHORDS, MELODY, ("C", "major"), {})
+
+
 def test_summary_table_shows_confidence_and_shapes():
     ls = build_leadsheet(BEATS, CHORDS, MELODY, ("C", "major"), {2: "サビ"})
     text = summary_table(ls, capo=2)
@@ -1297,6 +1304,9 @@ _MARK = {"high": "", "medium": "?", "low": "??"}
 
 
 def build_leadsheet(beats: dict, chords: dict, melody: dict, key: tuple[str, str], sections: dict[int, str]) -> dict:
+    if beats.get("short_bars"):
+        raise ValueError(f"beats.json has short bars {beats['short_bars']}: fix with overrides.downbeat_shift "
+                         "before building the leadsheet (melody bucketing assumes 4-beat bars)")
     bpb = beats["time_signature"][0]
     by_bar: dict[int, list[dict]] = {}
     for s in chords["segments"]:
@@ -1433,7 +1443,7 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
 - [ ] **Step 7: 运行，确认通过**
 
 Run: `$PY -m pytest tests/test_leadsheet.py -v && $PY -m guitarize --help`
-Expected: 3 passed；帮助文本列出 `analyze` 与 `summary`
+Expected: 4 passed；帮助文本列出 `analyze` 与 `summary`
 
 - [ ] **Step 8: Commit**
 
