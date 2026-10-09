@@ -17,7 +17,7 @@ _QUALITIES = [
     (r"^(dim|o)", "dim"),
     (r"^(aug|\+)", "aug"),
     (r"^(m7|min7|-7)", "min7"),
-    (r"^(m|min|-)", "min"),
+    (r"^(m(?!aj)|min|-)", "min"),
     (r"^sus2", "sus2"),
     (r"^sus", "sus4"),
     (r"^(7|9|11|13)", "7"),

@@ -19,6 +19,10 @@ def test_majmin():
     assert theory.majmin("E/G#") == "E:maj"
     assert theory.majmin("Asus4") == "A:maj"
     assert theory.majmin("N") == "N" and theory.majmin(None) == "N"
+    # 回归：字面 maj 后缀不能被 m 规则误判为小和弦
+    assert theory.majmin("Cmaj") == "C:maj"
+    assert theory.majmin("Cm6") == "C:min"
+    assert theory.majmin("CM7") == "C:maj"
 
 
 def test_transpose_label():
