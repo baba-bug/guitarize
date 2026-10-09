@@ -55,7 +55,13 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
     melody = [m["midi"] for b in leadsheet["bars"] for m in b["melody"]] if arr == "finger" else []
     options = choose_capo(chord_beats(leadsheet), profile, melody)
     wanted = capo if capo is not None else cfg.overrides.get("capo")
-    chosen = next(o for o in options if o.capo == int(wanted)) if wanted is not None else options[0]
+    if wanted is None:
+        chosen = options[0]
+    else:
+        valid = sorted(o.capo for o in options)
+        chosen = next((o for o in options if o.capo == int(wanted)), None)
+        if chosen is None:
+            raise ValueError(f"capo must be one of {valid[0]}..{valid[-1]} (got {wanted})")
     if arr == "strum":
         text = generate_strum(leadsheet, chosen.capo, profile, section_patterns(paths, leadsheet), cfg.title)
     else:

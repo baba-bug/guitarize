@@ -8,6 +8,8 @@ import os
 import re
 from pathlib import Path
 
+import yaml
+
 from .config import load_song_config
 from .paths import REPO_ROOT, SongPaths
 
@@ -72,24 +74,14 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-SONG_TEMPLATE = """slug: {slug}
-title: {title}
-artist: {artist}
-version: tv
-level: intermediate
-arrangements: [strum, finger]
-outputs: [html, pdf, txt]
-source: {{url: null, kind: null, trim: null}}
-reference_charts: []
-overrides: {{}}
-"""
-
-
 def _new(paths: SongPaths, title: str, artist: str) -> int:
     if paths.config.exists():
         raise FileExistsError(paths.config)
     paths.root.mkdir(parents=True, exist_ok=True)
-    paths.config.write_text(SONG_TEMPLATE.format(slug=paths.slug, title=title, artist=artist), encoding="utf-8")
+    data = {"slug": paths.slug, "title": title, "artist": artist, "version": "tv", "level": "intermediate",
+            "arrangements": ["strum", "finger"], "outputs": ["html", "pdf", "txt"],
+            "source": {"url": None, "kind": None, "trim": None}, "reference_charts": [], "overrides": {}}
+    paths.config.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
     print(paths.config)
     return 0
 

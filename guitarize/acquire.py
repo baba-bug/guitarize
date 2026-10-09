@@ -8,6 +8,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 from .paths import SongPaths
 
@@ -16,13 +17,26 @@ def download(url: str, raw_dir: Path) -> Path:
     raw_dir.mkdir(parents=True, exist_ok=True)
     proc = subprocess.run(
         [sys.executable, "-m", "yt_dlp", "-f", "bestaudio", "--no-playlist",
-         "-o", str(raw_dir / "%(id)s.%(ext)s"), "--print", "after_move:filepath", url],
-        capture_output=True, text=True, check=True,
+         "-o", str(raw_dir / "%(id)s.%(ext)s"), "--print", "after_move:filepath", "--", url],
+        capture_output=True, text=True,
     )
+    if proc.returncode != 0:
+        raise RuntimeError(f"yt-dlp failed (exit {proc.returncode}): {(proc.stderr or '')[-2000:]}")
     return Path(proc.stdout.strip().splitlines()[-1])
 
 
+def _kind(url: str | None) -> str:
+    if not url:
+        return "local"
+    host = (urlparse(url).hostname or "").lower()
+    if host in ("bilibili.com", "b23.tv") or host.endswith((".bilibili.com", ".b23.tv")):
+        return "bilibili"
+    return "url"
+
+
 def normalize(raw: Path, wav: Path, trim: tuple[float, float] | None = None) -> Path:
+    if trim is not None and not (0 <= trim[0] < trim[1]):
+        raise ValueError(f"invalid trim {trim}: need 0 <= start < end")
     wav.parent.mkdir(parents=True, exist_ok=True)
     cmd = ["ffmpeg", "-v", "error", "-y", "-i", str(raw)]
     if trim:
@@ -36,10 +50,12 @@ def acquire(paths: SongPaths, url: str | None = None, raw: Path | None = None,
             trim: tuple[float, float] | None = None) -> Path:
     if (url is None) == (raw is None):
         raise ValueError("give exactly one of url / raw")
+    if trim is not None and not (0 <= trim[0] < trim[1]):
+        raise ValueError(f"invalid trim {trim}: need 0 <= start < end")
     raw_path = download(url, paths.source_dir / "raw") if url else Path(raw)
     normalize(raw_path, paths.original_wav, trim)
     meta = {
-        "kind": "bilibili" if url and "bilibili.com" in url else ("url" if url else "local"),
+        "kind": _kind(url),
         "url": url,
         "raw": str(raw_path),
         "trim": list(trim) if trim else None,
