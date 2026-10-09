@@ -53,8 +53,9 @@ def main(argv: list[str] | None = None) -> int:
         from .analyze.leadsheet import summary_table
         from .analyze.pipeline import run_analysis
 
-        run_analysis(paths, cfg, [s.strip() for s in args.steps.split(",") if s.strip()])
-        if paths.leadsheet_json.exists():
+        steps = [s.strip() for s in args.steps.split(",") if s.strip()]
+        run_analysis(paths, cfg, steps)
+        if "leadsheet" in steps:
             import json
 
             print(summary_table(json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))))

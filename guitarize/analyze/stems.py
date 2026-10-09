@@ -30,16 +30,22 @@ def mix_harmonic(stems_dir: Path) -> Path:
             n = max(len(total), len(y))
             total = np.pad(total, ((0, n - len(total)), (0, 0))) + np.pad(y, ((0, n - len(y)), (0, 0)))
     out = Path(stems_dir) / "harmonic.wav"
-    sf.write(str(out), total, sr)
+    sf.write(str(out), total, sr, subtype="FLOAT")
     return out
 
 
 def separate(mix: Path, stems_dir: Path, model: str = "htdemucs_6s") -> dict[str, Path]:
     stems_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="guitarize-demucs-") as tmp:
-        subprocess.run([sys.executable, "-m", "demucs", "-n", model, "-d", _device(), "-o", tmp, str(mix)],
-                       check=True, capture_output=True)
+        proc = subprocess.run([sys.executable, "-m", "demucs", "-n", model, "-d", _device(), "-o", tmp, str(mix)],
+                              capture_output=True)
+        if proc.returncode != 0:
+            err = (proc.stderr or b"").decode("utf-8", "replace")[-2000:]
+            raise RuntimeError(f"demucs failed (exit {proc.returncode}):\n{err}")
         produced = Path(tmp) / model / Path(mix).stem
+        missing = [n for n in STEMS if not (produced / f"{n}.wav").exists()]
+        if missing:
+            raise RuntimeError(f"demucs did not produce stems {missing} in {produced}")
         for name in STEMS:
             shutil.move(str(produced / f"{name}.wav"), str(stems_dir / f"{name}.wav"))
     mix_harmonic(stems_dir)

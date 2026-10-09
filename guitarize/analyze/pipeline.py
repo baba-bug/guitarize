@@ -28,17 +28,25 @@ def _read(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _need(path: Path, slug: str, step: str) -> dict:
+    if not path.exists():
+        raise ValueError(f"missing {path.name}; run `guitarize analyze {slug} --steps {step}` first")
+    return _read(path)
+
+
 def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS) -> None:
     unknown = set(steps) - set(STEPS)
     if unknown:
         raise ValueError(f"unknown analysis steps {sorted(unknown)}; choose from {STEPS}")
     overrides = cfg.overrides
+    slug = paths.slug
     if "stems" in steps:
         separate(paths.original_wav, paths.stems_dir)
     if "beats" in steps:
         _write(paths.beats_json, track_beats(paths.original_wav, paths.stems_dir, overrides))
-    beats = _read(paths.beats_json)
+    beats = chords = None
     if "chords" in steps:
+        beats = _need(paths.beats_json, slug, "beats")
         times = [b["t"] for b in beats["beats"]]
         cb = features.beat_sync_chroma(features.load_mix([paths.stem("harmonic")]), times)
         if overrides.get("key"):
@@ -50,9 +58,12 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
         chords = reference_chords(cb, beats, web)
         chords["key"] = {"tonic": tonic, "mode": mode, "r": r}
         _write(paths.chords_json, chords)
-    chords = _read(paths.chords_json)
-    key = (chords["key"]["tonic"], chords["key"]["mode"])
+    if "melody" in steps or "leadsheet" in steps:
+        beats = beats or _need(paths.beats_json, slug, "beats")
+        chords = chords or _need(paths.chords_json, slug, "chords")
+        key = (chords["key"]["tonic"], chords["key"]["mode"])
     if "melody" in steps:
         _write(paths.melody_json, extract_melody(paths.stem("vocals"), beats, scale_pcs(*key)))
     if "leadsheet" in steps:
-        _write(paths.leadsheet_json, build_leadsheet(beats, chords, _read(paths.melody_json), key, cfg.sections))
+        melody = _need(paths.melody_json, slug, "melody")
+        _write(paths.leadsheet_json, build_leadsheet(beats, chords, melody, key, cfg.sections))

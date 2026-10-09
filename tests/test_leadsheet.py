@@ -52,3 +52,69 @@ def test_mix_harmonic(tmp_path):
     out = mix_harmonic(tmp_path)
     y, sr = sf.read(out)
     assert sr == 22050 and y.shape == (100, 2) and np.allclose(y, 0.35, atol=1e-3)
+
+
+def _paths_cfg(tmp_path):
+    from guitarize.config import SongConfig
+    from guitarize.paths import SongPaths
+
+    return SongPaths(tmp_path / "song"), SongConfig(slug="song", title="t", artist="a")
+
+
+def test_partial_steps_name_missing_prerequisite(tmp_path):
+    import pytest
+
+    from guitarize.analyze.pipeline import run_analysis
+
+    paths, cfg = _paths_cfg(tmp_path)
+    with pytest.raises(ValueError, match="--steps beats"):
+        run_analysis(paths, cfg, ["chords"])
+    with pytest.raises(ValueError, match="--steps beats"):
+        run_analysis(paths, cfg, ["melody"])
+    paths.beats_json.parent.mkdir(parents=True)
+    paths.beats_json.write_text("{}")
+    with pytest.raises(ValueError, match="--steps chords"):
+        run_analysis(paths, cfg, ["leadsheet"])
+
+
+def test_separate_surfaces_stderr(tmp_path, monkeypatch):
+    import subprocess
+
+    import pytest
+
+    from guitarize.analyze import stems
+
+    monkeypatch.setattr(stems, "_device", lambda: "cpu")
+    monkeypatch.setattr(stems.subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a, 1, b"", b"boom"))
+    with pytest.raises(RuntimeError, match="boom"):
+        stems.separate(tmp_path / "m.wav", tmp_path / "stems")
+
+
+def test_separate_missing_stems_leaves_dir_untouched(tmp_path, monkeypatch):
+    import subprocess
+
+    import pytest
+
+    from guitarize.analyze import stems
+
+    monkeypatch.setattr(stems, "_device", lambda: "cpu")
+
+    def fake_run(cmd, **k):
+        out = tmp_path.__class__(cmd[cmd.index("-o") + 1]) / "htdemucs_6s" / "m"
+        out.mkdir(parents=True)
+        for n in ("vocals", "drums"):
+            (out / f"{n}.wav").write_bytes(b"x")
+        return subprocess.CompletedProcess(cmd, 0, b"", b"")
+
+    monkeypatch.setattr(stems.subprocess, "run", fake_run)
+    sd = tmp_path / "stems"
+    with pytest.raises(RuntimeError, match="bass.*guitar"):
+        stems.separate(tmp_path / "m.wav", sd)
+    assert not list(sd.glob("*.wav"))
+
+
+def test_mix_harmonic_is_float(tmp_path):
+    for name in ("bass", "guitar", "piano", "other"):
+        sf.write(tmp_path / f"{name}.wav", np.full((10, 2), 0.9), 22050)
+    assert sf.info(mix_harmonic(tmp_path)).subtype == "FLOAT"
