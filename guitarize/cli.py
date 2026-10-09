@@ -23,6 +23,13 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(name, help=help_text)
         p.add_argument("slug")
         p.add_argument("--arr", choices=ARRS, required=True)
+    p = sub.add_parser("analyze", help="分析原曲：分轨 / 节拍 / 和弦 / 旋律 / leadsheet")
+    p.add_argument("slug")
+    p.add_argument("--steps", default="stems,beats,chords,melody,leadsheet",
+                   help="逗号分隔，可选 stems,beats,chords,melody,leadsheet")
+    p = sub.add_parser("summary", help="打印 leadsheet 的逐小节摘要")
+    p.add_argument("slug")
+    p.add_argument("--capo", type=int, default=0)
     p = sub.add_parser("serve", help="从仓库根目录起本地 HTTP 服务，用于打开交互谱")
     p.add_argument("--port", type=int, default=8765)
     args = ap.parse_args(argv)
@@ -42,6 +49,21 @@ def main(argv: list[str] | None = None) -> int:
         out = run_verify(paths, cfg, args.arr)
         print((out / "report.md").read_text(encoding="utf-8"))
         print(f"报告目录：{out}")
+    elif args.cmd == "analyze":
+        from .analyze.leadsheet import summary_table
+        from .analyze.pipeline import run_analysis
+
+        run_analysis(paths, cfg, [s.strip() for s in args.steps.split(",") if s.strip()])
+        if paths.leadsheet_json.exists():
+            import json
+
+            print(summary_table(json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))))
+    elif args.cmd == "summary":
+        import json
+
+        from .analyze.leadsheet import summary_table
+
+        print(summary_table(json.loads(paths.leadsheet_json.read_text(encoding="utf-8")), capo=args.capo))
     return 0
 
 
