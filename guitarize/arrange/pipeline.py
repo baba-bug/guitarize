@@ -1,14 +1,18 @@
-"""编配编排：leadsheet → 选变调夹 → 生成弹唱 / 指弹草稿 alphaTex。默认不覆盖已有编配（那是迭代修改过的成果）。"""
+"""编配编排：leadsheet → 选变调夹 → 生成弹唱 / 指弹草稿 alphaTex → 自检。默认不覆盖已有编配（那是迭代修改过的成果）。"""
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 
 import numpy as np
 
-from ..config import SongConfig, load_profile
+from ..config import Profile, SongConfig, load_profile
 from ..paths import SongPaths
+from ..render import alphatab
 from ..verify.metrics import onset_slots
+from ..verify.model import load_score
+from ..verify.playability import Violation, check_playability
 from .capo import CapoOption, choose_capo
 from .finger import generate_finger, section_bars
 from .patterns import DEFAULT, choose_pattern, slots_per_beat
@@ -45,12 +49,26 @@ def section_patterns(paths: SongPaths, leadsheet: dict) -> list[str]:
     return out
 
 
+def self_check(text: str, profile: Profile, kind: str) -> list[Violation]:
+    """草稿自检：用 alphaTab 构建后跑 verify 同一套可弹性检查。profile 用难度档本身（品位上限由检查自己按变调夹收紧）。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "draft.atex"
+        src.write_text(text, encoding="utf-8")
+        built = alphatab.build(src, Path(tmp), "draft")
+        score = load_score(built["json"])
+    return check_playability(score, profile, kind)
+
+
 def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None,
-            force: bool = False) -> tuple[Path, CapoOption]:
+            force: bool = False) -> tuple[Path, CapoOption, list[Violation]]:
+    """返回 (草稿路径, 选中的变调夹, 自检违规)。有违规也照常写出草稿，留给审阅。"""
     target = paths.atex(arr)
     if target.exists() and not force:
         raise FileExistsError(f"{target} exists; edit it directly or pass --force to regenerate")
     leadsheet = json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))
+    bpb = leadsheet.get("beats_per_bar", 4)
+    if bpb != 4:
+        raise ValueError(f"only 4/4 is supported for now (beats_per_bar={bpb})")
     profile = load_profile(cfg.level)
     notes = [(m["start_beats"], m["midi"]) for b in leadsheet["bars"] for m in b["melody"]]
     melody = sorted(notes) if arr == "finger" else []
@@ -63,10 +81,17 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
         chosen = next((o for o in options if o.capo == int(wanted)), None)
         if chosen is None:
             raise ValueError(f"capo must be one of {valid[0]}..{valid[-1]} (got {wanted})")
+    checked: dict[str, list[Violation]] = {}
+
+    def check(text: str) -> list[Violation]:   # 同一份文本只构建一次
+        if text not in checked:
+            checked[text] = self_check(text, profile, arr)
+        return checked[text]
+
     if arr == "strum":
         text = generate_strum(leadsheet, chosen.capo, profile, section_patterns(paths, leadsheet), cfg.title)
     else:
-        text = generate_finger(leadsheet, chosen.capo, profile, cfg.title)
+        text = generate_finger(leadsheet, chosen.capo, profile, cfg.title, check=check)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
-    return target, chosen
+    return target, chosen, check(text)

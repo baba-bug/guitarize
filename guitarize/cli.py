@@ -14,6 +14,7 @@ from .config import load_song_config
 from .paths import REPO_ROOT, SongPaths
 
 ARRS = ("strum", "finger")
+SHOW_VIOLATIONS = 5
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -68,9 +69,14 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "arrange":
         from .arrange.pipeline import arrange
 
-        target, option = arrange(paths, cfg, args.arr, capo=args.capo, force=args.force)
+        target, option, violations = arrange(paths, cfg, args.arr, capo=args.capo, force=args.force)
         names = ", ".join(f"{k}→{v.name}" for k, v in option.shapes.items())
         print(f"{target}\ncapo {option.capo}（代价 {option.cost}）：{names}")
+        print(f"自检：{len(violations)} 处违规")   # 不让命令失败，但必须看得见
+        for v in violations[:SHOW_VIOLATIONS]:
+            print(f"  bar {v.bar} {v.rule}：{v.detail}")
+        if len(violations) > SHOW_VIOLATIONS:
+            print(f"  …另有 {len(violations) - SHOW_VIOLATIONS} 处")
     return 0
 
 
