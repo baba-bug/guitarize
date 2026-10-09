@@ -54,3 +54,9 @@ def test_choose_capo_prefers_g_shapes_for_b_major_song():
 def test_melody_octave():
     assert melody_octave([71, 73, 75, 76]) == (-12, 0.0)
     assert melody_octave([]) == (0, 0.0)
+
+
+def test_no_chord_label_skipped_in_capo_choice():
+    best = choose_capo({"N": 4, "C": 4}, MID)[0]
+    assert best.capo == 0
+    assert "N" not in best.shapes

@@ -50,10 +50,13 @@ def choose_capo(chord_beats: dict[str, float], profile: Profile, melody: Sequenc
         cost = 0.0
         for label, beats in chord_beats.items():
             try:
-                v = voicings(theory.transpose_label(label, -capo), effective_profile(profile, capo))[0]
+                opts = voicings(theory.transpose_label(label, -capo), effective_profile(profile, capo))
             except ValueError:
                 cost += beats * 5.0
                 continue
+            if not opts:  # 无和弦（N）：不计代价、不出指型
+                continue
+            v = opts[0]
             shapes[label] = v
             cost += beats * v.cost
         cost += 0.02 * capo * total
