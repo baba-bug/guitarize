@@ -10,6 +10,7 @@ import numpy as np
 from ..config import Profile, SongConfig, load_profile
 from ..paths import SongPaths
 from ..render import alphatab
+from ..render.alphatab import AlphaTexError
 from ..verify.metrics import onset_slots
 from ..verify.model import load_score
 from ..verify.playability import Violation, check_playability
@@ -59,9 +60,14 @@ def self_check(text: str, profile: Profile, kind: str) -> list[Violation]:
     return check_playability(score, profile, kind)
 
 
+def _first_line(error: Exception) -> str:
+    return next((line.strip() for line in str(error).splitlines() if line.strip()), type(error).__name__)
+
+
 def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None,
-            force: bool = False) -> tuple[Path, CapoOption, list[Violation]]:
-    """返回 (草稿路径, 选中的变调夹, 自检违规)。有违规也照常写出草稿，留给审阅。"""
+            force: bool = False) -> tuple[Path, CapoOption, list[Violation] | str]:
+    """返回 (草稿路径, 选中的变调夹, 自检结果)。自检结果是违规列表；alphaTab 构建失败或找不到 node 时
+    是一行 `自检失败：<错误第一行>`。有违规、自检失败都照常写出草稿，留给审阅。"""
     target = paths.atex(arr)
     if target.exists() and not force:
         raise FileExistsError(f"{target} exists; edit it directly or pass --force to regenerate")
@@ -81,17 +87,25 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
         chosen = next((o for o in options if o.capo == int(wanted)), None)
         if chosen is None:
             raise ValueError(f"capo must be one of {valid[0]}..{valid[-1]} (got {wanted})")
-    checked: dict[str, list[Violation]] = {}
+    checked: dict[str, list[Violation] | str] = {}
 
-    def check(text: str) -> list[Violation]:   # 同一份文本只构建一次
+    def result(text: str) -> list[Violation] | str:   # 同一份文本只构建一次；构建失败不让编配失败
         if text not in checked:
-            checked[text] = self_check(text, profile, arr)
+            try:
+                checked[text] = self_check(text, profile, arr)
+            except (AlphaTexError, FileNotFoundError) as e:
+                checked[text] = f"自检失败：{_first_line(e)}"
         return checked[text]
 
+    def check(text: str) -> list[Violation]:   # 给生成器的修补循环：自检失败当作无违规，修补就此停下
+        found = result(text)
+        return found if isinstance(found, list) else []
+
     if arr == "strum":
-        text = generate_strum(leadsheet, chosen.capo, profile, section_patterns(paths, leadsheet), cfg.title)
+        text = generate_strum(leadsheet, chosen.capo, profile, section_patterns(paths, leadsheet), cfg.title,
+                              check=check)
     else:
         text = generate_finger(leadsheet, chosen.capo, profile, cfg.title, check=check)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
-    return target, chosen, check(text)
+    return target, chosen, result(text)

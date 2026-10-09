@@ -72,6 +72,9 @@ def main(argv: list[str] | None = None) -> int:
         target, option, violations = arrange(paths, cfg, args.arr, capo=args.capo, force=args.force)
         names = ", ".join(f"{k}→{v.name}" for k, v in option.shapes.items())
         print(f"{target}\ncapo {option.capo}（代价 {option.cost}）：{names}")
+        if isinstance(violations, str):   # 自检本身没跑成（alphaTab 构建失败 / 找不到 node）：草稿已写出
+            print(violations)
+            return 0
         print(f"自检：{len(violations)} 处违规")   # 不让命令失败，但必须看得见
         for v in violations[:SHOW_VIOLATIONS]:
             print(f"  bar {v.bar} {v.rule}：{v.detail}")
