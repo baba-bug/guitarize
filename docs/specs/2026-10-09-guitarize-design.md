@@ -150,7 +150,7 @@ overrides: {}            # 人工覆盖项，如 {tempo_bpm: 168, key: B, capo: 
   - `build/<arr>.json`：小节 → 拍 → 音（弦、品、开始拍、时值、连音线等）和和弦名，供 Python 校验使用
   - `build/<arr>.mid`
   - `out/<arr>.gp`：附带产物，可用 Guitar Pro / TuxGuitar 打开
-- **PDF**：优先用 alphaTab 在 Node 里渲染 SVG，再合成 PDF，这样和网页谱面一致。备选：`.gp` → MuseScore 命令行 → PDF。
+- **PDF**：alphaTab 在 Node 里渲染 SVG → 套上 Bravura 字体的 HTML → 无头 Chrome 打印成 PDF，与网页谱面一致。spike 已验证，不需要 MuseScore。
 - **文本六线谱**：Python 从 `build/<arr>.json` 生成。每行 4 小节，带小节号、段落标记和和弦名。
 - **合成音频**：MIDI → FluidSynth + GM 音色库（钢弦吉他）→ `build/<arr>.wav`，供校验使用。
 - **网页交互谱** `web/viewer.html`：
@@ -158,7 +158,8 @@ overrides: {}            # 人工覆盖项，如 {tempo_bpm: 168, key: B, capo: 
   - 功能：播放 / 暂停、光标跟随、调速、选段循环
   - **原曲对照**：页面内嵌原曲 `<audio>`。用 `beats.json` 的"小节 → 原曲时间"映射，点击任一小节即可跳到原曲对应位置播放，可在合成音和原曲之间切换
   - 只用本地 HTTP 服务打开，不发布在线页面
-- 谱面记法：Shuffle 记为直八分音符，加"三连音感觉"标记，这是 J-rock 谱子的通行写法。
+- 谱面记法：Shuffle 记为直八分音符，加"三连音感觉"标记（`\tf triplet-8th`），这是 J-rock 谱子的通行写法。指弹谱用两个声部：voice 1 为旋律（符干向上），voice 2 为低音和填充（符干向下）。
+- spike 结论（2026-10-09，alphaTab 1.8.4）：变调夹、三连音感觉、和弦图、扫弦方向、刷弦、三连音、段落、多声部、连音线、附点都能正确解析；导出的 MIDI 已包含变调夹移调和 swing；Guitar Pro 导出和 SVG 渲染可用；alphaTab 自带 sonivox.sf2 音色库，可直接用于 FluidSynth 合成。
 
 ### 4.6 校验（verify）
 
@@ -167,7 +168,7 @@ overrides: {}            # 人工覆盖项，如 {tempo_bpm: 168, key: B, capo: 
 | 规则 | intermediate 档 |
 |---|---|
 | 同一弦同时出两个音 | 禁止 |
-| 左手跨度（同时按住的最高品 − 最低品，不含空弦） | ≤ 4 品 |
+| 左手跨度：一个四品格的把位范围（最高品 − 最低品，不含空弦） | ≤ 3 |
 | 同时按弦手指数（横按计 1 指） | ≤ 4 |
 | 最高品位 | ≤ 12 |
 | 指弹同时拨弦数（p / i / m / a） | ≤ 4 |
@@ -180,7 +181,7 @@ overrides: {}            # 人工覆盖项，如 {tempo_bpm: 168, key: B, capo: 
 | 指标 | 定义 | 适用 |
 |---|---|---|
 | 和弦一致率 | 编配和弦由**实际发声的音符**推断（每拍窗口内的音名集合，含延音，做模板匹配），不用谱上写的和弦名。换算回音乐会音高后，与参考和弦按"根音 + 大小三"逐拍比对。`low` 置信拍不计入分母。另做一项检查：谱上写的和弦名与实际音符推断结果不符时报错 | 两者 |
-| 旋律 F1 | 指弹最高声部与参考旋律逐音符匹配：起音容差取 min(0.12s, 1/3 拍)，**音名相同即算对，允许八度差**。另报告"八度完全正确"比例 | 指弹 |
+| 旋律 F1 | 指弹旋律声部（alphaTex 的 voice 1）与参考旋律逐音符匹配：起音容差为 1/3 拍，**音名相同即算对，允许八度差**。精确率以编配的全部旋律音为分母；召回率以参考旋律的**骨架音**为分母（骨架规则与编配生成器共用同一个函数，因为指弹本来就只保留骨架音）。另报告"八度完全正确"比例 | 指弹 |
 | 和声相似度 | 合成音频与原曲和声分轨（去人声和鼓），逐小节 CENS 色度均值的余弦相似度。用 `beats.json` 把两边按小节对齐 | 两者 |
 | 节奏相关度 | 扫弦重音向量与原曲鼓 + 吉他分轨在三连音八分格上的起音强度的相关系数，按段落平均 | 弹唱 |
 
@@ -270,7 +271,7 @@ Guitar/
   - torch（MPS）、demucs、beat_this、librosa、mir_eval、soundfile、pretty_midi
   - pyyaml、yt-dlp、pytest
   - 基频模型（RMVPE 权重或 torchcrepe）
-- Homebrew：`fluid-synth`；MuseScore 仅在 PDF 走备选路线时安装
+- Homebrew：`fluid-synth`、`gh`；PDF 用系统已安装的 Google Chrome（无头模式）
 - Node：`@coderline/alphatab`，装在 `tools/alphatab/`
 - 磁盘：约 3–5GB（环境 + 模型权重）
 
@@ -291,7 +292,7 @@ Guitar/
 
 | 风险 | 对策 |
 |---|---|
-| alphaTex 表达力不足（三连音感觉、变调夹、和弦图、扫弦方向），或 alphaTab 在 Node 下无法导出 MIDI / SVG | **写实施计划前先做小验证（spike）**。不行则改用自定义文本格式 + Python 解析，再转 alphaTex 给网页用 |
+| alphaTex 表达力不足，或 alphaTab 在 Node 下无法导出 MIDI / SVG | **已通过 spike 验证（见 §4.5）**，风险关闭 |
 | 失真吉他混音下和弦识别出错 | 三方投票 + 置信度；`low` 不参与自动修改，转人耳确认 |
 | 168 BPM Shuffle 下日语快速音节导致旋律切分不准 | 指弹本来就做旋律骨架化，只要求骨架音准确；八度允许差异 |
 | 找不到 TV size 音源，只有完整版 | 用 OP 视频音轨与完整版做互相关，定位截取区间；都不行就请用户指定时间段 |
