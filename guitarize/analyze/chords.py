@@ -10,8 +10,12 @@ from .webchart import POWER_RE, WebBar
 LABELS = list(theory.PITCH_CLASSES) + [n + "m" for n in theory.PITCH_CLASSES]  # 与 theory.MAJMIN_LABELS 同序
 _TEMPLATES = theory.TEMPLATES / np.linalg.norm(theory.TEMPLATES, axis=1, keepdims=True)
 MIN_ALIGN_SIM = 0.5
-# 对齐时全 N 小节（N.C. / 只有贝斯）按此相似度计。须高于单音（只有贝斯）与含该音的三和弦的相似度 1/√3 ≈ 0.58，
-# 否则只有贝斯的小节会被接到无关的和弦小节上；又须低于真实混音里正确对齐的和弦小节（约 0.7–0.8），免得 N 小节抢走它们。
+# 对齐时全 N 小节（N.C. / 只有贝斯）按此相似度计。取值来自经验窗口，不是理论值：
+#   · 真实曲目（なんもねえ）的临界值是 0.594：低于它，只有贝斯的尾奏小节会被接到无关的和弦小节上；
+#   · 0.60–0.76 之间结果完全相同；
+#   · ≥ 0.77 会抢走一个真实的 F# 边界小节（相似度 0.761）；合成场景里 TV 版跳过 N.C. 段后相似度约 0.7 的主歌小节也会被吞进 N 段；
+#   · 合成噪声测试在 0.65 稳健。
+# 取窗口中部 0.65；上沿由 test_chords.py::test_modest_verse_bars_are_not_absorbed_by_an_n_run 钉住。
 N_ALIGN_SIM = 0.65
 CONFIDENT_POSTERIOR = 0.7
 

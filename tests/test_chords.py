@@ -1,6 +1,7 @@
 import numpy as np
 
 from guitarize import theory
+from guitarize.analyze import chords as chords_mod
 from guitarize.analyze.chords import (LABELS, align_webchart, power_quality_table, reference_chords,
                                       resolve_power, template_track, vote_beat)
 from guitarize.analyze.key import scale_pcs
@@ -121,7 +122,7 @@ def test_reference_chords_rotates_power_table_with_transpose():
 
 def test_tail_aligns_to_n_run_not_repeat():
     # 网上谱：段落 + N.C. 段 + 段落重复；音频：段落 + 无和弦的安静尾巴。
-    # 全 N 小节的相似度若是 0，DP 会跳去重复段；对齐时按 MIN_ALIGN_SIM 计，尾巴应落在 N 段上。
+    # 全 N 小节的相似度若是 0，DP 会跳去重复段；对齐时按 N_ALIGN_SIM 计，尾巴应落在 N 段上。
     sec = ["C", "G", "Am", "F"]
     web = ([WebBar([(c, 1.0)]) for c in sec] + [WebBar([("N", 1.0)]) for _ in range(4)]
            + [WebBar([(c, 1.0)]) for c in sec])
@@ -154,3 +155,36 @@ def test_bass_only_tail_reaches_n_outro_after_jump():
                      + [one(n) for n in ["C", "G", "A", "F"]])
     out = align_webchart(audio, web)
     assert out["index"] == [0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21]
+
+
+def _off_chord(label, cos):
+    """与 label 的和弦向量余弦为 cos 的单位向量：其余部分放在根音上方半音（不属于该大 / 小三和弦）。"""
+    root = theory.parse_chord(label)[0]
+    e = np.zeros(12)
+    e[(root + 1) % 12] = 1.0
+    return cos * vec(label) + np.sqrt(1 - cos ** 2) * e
+
+
+def test_modest_verse_bars_are_not_absorbed_by_an_n_run(monkeypatch):
+    """N_ALIGN_SIM 的上沿：网上谱有 4 小节 N.C. 休止，TV 版音频跳过它，紧接着是相似度只有约 0.7 的重复主歌。
+    N 小节的对齐分数若高于这些和弦小节（≥ 0.77），DP 会把前 4 个主歌小节接到 N 段上，它们的和弦就丢了。"""
+    chorus, verse, pre = ["C", "G", "Am", "F"], ["F", "G", "C", "Am"] * 2, ["Dm", "E", "Dm", "E"]
+    chart = chorus + ["N"] * 4 + verse + pre
+    web = [WebBar([(c, 1.0)]) for c in chart]
+    bars = [vec(c) for c in chorus] + [_off_chord(c, 0.7) for c in verse] + [vec(c) for c in pre]
+    expected = [0, 1, 2, 3] + list(range(8, 20))  # 音频 16 小节：跳过 N 段，主歌对上网上谱的主歌
+
+    def run():
+        beats_json = {"time_signature": [4, 4],
+                      "beats": [{"t": 0.5 * i, "bar": i // 4 + 1, "beat": i % 4 + 1, "g": i} for i in range(64)]}
+        cb = np.stack([b for b in bars for _ in range(4)], axis=1)
+        return align_webchart(np.stack(bars), web), reference_chords(cb, beats_json, web)
+
+    align, out = run()
+    assert align["index"] == expected
+    assert all(abs(s - 0.7) < 1e-9 for s in align["sim"][4:12])
+    verse_segs = [s for s in out["segments"] if 5 <= s["bar"] <= 12]
+    assert [s["label"] for s in verse_segs] == verse and all(s["votes"]["web"] != "N" for s in verse_segs)
+
+    monkeypatch.setattr(chords_mod, "N_ALIGN_SIM", 0.8)  # 反证：窗口之外就会吞掉这些主歌小节
+    assert run()[0]["index"] != expected
