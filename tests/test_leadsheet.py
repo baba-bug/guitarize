@@ -118,3 +118,25 @@ def test_mix_harmonic_is_float(tmp_path):
     for name in ("bass", "guitar", "piano", "other"):
         sf.write(tmp_path / f"{name}.wav", np.full((10, 2), 0.9), 22050)
     assert sf.info(mix_harmonic(tmp_path)).subtype == "FLOAT"
+
+
+def _write_analysis(paths, chords=None, melody=None, beats=None):
+    import json
+
+    paths.analysis_dir.mkdir(parents=True, exist_ok=True)
+    for path, data in ((paths.beats_json, beats or BEATS), (paths.chords_json, chords or CHORDS),
+                       (paths.melody_json, melody or MELODY)):
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_leadsheet_step_uses_key_from_chords_when_chosen(tmp_path):
+    import json
+
+    from guitarize.analyze.pipeline import run_analysis
+
+    paths, cfg = _paths_cfg(tmp_path)
+    kc = {"tonic": "G", "mode": "major", "score": 1.0, "chroma_key_score": 0.6, "used": True}
+    _write_analysis(paths, chords={**CHORDS, "key": {"tonic": "D", "mode": "major", "r": 0.7}, "key_from_chords": kc})
+    run_analysis(paths, cfg, ["leadsheet"])
+    ls = json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))
+    assert (ls["key"], ls["mode"]) == ("G", "major")

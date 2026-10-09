@@ -1,6 +1,7 @@
 """人声旋律：torchcrepe 基频 → 按节拍网格（Shuffle 用三连音格）量化成音符 → 调内吸附、八度纠错。"""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +14,7 @@ VOICED_PERIODICITY = 0.45
 SNAP_SEMITONES = 0.75
 GLIDE_MAX_BEATS = 1 / 3 + 1e-3
 GLIDE_MAX_SEMITONES = 2
+OUT_OF_KEY_GUARD = 0.3   # 调外音比例超过它 → 调性多半错了，不做滑音合并
 
 
 def vocal_pitch(vocals_wav: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -115,6 +117,18 @@ def merge_glides(notes: list[dict]) -> list[dict]:
     return out
 
 
+def tidy_notes(notes: list[dict]) -> list[dict]:
+    """八度纠错 → 去掉第 1 小节之前的音 → 合并滑音。滑音合并依赖调内 / 调外判断：
+    合并前调外音超过 30% 说明调性多半错了，此时跳过合并并警告。"""
+    notes = [n for n in fix_octaves(notes) if n["start_beats"] >= 0]
+    out = sum(n["out_of_key"] for n in notes) / len(notes) if notes else 0.0
+    if out > OUT_OF_KEY_GUARD:
+        print(f"[melody] warning: {100 * out:.0f}% of notes are out of key (> {100 * OUT_OF_KEY_GUARD:.0f}%): "
+              "the key is probably wrong; glide merging skipped", file=sys.stderr)
+        return notes
+    return merge_glides(notes)
+
+
 def extract_melody(vocals_wav: Path, beats_json: dict, key_pcs: set[int]) -> dict:
     import librosa
 
@@ -123,5 +137,5 @@ def extract_melody(vocals_wav: Path, beats_json: dict, key_pcs: set[int]) -> dic
     onsets = librosa.onset.onset_detect(y=y, sr=SR, hop_length=HOP, units="time")
     slot = 1 / 3 if beats_json.get("feel") == "shuffle" else 1 / 4
     notes = quantize(time_to_beat(beats_json, times), midi, per, time_to_beat(beats_json, onsets), key_pcs, slot)
-    notes = merge_glides([n for n in fix_octaves(notes) if n["start_beats"] >= 0])
+    notes = tidy_notes(notes)
     return {"grid": "triplet8" if slot == 1 / 3 else "sixteenth", "notes": notes}

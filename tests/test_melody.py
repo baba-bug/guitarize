@@ -99,3 +99,24 @@ def test_merge_glides_does_not_mutate_input():
     snapshot = [dict(n) for n in notes]
     merge_glides(notes)
     assert notes == snapshot
+
+
+def test_tidy_notes_merges_glides_when_key_fits():
+    from guitarize.analyze.melody import tidy_notes
+
+    notes = [N(1.0, 0.3333, 67, True), N(1.3333, 0.6667, 68), N(2.0, 1.0, 64), N(3.0, 1.0, 65), N(4.0, 1.0, 64)]
+    assert _sd(tidy_notes(notes))[0] == (1.0, 1.0, 68)
+
+
+def test_tidy_notes_skips_glide_merge_when_key_looks_wrong(capsys):
+    from guitarize.analyze.melody import tidy_notes
+
+    notes = [N(1.0, 0.3333, 67, True), N(1.3333, 0.6667, 68), N(2.0, 1.0, 61, True), N(3.0, 1.0, 65)]
+    assert tidy_notes(notes) == notes  # 2/4 = 50% 调外 > 30%：调性多半错了，不合并
+    assert "out of key" in capsys.readouterr().err
+
+
+def test_tidy_notes_drops_notes_before_bar_one():
+    from guitarize.analyze.melody import tidy_notes
+
+    assert _sd(tidy_notes([N(-1.0, 1.0, 64), N(0.0, 1.0, 65)])) == [(0.0, 1.0, 65)]

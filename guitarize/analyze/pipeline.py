@@ -10,7 +10,7 @@ from ..paths import SongPaths
 from . import features
 from .beats import track_beats
 from .chords import reference_chords
-from .key import estimate_key, parse_key, scale_pcs
+from .key import chosen_key, cross_check_key, estimate_key, key_report, parse_key, scale_pcs
 from .leadsheet import build_leadsheet
 from .melody import extract_melody
 from .stems import separate
@@ -57,11 +57,16 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
         web = parse_webchart(paths.webchart_txt.read_text(encoding="utf-8")) if paths.webchart_txt.exists() else None
         chords = reference_chords(cb, beats, web, key_pcs=scale_pcs(tonic, mode))
         chords["key"] = {"tonic": tonic, "mode": mode, "r": r}
+        # 色度调与和弦交叉确认：没有 overrides.key 时，和弦推断的调明显更合适就改用（旋律与 leadsheet）
+        kc = cross_check_key((tonic, mode), chords["segments"])
+        kc["used"] = kc["used"] and not overrides.get("key")
+        chords["key_from_chords"] = kc
+        print(f"[key] {key_report(chords, overridden=bool(overrides.get('key')))}")
         _write(paths.chords_json, chords)
     if "melody" in steps or "leadsheet" in steps:
         beats = beats or _need(paths.beats_json, slug, "beats")
         chords = chords or _need(paths.chords_json, slug, "chords")
-        key = (chords["key"]["tonic"], chords["key"]["mode"])
+        key = chosen_key(chords)
     if "melody" in steps:
         _write(paths.melody_json, extract_melody(paths.stem("vocals"), beats, scale_pcs(*key)))
     if "leadsheet" in steps:
