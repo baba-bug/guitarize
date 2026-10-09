@@ -120,9 +120,8 @@ def test_real_song_capo_and_shapes_unchanged():
              "C#m7": 8, "F#": 17, "A": 2, "D": 2}
     best = choose_capo(beats, MID)[0]
     assert best.capo == 4
-    names = {k: v.name for k, v in best.shapes.items()}
-    assert names | {"A": None, "D": None} == {
-        "F#7": "D7", "B": "G", "E": "C", "D#/G": "B7/D#", "G#m": "Em", "B/D#": "G/B", "C#": "A", "D#": "B7",
-        "C#m7": "Am7", "F#": "D", "A": None, "D": None}
+    expected = {"F#7": "D7", "B": "G", "E": "C", "D#/G": "B7/D#", "G#m": "Em", "B/D#": "G/B", "C#": "A", "D#": "B7",
+                "C#m7": "Am7", "F#": "D"}
+    assert {k: best.shapes[k].name for k in expected} == expected
     beg = choose_capo(beats, BEG)
     assert all(set(o.shapes) == set(beats) for o in beg)   # 新手档每个和弦都有指型（不再按缺失罚分）
