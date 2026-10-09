@@ -1,15 +1,34 @@
 """合并 beats / chords / melody → leadsheet.json（Phase 1 校验器的参考），并输出便于阅读的小节摘要。"""
 from __future__ import annotations
 
+import sys
+
 from .. import theory
+from .beats import beats_signature
 
 _MARK = {"high": "", "medium": "?", "low": "??"}
 
 
+def check_signatures(beats: dict, chords: dict, melody: dict) -> None:
+    """chords.json / melody.json 记下的 beats_signature 与当前 beats.json 不符 → 报错；旧文件没有签名 → 只警告。"""
+    sig = beats_signature(beats)
+    for name, data, step in (("chords.json", chords, "chords"), ("melody.json", melody, "melody")):
+        got = data.get("beats_signature")
+        if got is None:
+            print(f"[leadsheet] warning: {name} has no beats_signature (older file); cannot tell whether it matches "
+                  f"beats.json — re-run --steps {step} if beats changed", file=sys.stderr)
+        elif got != sig:
+            raise ValueError(f"{name} was computed from an older beats.json; re-run --steps {step} "
+                             f"({name} {got} vs beats.json {sig})")
+
+
 def build_leadsheet(beats: dict, chords: dict, melody: dict, key: tuple[str, str], sections: dict[int, str]) -> dict:
     if beats.get("short_bars"):
-        raise ValueError(f"beats.json has short bars {beats['short_bars']}: fix with overrides.downbeat_shift "
-                         "before building the leadsheet (melody bucketing assumes 4-beat bars)")
+        raise ValueError(f"beats.json has short bars {beats['short_bars']}: genuine 2/4 or 3/4 bars (common in "
+                         "TV-size edits) are not supported yet — the leadsheet assumes every bar has 4 beats. "
+                         "Only if the downbeat phase was mis-detected (bar lines off by a beat or two) is "
+                         "overrides.downbeat_shift the fix; then re-run --steps beats")
+    check_signatures(beats, chords, melody)
     bpb = beats["time_signature"][0]
     by_bar: dict[int, list[dict]] = {}
     for s in chords["segments"]:

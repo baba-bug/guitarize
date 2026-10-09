@@ -8,7 +8,7 @@ from typing import Sequence
 from ..config import SongConfig
 from ..paths import SongPaths
 from . import features
-from .beats import track_beats
+from .beats import beats_signature, track_beats
 from .chords import reference_chords
 from .key import chosen_key, cross_check_key, estimate_key, key_report, parse_key, scale_pcs
 from .leadsheet import build_leadsheet
@@ -61,6 +61,7 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
         kc = cross_check_key((tonic, mode), chords["segments"])
         kc["used"] = kc["used"] and not overrides.get("key")
         chords["key_from_chords"] = kc
+        chords["beats_signature"] = beats_signature(beats)
         print(f"[key] {key_report(chords, overridden=bool(overrides.get('key')))}")
         _write(paths.chords_json, chords)
     if "melody" in steps or "leadsheet" in steps:
@@ -68,7 +69,9 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
         chords = chords or _need(paths.chords_json, slug, "chords")
         key = chosen_key(chords)
     if "melody" in steps:
-        _write(paths.melody_json, extract_melody(paths.stem("vocals"), beats, scale_pcs(*key)))
+        melody = extract_melody(paths.stem("vocals"), beats, scale_pcs(*key))
+        melody["beats_signature"] = beats_signature(beats)
+        _write(paths.melody_json, melody)
     if "leadsheet" in steps:
         melody = _need(paths.melody_json, slug, "melody")
         _write(paths.leadsheet_json, build_leadsheet(beats, chords, melody, key, cfg.sections))

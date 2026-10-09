@@ -140,3 +140,128 @@ def test_leadsheet_step_uses_key_from_chords_when_chosen(tmp_path):
     run_analysis(paths, cfg, ["leadsheet"])
     ls = json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))
     assert (ls["key"], ls["mode"]) == ("G", "major")
+
+
+def test_short_bar_message_says_unsupported_not_shift():
+    import pytest
+
+    with pytest.raises(ValueError) as e:
+        build_leadsheet({**BEATS, "short_bars": [5]}, CHORDS, MELODY, ("C", "major"), {})
+    msg = str(e.value)
+    assert "2/4 or 3/4" in msg and "not supported" in msg
+    assert "mis-detected" in msg and "downbeat_shift" in msg
+
+
+SIG = {"n_beats": 0, "pad_beats": 0, "pickup_beats": 0}
+
+
+def test_stale_chords_or_melody_rejected():
+    import pytest
+
+    stale = {**SIG, "n_beats": 99}
+    with pytest.raises(ValueError, match=r"chords\.json was computed from an older beats\.json; re-run --steps chords"):
+        build_leadsheet(BEATS, {**CHORDS, "beats_signature": stale}, {**MELODY, "beats_signature": SIG},
+                        ("C", "major"), {})
+    with pytest.raises(ValueError, match=r"melody\.json was computed from an older beats\.json; re-run --steps melody"):
+        build_leadsheet(BEATS, {**CHORDS, "beats_signature": SIG}, {**MELODY, "beats_signature": stale},
+                        ("C", "major"), {})
+    ls = build_leadsheet(BEATS, {**CHORDS, "beats_signature": SIG}, {**MELODY, "beats_signature": SIG},
+                         ("C", "major"), {})
+    assert len(ls["bars"]) == 2
+
+
+def test_missing_signature_only_warns(capsys):
+    ls = build_leadsheet(BEATS, CHORDS, MELODY, ("C", "major"), {})
+    assert len(ls["bars"]) == 2
+    err = capsys.readouterr().err
+    assert "chords.json" in err and "melody.json" in err and "beats_signature" in err
+
+
+def _padded_beats():
+    from guitarize.analyze.beats import assemble_beats
+
+    # 弱起 3 拍：第 1 小节补 1 拍休止（pad 1），之后两个完整小节
+    return assemble_beats([0.5 + 0.5 * k for k in range(11)], [1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3], "straight")
+
+
+def test_pipeline_stamps_beats_signature(tmp_path, monkeypatch):
+    import json
+
+    import numpy as np
+
+    from guitarize import theory
+    from guitarize.analyze import pipeline
+    from guitarize.analyze.beats import beats_signature
+
+    paths, cfg = _paths_cfg(tmp_path)
+    beats = _padded_beats()
+    _write_analysis(paths, beats=beats)
+    cb = np.zeros((12, 11))
+    cb[list(theory.chord_tones("C")), :] = 1 / np.sqrt(3)
+    monkeypatch.setattr(pipeline.features, "load_mix", lambda wavs: np.zeros(10))
+    monkeypatch.setattr(pipeline.features, "beat_sync_chroma", lambda y, times: cb)
+    monkeypatch.setattr(pipeline, "extract_melody", lambda wav, bj, pcs: {"grid": "sixteenth", "notes": []})
+    pipeline.run_analysis(paths, cfg, ["chords", "melody", "leadsheet"])
+    sig = beats_signature(beats)
+    assert sig == {"n_beats": 11, "pad_beats": 1, "pickup_beats": 3}
+    for path in (paths.chords_json, paths.melody_json):
+        assert json.loads(path.read_text(encoding="utf-8"))["beats_signature"] == sig
+
+
+def _score_from_events(events_spec):
+    """events_spec: [(起点拍, 时值拍, [midi...])] → 声部 0 的 Score（3 个 4/4 小节，不用 alphaTab）。"""
+    from guitarize.verify.model import Bar, Event, Note, Score
+
+    events = [Event(bar=int(s // 4), voice=0, start=s, dur=d, written_start=s, written_dur=d,
+                    notes=tuple(Note(i + 1, 0, m, False, False) for i, m in enumerate(sorted(ms, reverse=True))),
+                    chord=None, pick=None, brush=None, rest=False)
+              for s, d, ms in events_spec]
+    bars = [Bar(i, 4.0 * i, 4.0, None, "none") for i in range(3)]
+    return Score("t", 120.0, 0, [64, 59, 55, 50, 45, 40], bars, events)
+
+
+def test_padded_leadsheet_lines_up_with_verify_metrics(tmp_path):
+    """契约：带弱起（pad 1、pickup 3）的 beats.json → leadsheet.json → verify 读参考并评分，
+    第 2 小节第 1 拍的参考和弦 / 旋律对上谱面第 2 小节第 1 拍。"""
+    from guitarize.analyze.beats import beats_signature
+    from guitarize.analyze.pipeline import run_analysis
+    from guitarize.config import Thresholds
+    from guitarize.verify import metrics
+    from guitarize.verify.report import _load_json
+
+    beats = _padded_beats()
+    assert (beats["pad_beats"], beats["pickup_beats"]) == (1, 3)
+    sig = beats_signature(beats)
+
+    def seg(bar, beat, dur, label):
+        return {"bar": bar, "beat": beat, "dur_beats": dur, "label": label, "confidence": "high",
+                "votes": {"template": label, "web": label}}
+
+    chords = {"segments": [seg(1, 2, 3, "G"), seg(2, 1, 1, "C"), seg(2, 2, 3, "F"), seg(3, 1, 4, "G")],
+              "key": {"tonic": "C", "mode": "major", "r": None}, "beats_signature": sig}
+    melody = {"grid": "sixteenth", "beats_signature": sig, "notes": [
+        {"start_beats": s, "dur_beats": d, "midi": m, "out_of_key": False, "conf": 0.9}
+        for s, d, m in ((1.0, 2.0, 67), (3.0, 1.0, 71), (4.0, 1.0, 72), (5.0, 3.0, 69), (8.0, 4.0, 71))]}
+    paths, cfg = _paths_cfg(tmp_path)
+    _write_analysis(paths, chords=chords, melody=melody, beats=beats)
+    run_analysis(paths, cfg, ["leadsheet"])
+    leadsheet = _load_json(paths.leadsheet_json)  # run_verify 读参考的同一函数
+    assert [b["bar"] for b in leadsheet["bars"]] == [1, 2, 3]
+    assert [c["beat"] for c in leadsheet["bars"][0]["chords"]] == [2]
+    assert [[m["start_beats"] for m in b["melody"]] for b in leadsheet["bars"]] == [[1.0, 3.0], [4.0, 5.0], [8.0]]
+
+    # 谱面：第 1 小节第 1 拍是补的休止；第 2 小节第 1 拍 C（旋律 C5），第 2–4 拍 F（旋律 A4）
+    score = _score_from_events([(1.0, 2.0, [55, 59, 62, 67]), (3.0, 1.0, [55, 59, 62, 71]),
+                                (4.0, 1.0, [60, 64, 67, 72]), (5.0, 3.0, [53, 57, 60, 69]),
+                                (8.0, 4.0, [55, 59, 62, 71])])
+    bars = metrics.score_bars(score, leadsheet, "finger")
+    assert [(b.chord_agree, b.chord_total) for b in bars] == [(3, 3), (4, 4), (4, 4)]
+    assert [(b.mel_hit, b.mel_est) for b in bars] == [(2, 2), (2, 2), (1, 1)]
+    s = metrics.summarize(bars, [], Thresholds(), "finger")
+    assert s["chord_agreement"] == 1.0 and s["melody_f1"] == 1.0
+
+    # 把第 2 小节第 1 拍的参考改成 Am：问题恰好记在谱面第 2 小节的第 1 拍
+    leadsheet["bars"][1]["chords"][0]["label"] = "Am"
+    bars = metrics.score_bars(score, leadsheet, "finger")
+    assert (bars[1].chord_agree, bars[1].chord_total) == (3, 4)
+    assert bars[1].chord_issues[0].startswith("拍 1：参考 Am")

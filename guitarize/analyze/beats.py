@@ -195,6 +195,12 @@ def assemble_beats(beat_times: Sequence[float], positions: Sequence[int], feel: 
     }
 
 
+def beats_signature(beats_json: dict) -> dict:
+    """chords.json / melody.json 记下产出时 beats.json 的拍数、补拍和弱起，用来发现 beats 重跑后的过期文件。"""
+    return {"n_beats": len(beats_json["beats"]), "pad_beats": beats_json["pad_beats"],
+            "pickup_beats": beats_json["pickup_beats"]}
+
+
 def _axis(beats_json: dict) -> tuple[np.ndarray, np.ndarray]:
     g = np.array([b["g"] for b in beats_json["beats"]], dtype=float)
     t = np.array([b["t"] for b in beats_json["beats"]], dtype=float)
