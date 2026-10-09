@@ -10,6 +10,9 @@ from .webchart import POWER_RE, WebBar
 LABELS = list(theory.PITCH_CLASSES) + [n + "m" for n in theory.PITCH_CLASSES]  # 与 theory.MAJMIN_LABELS 同序
 _TEMPLATES = theory.TEMPLATES / np.linalg.norm(theory.TEMPLATES, axis=1, keepdims=True)
 MIN_ALIGN_SIM = 0.5
+# 对齐时全 N 小节（N.C. / 只有贝斯）按此相似度计。须高于单音（只有贝斯）与含该音的三和弦的相似度 1/√3 ≈ 0.58，
+# 否则只有贝斯的小节会被接到无关的和弦小节上；又须低于真实混音里正确对齐的和弦小节（约 0.7–0.8），免得 N 小节抢走它们。
+N_ALIGN_SIM = 0.65
 CONFIDENT_POSTERIOR = 0.7
 
 
@@ -97,13 +100,13 @@ def align_webchart(audio_bars: np.ndarray, web: list[WebBar], jump: float = 1.0,
     """audio_bars: (N, 12) 单位化小节色度。网上谱整体移调 transpose 个半音后与音频最匹配。
 
     全 N 小节（N.C. / 只有贝斯）的向量为零，相似度恒为 0，DP 永远不会经过它们；
-    对齐时把这些列按 MIN_ALIGN_SIM 计，返回的 sim 仍是真实相似度（交给 reference_chords 的门槛判断）。"""
+    对齐时把这些列按 N_ALIGN_SIM 计，返回的 sim 仍是真实相似度（交给 reference_chords 的门槛判断）。"""
     w = np.stack([web_bar_vector(b) for b in web])
     all_n = np.array([all(c == "N" for c, _ in b.chords) for b in web])
     best = None
     for t in range(12):
         sim = audio_bars @ np.roll(w, t, axis=1).T
-        score, path = _dp_align(np.where(all_n[None, :], MIN_ALIGN_SIM, sim), jump, any_jump)
+        score, path = _dp_align(np.where(all_n[None, :], N_ALIGN_SIM, sim), jump, any_jump)
         if best is None or score > best[0] + 1e-9:
             best = (score, t, path, sim)
     _, t, path, sim = best

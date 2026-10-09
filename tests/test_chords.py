@@ -135,3 +135,22 @@ def test_tail_aligns_to_n_run_not_repeat():
     assert all(a["sim"] == 0.0 for a in out["web_alignment"][4:])  # 报告的仍是真实相似度
     tail_segs = [s for s in out["segments"] if s["bar"] >= 5]
     assert {(s["label"], s["confidence"]) for s in tail_segs} == {("N", "medium")}
+
+
+def test_bass_only_tail_reaches_n_outro_after_jump():
+    # 真实失败的形状（なんもねえ TV size 结尾）：照着网上谱（完整版）往下走是吉他 solo，
+    # 正确的路要跳到最后一遍副歌再进 N 尾奏。尾巴只有贝斯（单音），与含该音的三和弦相似度 1/√3 ≈ 0.58，
+    # 所以对齐时 N 小节的相似度必须高于它，否则贝斯尾巴会被接到 solo 的和弦小节上。
+    def one(name):
+        v = np.zeros(12)
+        v[theory.pc(name)] = 1.0
+        return v
+
+    chart = (["D", "A"] + ["C", "G", "Am", "F"] + ["C", "G", "Am", "E"]  # 前奏、副歌、副歌重复
+             + ["C", "G", "Am", "F"]                                     # solo（完整版才有）
+             + ["C", "G", "Am", "D"] + ["N"] * 4)                        # 最后一遍副歌、只有贝斯的尾奏
+    web = [WebBar([(c, 1.0)]) for c in chart]
+    audio = np.stack([vec(c) for c in ["D", "A", "C", "G", "Am", "F", "C", "G", "Am", "D"]]
+                     + [one(n) for n in ["C", "G", "A", "F"]])
+    out = align_webchart(audio, web)
+    assert out["index"] == [0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21]
