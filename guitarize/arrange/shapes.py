@@ -1,6 +1,7 @@
-"""和弦指型库：开放和弦、E/A 型横按、替代指型、斜杠低音调整；按难度档过滤，代价升序。"""
+"""和弦指型库：开放和弦、E/A 型横按、替代指型、斜杠低音调整，以及兜底的高音弦部分指型；按难度档过滤，代价升序。"""
 from __future__ import annotations
 
+import itertools
 import re
 from dataclasses import dataclass, replace
 
@@ -30,8 +31,12 @@ _SUFFIX = {"maj": "", "min": "m", "7": "7", "min7": "m7", "maj7": "maj7", "sus4"
 # 找不到该性质的指型时可用的替代（性质, 额外代价）
 _SUBSTITUTE = {"maj": [("7", 0.3)], "7": [("maj", 0.2)], "min7": [("min", 0.2)], "maj7": [("maj", 0.2)],
                "sus4": [("maj", 0.4)], "sus2": [("maj", 0.4)], "aug": [("maj", 0.6)], "dim": [("min", 0.6)],
-               "min7b5": [("min", 0.6)]}
+               "min7b5": [("dim", 0.3), ("min", 0.6)]}
 _POWER = re.compile(r"^([A-G][#b]?)5$")
+# 部分指型（只弹 1–3 弦或 1–4 弦）：排在完整指型之后的兜底
+PARTIAL_EXTRA = 1.5   # 比最好的完整指型贵这么多
+PARTIAL_ALONE = 2.0   # 没有完整指型时的代价
+PARTIAL_SLASH = 0.5   # 高音弦上做不到斜杠低音：沿用原名并加罚
 
 
 @dataclass(frozen=True)
@@ -83,8 +88,32 @@ def with_bass(v: Voicing, bass_pc: int, profile: Profile) -> Voicing | None:
     return None
 
 
+def partial_shapes(root: int, quality: str, profile: Profile) -> list[tuple[tuple, bool]]:
+    """高音弦上的三和弦 / 七和弦（任意转位）：1–3 弦或 1–4 弦全弹，每根弦都是和弦音，且含全部必要音
+    （四音和弦可省纯五度）。品位 0..max_fret，须可弹；手指不够、只能靠横按时，只有允许横按才收。
+    返回 [(品位, 是否横按)]，把位低、弦多、按弦少的在前。"""
+    tones = theory.chord_tones(theory.pc_name(root) + _SUFFIX[quality])
+    needed = tones - {(root + 7) % 12} if len(tones) == 4 else tones
+    out = []
+    for n in (3, 4):
+        options = [[f for f in range(profile.max_fret + 1) if (OPEN_STRINGS[s] + f) % 12 in tones] for s in range(n)]
+        for combo in itertools.product(*options):
+            if not needed <= {(OPEN_STRINGS[s] + f) % 12 for s, f in enumerate(combo)}:
+                continue
+            frets = combo + (None,) * (6 - n)
+            barre = len([f for f in combo if f > 0]) > profile.max_fingers
+            if playable(frets, profile) and (profile.allow_barre or not barre):
+                out.append((frets, barre))
+
+    def order(item):
+        fretted = [f for f in item[0][:4] if f]
+        return (max(fretted, default=0), max(fretted, default=0) - min(fretted, default=0),
+                -sum(f is not None for f in item[0]), len(fretted), tuple(-1 if f is None else f for f in item[0]))
+    return sorted(out, key=order)
+
+
 def voicings(label: str, profile: Profile) -> list[Voicing]:
-    """指法调里的和弦名 → 可弹指型（代价升序）。"""
+    """指法调里的和弦名 → 可弹指型（代价升序）。完整指型在前，高音弦部分指型兜底，所以能解析的和弦总有指型。"""
     m = _POWER.match(label)
     if m:
         label = m.group(1)
@@ -98,6 +127,14 @@ def voicings(label: str, profile: Profile) -> list[Voicing]:
     if bass is not None and bass != root:
         cands = [with_bass(v, bass, profile) or replace(v, cost=v.cost + 0.5) for v in cands]
     cands = [v for v in cands if playable(v.frets, profile)]
+    cost = (min(v.cost for v in cands) + PARTIAL_EXTRA if cands else PARTIAL_ALONE)
+    cost += PARTIAL_SLASH if bass is not None and bass != root else 0.0
+    for q, extra in [(quality, 0.0)] + _SUBSTITUTE.get(quality, []):   # 本性质凑不出时才用替代性质
+        partial = [Voicing(theory.pc_name(root) + _SUFFIX[q], frets, cost + extra, barre)
+                   for frets, barre in partial_shapes(root, q, profile)]
+        if partial:
+            cands += partial
+            break
     if not cands:
         raise ValueError(f"no playable voicing for {label!r} at level {profile.name}")
     return sorted(cands, key=lambda v: v.cost)

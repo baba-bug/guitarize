@@ -54,3 +54,19 @@ def test_document_builds_with_alphatab(tmp_path):
     assert score.capo == 4 and score.tempo == 168 and score.bars[0].section == "サビ"
     assert score.bars[0].feel == "triplet8th"
     assert [n.midi for n in score.melody(0)] == [71]
+
+
+def test_quote_escapes_strings():
+    assert atex.quote('Outro "end"') == '"Outro \\"end\\""'
+    assert atex.quote("a\\b") == '"a\\\\b"'
+    assert atex.quote("x\ny") == '"x y"'
+
+
+def test_names_with_quotes_and_backslashes_build(tmp_path):
+    head = atex.header('C:\\songs "x"', 120, 0, "straight", "tabs", {'G"x': (3, 0, 0, 0, 2, 3)})
+    bar = atex.bar_line(atex.beat_tokens([(1, 3)], 4, ['ch "G"']), 1, 'Outro "end"\\')
+    src = tmp_path / "q.atex"
+    src.write_text(atex.document(head, [[bar]]), encoding="utf-8")
+    score = load_score(alphatab.build(src, tmp_path / "b", "q")["json"])
+    assert score.title == 'C:\\songs "x"'
+    assert score.bars[0].section == 'Outro "end"\\'
