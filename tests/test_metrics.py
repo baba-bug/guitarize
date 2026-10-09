@@ -244,3 +244,35 @@ def test_reference_skeleton_but_no_arrangement_melody_is_a_problem(build_tex):
     assert (bars[0].mel_est, bars[0].mel_ref, bars[0].mel_found) == (0, 2, 0)
     assert bars[0].mel_f1 == 0.0
     assert metrics.problem_bars(bars, [], Thresholds(), "finger") == [1]
+
+
+def test_onset_slots_finds_clicks_in_expected_slots(tmp_path):
+    import soundfile as sf
+
+    sr = 22050
+    windows = [(0.0, 2.0), (2.0, 4.0)]
+    step = 2.0 / metrics.SLOTS
+    clicks = {0: [1, 4, 7], 1: [2, 8]}
+    y = np.zeros(4 * sr)
+    t = np.arange(int(0.05 * sr)) / sr
+    burst = np.sin(2 * np.pi * 1000 * t) * np.exp(-t * 60)
+    for w, slots in clicks.items():
+        for k in slots:
+            i = int((windows[w][0] + k * step) * sr)
+            y[i:i + len(burst)] += burst
+    wav = tmp_path / "clicks.wav"
+    sf.write(str(wav), y, sr)
+    out = metrics.onset_slots([wav], windows)
+    assert out.shape == (2, metrics.SLOTS)
+    for w, slots in clicks.items():
+        assert sorted(np.argsort(out[w])[-len(slots):].tolist()) == slots
+
+
+def test_beat_label():
+    from guitarize.verify.positions import beat_label
+
+    assert beat_label(0) == "1" and beat_label(2.0) == "3" and beat_label(2.999999) == "4"
+    assert beat_label(2.5) == "3&" and beat_label(2 + 2 / 3) == "3&"
+    assert beat_label(2 + 1 / 3) == "3+⅓"
+    assert beat_label(0.25) == "1e" and beat_label(3.75) == "4a"
+    assert beat_label(0.4) == "1.40"

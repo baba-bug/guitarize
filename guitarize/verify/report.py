@@ -16,11 +16,13 @@ from ..paths import SongPaths
 from ..render import alphatab
 from ..render.synth import midi_to_wav
 from . import metrics
+from .positions import beat_label
 from .model import Score, load_score
 from .playability import Violation, check_playability, soft_stats
 
 HISTORY_FIELDS = ["iter", "time", "violations", "chord_agreement", "melody_f1",
-                  "harmonic_similarity", "rhythm_correlation", "pass"]
+                  "harmonic_similarity", "rhythm_correlation", "pass",
+                  "chord_mark_issues", "arrangement_bars", "reference_bars", "scored_beats"]
 MAX_SNIPPETS = 20
 CHECK_NAMES = {"playability": "可弹性", "chord": "和弦", "melody": "旋律", "chord_marks": "和弦标记",
                "bar_count": "小节数", "reference": "参考不足"}
@@ -165,6 +167,15 @@ def _last_row(path: Path) -> dict | None:
 
 def _append_history(path: Path, iter_name: str, s: dict) -> None:
     new = not path.exists()
+    if not new:  # 旧版表头列数较少：先把已有行迁移到新表头，避免错位
+        with path.open(encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            old_fields, old_rows = reader.fieldnames, list(reader)
+        if old_fields != HISTORY_FIELDS:
+            with path.open("w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=HISTORY_FIELDS, restval="")
+                w.writeheader()
+                w.writerows({k: r.get(k, "") for k in HISTORY_FIELDS} for r in old_rows)
     with path.open("a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=HISTORY_FIELDS)
         if new:
@@ -225,7 +236,7 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
             lines.append(f"| 小节数（编配 / 参考） | {s['arrangement_bars']} / {s['reference_bars'] or '—'} | — | 相等 |")
 
     lines += ["", f"## 可弹性违规（{len(violations)}）"]
-    lines += [f"- 第 {v.bar} 小节 · 拍 {v.start - score.bars[v.bar - 1].start + 1:.2f} · `{v.rule}`：{v.detail}"
+    lines += [f"- 第 {v.bar} 小节 · 拍 {beat_label(v.start - score.bars[v.bar - 1].start)} · `{v.rule}`：{v.detail}"
               for v in violations] or ["- 无"]
 
     by_bar = {b.bar: b for b in bars}

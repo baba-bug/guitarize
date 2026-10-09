@@ -49,6 +49,26 @@ class RangeRequestHandler(http.server.SimpleHTTPRequestHandler):
     """静态文件服务，支持单段 HTTP Range（音频跳转需要 206 响应）。"""
 
     _range_left: int | None = None
+    ALLOWED_HOSTS = ("localhost", "127.0.0.1", "[::1]")
+
+    def _host_ok(self) -> bool:
+        host = (self.headers.get("Host") or "").strip().lower()
+        name = host[: host.index("]") + 1] if host.startswith("[") else host.rsplit(":", 1)[0] if ":" in host else host
+        return name in self.ALLOWED_HOSTS
+
+    def do_GET(self):
+        if not self._host_ok():  # 防 DNS rebinding：只认本机主机名
+            return self.send_error(403, "Forbidden host")
+        return super().do_GET()
+
+    def do_HEAD(self):
+        if not self._host_ok():
+            return self.send_error(403, "Forbidden host")
+        return super().do_HEAD()
+
+    def list_directory(self, path):
+        self.send_error(404, "No permission to list directory")
+        return None
 
     def send_head(self):
         header = self.headers.get("Range")

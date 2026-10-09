@@ -11,6 +11,7 @@ from .. import theory
 from ..config import Thresholds
 from ..skeleton import skeleton_mask
 from .model import Attack, Bar, Score
+from .positions import beat_label
 
 MELODY_TOL = 1 / 3 + 1e-6  # 起音容差（拍）
 SLOTS = 12                 # 4/4 小节的三连音八分格数
@@ -107,7 +108,7 @@ def score_chords(score: Score, leadsheet: dict, bars: list[BarScore]) -> None:
                 bs.chord_agree += 1
             else:
                 shape = theory.transpose_label(raw, -score.capo) if score.capo else raw
-                bs.chord_issues.append(f"拍{k + 1}：参考 {raw}（指法 {shape}），编配听起来是 {'/'.join(sorted(cands))}")
+                bs.chord_issues.append(f"拍 {beat_label(k)}：参考 {raw}（指法 {shape}），编配听起来是 {'/'.join(sorted(cands))}")
 
 
 def chord_mark_issues(score: Score, bars: list[BarScore]) -> None:
@@ -122,8 +123,8 @@ def chord_mark_issues(score: Score, bars: list[BarScore]) -> None:
             continue
         cands = theory.infer_majmin(w, bass)
         if expected not in cands:
-            pos = e.start - score.bars[e.bar].start + 1
-            bars[e.bar].mark_issues.append(f"拍 {pos:.2f} 标记 {e.chord}，实际音听起来是 {'/'.join(sorted(cands))}")
+            pos = beat_label(e.start - score.bars[e.bar].start)
+            bars[e.bar].mark_issues.append(f"拍 {pos} 标记 {e.chord}，实际音听起来是 {'/'.join(sorted(cands))}")
 
 
 # ---------- 旋律 ----------
@@ -170,25 +171,25 @@ def score_melody(score: Score, leadsheet: dict, bars: list[BarScore]) -> None:
         bi = _bar_of(score, e.start)
         if bi not in ref_bars:
             continue
-        bs, pos = bars[bi], e.start - score.bars[bi].start + 1
+        bs, pos = bars[bi], beat_label(e.start - score.bars[bi].start)
         bs.mel_est += 1
         if i in hits:
             bs.mel_hit += 1
             if ref_all[hits[i]]["midi"] == e.midi:
                 bs.mel_octave_exact += 1
         else:
-            bs.mel_issues.append(f"多余/错音：拍 {pos:.2f} {theory.midi_name(e.midi)}")
+            bs.mel_issues.append(f"多余/错音：拍 {pos} {theory.midi_name(e.midi)}")
     for j, m in enumerate(skel):
         bi = _bar_of(score, m["start_beats"])
         if bi is None or bi >= n:
             continue
-        bs, pos = bars[bi], m["start_beats"] - score.bars[bi].start + 1
+        bs, pos = bars[bi], beat_label(m["start_beats"] - score.bars[bi].start)
         bs.mel_ref += 1
         if j in founds:
             bs.mel_found += 1
         else:
             shape = theory.midi_name(m["midi"] - score.capo)
-            bs.mel_issues.append(f"漏掉骨架音：拍 {pos:.2f} {theory.midi_name(m['midi'])}（指法调 {shape}）")
+            bs.mel_issues.append(f"漏掉骨架音：拍 {pos} {theory.midi_name(m['midi'])}（指法调 {shape}）")
 
 
 # ---------- 和声相似度 ----------
@@ -198,7 +199,7 @@ def bar_chroma(wav: Path, windows: Sequence[tuple[float, float]]) -> np.ndarray:
 
     y, sr = librosa.load(str(wav), sr=22050, mono=True)
     hop = 512
-    chroma = librosa.feature.chroma_cens(y=y, sr=sr, hop_length=hop)
+    chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=hop)  # 不用 chroma_cens：它约 1 秒的平滑会把相邻小节糊在一起
     times = librosa.frames_to_time(np.arange(chroma.shape[1]), sr=sr, hop_length=hop)
     out = np.full((len(windows), 12), np.nan)
     for i, (a, b) in enumerate(windows):

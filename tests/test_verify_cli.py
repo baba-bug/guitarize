@@ -16,6 +16,9 @@ def test_verify_twice_creates_iterations(demo_song, capsys):
     rows = list(csv.DictReader((root / "history.csv").open(encoding="utf-8")))
     assert [r["iter"] for r in rows] == ["iter-01", "iter-02"]
     report = (root / "iter-02" / "report.md").read_text(encoding="utf-8")
+    row = next(ln for ln in report.splitlines() if ln.startswith("| 和弦一致率"))
+    cells = [c.strip() for c in row.strip("|").split("|")]
+    assert cells[1] == "100.0%" and cells[2] == cells[1]  # 上一轮 = 本轮
     assert "指弹校验报告" in report and "✅ 达标" in report
     assert "小节数（编配 / 参考）" in report
     assert "指弹校验报告" in capsys.readouterr().out
@@ -48,3 +51,14 @@ def test_render_cli(demo_song, capsys):
     assert main(["--songs-dir", str(demo_song.root.parent), "render", "demo", "--arr", "strum"]) == 0
     printed = capsys.readouterr().out
     assert "pdf:" in printed and demo_song.out("strum", "html").exists()
+
+
+def test_history_migrates_old_header(tmp_path):
+    from guitarize.verify.report import HISTORY_FIELDS, _append_history
+
+    path = tmp_path / "history.csv"
+    path.write_text("iter,time,violations\niter-01,t,2\n", encoding="utf-8")
+    _append_history(path, "iter-02", {"violations": 0, "scored_beats": 8})
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    assert list(rows[0]) == HISTORY_FIELDS
+    assert rows[0]["violations"] == "2" and rows[1]["scored_beats"] == "8"
