@@ -18,6 +18,7 @@
 \chord "D7" 2 1 2 0 x x
 \chord "A7" 0 2 0 2 0 x
 \ts 4 4
+\ks B
 \tf triplet-8th
 // bar 1 [イントロ]
 \section "イントロ" r.1 |
