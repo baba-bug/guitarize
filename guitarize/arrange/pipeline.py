@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 from pathlib import Path
 
@@ -61,7 +62,9 @@ def self_check(text: str, profile: Profile, kind: str) -> list[Violation]:
 
 
 def _first_line(error: Exception) -> str:
-    return next((line.strip() for line in str(error).splitlines() if line.strip()), type(error).__name__)
+    """错误里最有用的一行：alphaTex 的定位诊断（`L行:列 …`）优先；临时文件路径那行没用（文件已删）。"""
+    lines = [line.strip() for line in str(error).splitlines() if line.strip()]
+    return next((line for line in lines if re.match(r"L\d+:\d+", line)), lines[0] if lines else type(error).__name__)
 
 
 def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None,

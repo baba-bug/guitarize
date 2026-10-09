@@ -129,7 +129,8 @@ def test_arrange_survives_a_failed_self_check(demo_song, capsys, monkeypatch, er
         assert main(["--songs-dir", songs, "arrange", "demo", "--arr", arr]) == 0
         assert demo_song.atex(arr).read_text(encoding="utf-8").count("\\track") == 1    # 草稿照写
     out = capsys.readouterr().out
-    assert out.count(f"自检失败：{str(error).splitlines()[0]}") == 2
+    wanted = "L4:9 Unexpected 'Dot' token." if isinstance(error, AlphaTexError) else str(error).splitlines()[0]
+    assert out.count(f"自检失败：{wanted}") == 2     # alphaTex 的定位诊断优先于临时文件路径那行
     assert "处违规" not in out
 
 
@@ -150,3 +151,10 @@ def test_strum_draft_is_checked_inside_generate_strum(demo_song, monkeypatch):
     monkeypatch.setattr(pipeline, "self_check", lambda text, profile, kind: calls.append((kind, inside[0])) or [])
     assert main(["--songs-dir", str(demo_song.root.parent), "arrange", "demo", "--arr", "strum", "--force"]) == 0
     assert calls == [("strum", True)]      # 生成器的修补循环里检查过；最后的自检用同一份结果
+
+
+def test_first_line_prefers_the_alphatex_diagnostic():
+    from guitarize.arrange.pipeline import _first_line
+    err = RuntimeError("alphaTex build failed for /tmp/x/draft.atex:\n  L12:8 Unexpected end of file\n  more")
+    assert _first_line(err) == "L12:8 Unexpected end of file"
+    assert _first_line(RuntimeError("node not found")) == "node not found"

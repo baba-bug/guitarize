@@ -386,14 +386,15 @@ def _repair_shift(v1: list[Placed], v2: list[Placed], t: float, max_fret: int,
 
 
 def repair(v1: list[Placed], v2: list[Placed], violations: Iterable[Violation], feel: str,
-           max_fret: int) -> list[tuple[float, str]]:
+           max_fret: int, max_shift: int | None = None) -> list[tuple[float, str]]:
     """按自检违规修补（就地修改 v1 / v2）。Violation.start 是演奏时间，先换回记谱位置 t。每个 t 每轮只修一处：
     - 跨度 / 手指数：依次 1. 截短 t 之前起音、t 时仍按着的低音 / 填充；2. 截短 t 时仍按着的旋律音；
       3. 去掉 t 时起音的填充；4. 再去掉低音。
     - 换把：同样的顺序，但截短之后先截短前一个手上有音的起音 t′ 时仍按着的低音 / 填充（宁可截短也不丢新起音），
       去音之后再去掉 t′ 起音的填充、低音；优先取能缩小跳动的一步（见 _repair_shift），
       都做不了时 (b) 把 t 或 t′ 的旋律音移八度（melody±12）。
-    只动按弦音（空弦不占手型），只修手型类规则。返回 (修补位置, 说明)；空表示无可修。"""
+    只动按弦音（空弦不占手型），只修手型类规则。违规来自本轮修补之前的文本：给了 max_shift 时，
+    本轮前面的修补已让 t 的跳动 ≤ max_shift 的换把不再修（免得白白去音）。返回 (修补位置, 说明)；空表示无可修。"""
     done, seen, touched = [], set(), set()
     for v in violations:
         t = written_position(v.start, feel)
@@ -401,6 +402,8 @@ def repair(v1: list[Placed], v2: list[Placed], violations: Iterable[Violation], 
             continue
         seen.add(t)
         if v.rule == "shift":
+            if max_shift is not None and jump(v1, v2, t) <= max_shift:
+                continue
             found = _repair_shift(v1, v2, t, max_fret, touched)
         else:
             what = _repair_at(v1, v2, t)
@@ -464,7 +467,7 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
         found = check(text)
         if not found:
             break
-        done = repair(v1, v2, found, feel, profile.max_fret)
+        done = repair(v1, v2, found, feel, profile.max_fret, profile.max_shift)
         if not done:
             break
         remark(done)

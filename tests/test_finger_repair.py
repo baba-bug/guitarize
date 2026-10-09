@@ -192,3 +192,11 @@ def test_shift_falls_back_to_the_first_step_that_applies():
     v1 = [Placed(0.0, 1.0, [(1, 1)]), Placed(1.0, 1.0, [(1, 8)])]
     v2 = [Placed(1.0, 1.0, [(3, 10), (5, 8)])]
     assert repair(v1, v2, [V(1.0, "shift")], "straight", 12) == [(1.0, "drop fill @2 (shift)")]
+
+
+def test_shift_already_fixed_this_round_is_not_repaired_again():
+    # 违规来自本轮修补之前的文本：同一轮里前面的修补已经让 t 的跳动 ≤ max_shift 时，不能再白白去音 / 截短
+    v1 = [Placed(1.0, 1.0, [(1, 0)]), Placed(2.0, 1.0, [(1, 3)])]
+    v2 = [Placed(1.0, 1.0, [(3, 2), (5, 3)])]
+    assert repair(v1, v2, [V(2.0, "shift")], "straight", 12, max_shift=4) == []
+    assert v2[0].where == [(3, 2), (5, 3)] and v2[0].dur == 1.0

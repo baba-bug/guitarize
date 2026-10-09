@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 from conftest import capo4_bar12_leadsheet
 
@@ -182,15 +184,20 @@ def test_shift_with_nothing_at_t_is_repaired_at_the_previous_attack():
 
 
 def test_shift_between_two_melody_notes_moves_one_an_octave():
-    # (b)：D5 只能在 1 弦 10 品，G4 在 2 弦 8 品，没有低音 / 填充。校验说这里换把 → G4 降八度落到 3 弦空弦
-    ls = _sheet([_bar(0, None, "N", [(0, 1, 74), (1, 1, 67), (2, 2, 65)])])
+    # (b)：D5 只能在 1 弦 10 品，反拍的 G4 在 2 弦 8 品，没有低音 / 填充；max_shift = 1 时半拍内 10 → 8 品是真违规
+    # （校验只看相隔不到 1 拍的起音）→ 用真实自检修补：G4 降八度落到 3 弦空弦
+    from guitarize.arrange.pipeline import self_check
+    tight = replace(MID, max_shift=1)
+    ls = _sheet([_bar(0, None, "N", [(0, 0.5, 74), (0.5, 1.5, 67), (2, 2, 65)])])
     calls = []
 
     def check(text):
-        calls.append(text)
-        return [Violation(1, 1.0, "shift", "x")] if len(calls) == 1 else []
+        found = self_check(text, tight, "finger")
+        calls.append(found)
+        return found
 
-    text = generate_finger(ls, 0, MID, "T", check=check)
-    assert calls[0].split("// bar 1\n")[1].splitlines()[0] == "10.1.4 8.2.4 6.2.2 |"
-    assert _bar_comment(text, 1) == "// bar 1 · melody-12 @2 (shift)"
-    assert text.split("// bar 1 · melody-12 @2 (shift)\n")[1].splitlines()[0] == "10.1.4 0.3.4 6.2.2 |"
+    text = generate_finger(ls, 0, tight, "T", check=check)
+    assert [(v.rule, v.detail) for v in calls[0]] == [("shift", "0.50 拍内换把 10→8 品")]
+    assert calls[-1] == []
+    assert _bar_comment(text, 1) == "// bar 1 · melody-12 @1.5 (shift)"
+    assert text.split("// bar 1 · melody-12 @1.5 (shift)\n")[1].splitlines()[0] == "10.1.8 0.3.4 {d} 6.2.2 |"
