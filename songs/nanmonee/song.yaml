@@ -1,0 +1,36 @@
+slug: nanmonee
+title: なんもねえ
+artist: 忘れらんねえよ
+version: tv
+level: intermediate
+arrangements: [strum, finger]
+outputs: [html, pdf, txt]
+source:
+  url: https://www.bilibili.com/video/BV1yfTH6oEiT
+  kind: bilibili
+  trim: null
+reference_charts:
+  - https://ja.chordwiki.org/wiki/なんもねえ
+overrides:
+  key: B
+  feel: shuffle
+  # 间奏 / 尾奏的齐奏 riff：网上谱写成"只有贝斯"（N），按贝斯分轨逐格音高改写（B | 停 | B | E F# | B）
+  chords:
+    1: N
+    18: B
+    19: N
+    20: B
+    21: E F#
+    58: B
+    59: N
+    60: B
+    61: E F#
+    62: B
+sections:
+  1: イントロ
+  2: サビ
+  18: 間奏
+  22: Aメロ
+  30: Bメロ
+  38: サビ
+  54: アウトロ

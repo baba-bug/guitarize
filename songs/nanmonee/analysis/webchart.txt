@@ -1,0 +1,63 @@
+# source: ja.chordwiki.org「なんもねえ」(full version, user-editable wiki; chords only, lyrics not copied)
+# BPM≒168 Shuffle 4/4拍子 -:8分音符 =:16分音符 >:アクセント ＞:3連符 〇:全音符
+| B5 > | E5 > |
+| D# > | G#5 |
+# Beat in
+| E | B/D# |
+| C# | D# |
+| B5 | E5 |
+| D#/G | G#m |
+| E | B/D# |
+| C#m7 | F# | /B ↓
+| /B |
+| N.C. ---- - /G# - /A# - /F# - |
+| /B ---- - /G# - /B - /G# - |
+| /E -- /G# - /B - /F# -- /A# - /C# - |
+| B | B |
+| F# | F# | G#m | G#m |
+| D# | D# |
+| E | F# | B5 ---- A5 ---- | G#5 |
+| C#5 >--> ---- | D#5 >--> ----|
+| E5 >- >- >- >- | F#5 >- F#7 -- ---- |
+| B5 | E5 |
+| D#/G | G#m |
+| E | B/D# |
+| C# | D# |
+| B5 | E5 |
+| D#/G | G#m |
+| E | B/D# |
+| C#m7 | F# | E ↓
+E F#7
+# E.Gt Solo
+B5 E5 D#/G G#m
+E B/D# C#5 D#5
+E F# B F#/A# G#m
+C#5 D#5 E5 F#5
+# E.Gt. only
+| B | E |
+| D#/G | G#m |
+# Bs.  / Ride Cym. in
+| E | B/D# |
+# All in
+| C#5 >--- N.C. ---- | D#5 |
+| N.C. -- B5 >- ---- | E5 |
+| D#/G | G#m |
+| E | B/D# |
+| C#7 | F#7 |
+| B5 | E5 |
+| D#/G | G#m |
+| C#5 >- >- >- >- |
+| D#5 >- >- >- >- |
+| E5 >- >- >- >- |
+| F#5 |
+| -- B5 >- ---- | E5 |
+| D#/G | G#m |
+| E | B/D# |
+| C#7 | D#5 |
+| E5 | B/D# | C#7 |
+| F#5 | /B ↓
+| /B |
+| N.C. ---- - /G# - /A# - /F# - |
+| /B ---- - /G# - /B - /G# - |
+| /E -- /G# - /B - /F# -- /A# - /C# - |
+| N.C. B5
