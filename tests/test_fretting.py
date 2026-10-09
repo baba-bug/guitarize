@@ -1,14 +1,12 @@
-from guitarize.arrange.fretting import FretEvent, assign_frets
+from guitarize.arrange.fretting import FretEvent, _position, _transition, assign_frets
 from guitarize.config import load_profile
 
 MID = load_profile("intermediate")
 
 
 def test_first_position_melody_with_bass():
-    # Middle onset: Viterbi keeps the hand in 3rd position ((3, 5) over bass fret 3; total cost 1.65)
-    # rather than shifting to (2, 1) and back (cost 9.35); both are playable.
     evs = assign_frets([FretEvent(0, 59, 43), FretEvent(1, 60, 48), FretEvent(2, 62, None)], MID)
-    assert [(e.melody_pos, e.bass_pos) for e in evs] == [((2, 0), (6, 3)), ((3, 5), (5, 3)), ((2, 3), None)]
+    assert [(e.melody_pos, e.bass_pos) for e in evs] == [((2, 0), (6, 3)), ((2, 1), (5, 3)), ((2, 3), None)]
     assert all(e.fallback is None for e in evs)
 
 
@@ -39,3 +37,12 @@ def test_fill_is_kept_when_bass_moves_up_an_octave():
 def test_melody_prefers_top_three_strings():
     evs = assign_frets([FretEvent(t, p, None) for t, p in enumerate([55, 57, 59, 60])], MID)
     assert all(e.melody_pos[0] <= 3 for e in evs)
+
+
+def test_hand_box_intervals_and_transition():
+    assert _position(((6, 3),), 3) == (1, 3)
+    assert _position(((2, 1), (5, 3)), 3) == (1, 1)
+    assert _position(((1, 0), (2, 0)), 3) is None
+    assert _transition(((6, 3),), ((2, 1), (5, 3)), 1.0, 3) == 0
+    assert _position(((2, 8),), 3) == (5, 8)
+    assert _transition(((2, 1),), ((2, 8),), 1.0, 3) == 8.0

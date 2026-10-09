@@ -53,16 +53,20 @@ def _static(combo: tuple, has_melody: bool) -> float:
     return cost
 
 
-def _position(combo: tuple) -> int | None:
+def _position(combo: tuple, span: int) -> tuple[int, int] | None:
+    """手型框（四品格）起点的可行区间 (lo, hi)；全空弦则无约束。"""
     fretted = [f for _, f in combo if f > 0]
-    return min(fretted) if fretted else None
+    if not fretted:
+        return None
+    return max(1, max(fretted) - span), min(fretted)
 
 
-def _transition(a: tuple, b: tuple, gap: float) -> float:
-    pa, pb = _position(a), _position(b)
+def _transition(a: tuple, b: tuple, gap: float, span: int) -> float:
+    pa, pb = _position(a, span), _position(b, span)
     if pa is None or pb is None:
         return 0.0
-    return abs(pa - pb) * (1.0 + 1.0 / max(gap, 0.25))
+    dist = max(0, pa[0] - pb[1], pb[0] - pa[1])
+    return dist * (1.0 + 1.0 / max(gap, 0.25))
 
 
 def _ordered(m: int | None, f: int | None, b: int | None) -> tuple[int | None, int | None, int | None]:
@@ -119,8 +123,8 @@ def assign_frets(events: list[FretEvent], profile: Profile) -> list[FretEvent]:
         prev = layers[i - 1][0]
         new, bp = [], []
         for c in layers[i][0]:
-            k = min(range(len(prev)), key=lambda j: cost[j] + _transition(prev[j], c, gap))
-            new.append(cost[k] + _transition(prev[k], c, gap) + _static(c, layers[i][1][0] is not None))
+            k = min(range(len(prev)), key=lambda j: cost[j] + _transition(prev[j], c, gap, profile.max_span))
+            new.append(cost[k] + _transition(prev[k], c, gap, profile.max_span) + _static(c, layers[i][1][0] is not None))
             bp.append(k)
         cost = new
         back.append(bp)
