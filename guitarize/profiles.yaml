@@ -1,0 +1,28 @@
+# 难度档：生成器与可弹性校验共用。max_span = 最高品 − 最低品（不含空弦）。
+beginner:
+  max_span: 3
+  max_fret: 7
+  max_fingers: 3
+  max_plucks: 3
+  max_shift: 3
+  allow_barre: false
+  melody_max_per_beat: 1
+  bass_on_beat3: false
+intermediate:
+  max_span: 3
+  max_fret: 12
+  max_fingers: 4
+  max_plucks: 4
+  max_shift: 4
+  allow_barre: true
+  melody_max_per_beat: 2
+  bass_on_beat3: true
+advanced:
+  max_span: 5
+  max_fret: 15
+  max_fingers: 4
+  max_plucks: 5
+  max_shift: 7
+  allow_barre: true
+  melody_max_per_beat: 3
+  bass_on_beat3: true
