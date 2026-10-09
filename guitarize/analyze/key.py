@@ -36,17 +36,14 @@ def parse_key(text: str) -> tuple[str, str]:
     return theory.pc_name(theory.pc(t)), "major"
 
 
-def _diatonic(label: str, pcs: set[int]) -> bool | None:
-    """N → None（不计）；强力和弦只看根音；其它取大 / 小三和弦（根、三、五音），全在音阶内才算调内。"""
-    m = POWER_RE.match(label)
+def _diatonic(label: str, pcs: set[int], web: str | None = None) -> bool | None:
+    """N → None（不计）。网上谱原标签是强力和弦时只看根音（解析后的大 / 小三和弦偏向色度调，不可信）；
+    其它按真实和弦音（含 sus / dim / m7b5 / 斜线低音）判断：全在音阶内才算调内。"""
+    m = POWER_RE.match(web or "") or POWER_RE.match(label)
     if m:
         return theory.pc(m.group(1)) in pcs
-    mm = theory.majmin(label)
-    if mm == "N":
-        return None
-    root = theory.pc(mm.split(":")[0])
-    third = 3 if mm.endswith(":min") else 4
-    return {root, (root + third) % 12, (root + 7) % 12} <= pcs
+    tones = theory.chord_tones(label)  # N → 空集
+    return tones <= pcs if tones else None
 
 
 def diatonic_fraction(segments: list[dict], tonic: str, mode: str) -> float:
@@ -54,7 +51,7 @@ def diatonic_fraction(segments: list[dict], tonic: str, mode: str) -> float:
     pcs = scale_pcs(tonic, mode)
     hit = total = 0
     for s in segments:
-        d = _diatonic(s["label"], pcs)
+        d = _diatonic(s["label"], pcs, (s.get("votes") or {}).get("web"))
         if d is not None:
             total += s["dur_beats"]
             hit += s["dur_beats"] * d
