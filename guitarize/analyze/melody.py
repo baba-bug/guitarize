@@ -76,14 +76,14 @@ def quantize(beat_pos: np.ndarray, midi: np.ndarray, periodicity: np.ndarray, on
 
 
 def fix_octaves(notes: list[dict], window: int = 3) -> list[dict]:
-    """与前后各 window 个音的中位数相差 ≥ 10 半音的音，按八度移向中位数。"""
+    """与前后各 window 个音的中位数相差 ≥ 11.5 半音的音（10–11 半音视为合法大跳，保留），按八度移向中位数。"""
     pitches = [n["midi"] for n in notes]
     out = []
     for i, n in enumerate(notes):
         neighbors = pitches[max(0, i - window):i] + pitches[i + 1:i + 1 + window]
         if neighbors:
             d = n["midi"] - float(np.median(neighbors))
-            if abs(d) >= 10:
+            if abs(d) >= 11.5:
                 n = {**n, "midi": n["midi"] - 12 * int(np.sign(d)) * int(round(abs(d) / 12))}
         out.append(n)
     return out

@@ -39,3 +39,8 @@ def test_fix_octaves():
 def test_quantize_empty_input_returns_no_notes():
     empty = np.array([], dtype=float)
     assert quantize(empty, empty, empty, empty, C_MAJOR, slot=1 / 4) == []
+
+
+def test_fix_octaves_keeps_legitimate_leap():
+    notes = [{"midi": m} for m in [60, 60, 60, 70, 60, 60, 60]]
+    assert [n["midi"] for n in fix_octaves(notes)] == [60, 60, 60, 70, 60, 60, 60]
