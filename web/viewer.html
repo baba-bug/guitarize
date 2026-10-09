@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+  :root { --bg: #fafaf7; --fg: #1d1d1b; --muted: #6b6b66; --accent: #c2410c; --panel: #ffffffee; --line: #ddd; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 -apple-system, "PingFang SC", sans-serif; }
+  header { position: sticky; top: 0; z-index: 10; background: var(--panel); backdrop-filter: blur(6px);
+           border-bottom: 1px solid var(--line); padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  header h1 { font-size: 16px; margin: 0 12px 0 0; }
+  button, select { font: inherit; padding: 4px 10px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { color: var(--muted); font-size: 13px; }
+  #wrap { padding: 8px 16px 80px; }
+  .at-cursor-bar { background: rgba(194, 65, 12, .08); }
+  .at-cursor-beat { background: var(--accent); width: 3px; }
+  .at-highlight * { fill: var(--accent); stroke: var(--accent); }
+  .at-selection div { background: rgba(194, 65, 12, .15); }
+</style>
+</head>
+<body>
+<header>
+  <h1>{{TITLE}}</h1>
+  <button id="play" disabled>▶ 合成音</button>
+  <button id="orig">▶ 原曲（当前小节起）</button>
+  <label>速度 <select id="speed"><option>0.5</option><option>0.75</option><option selected>1</option></select></label>
+  <label><input type="checkbox" id="metro"> 节拍器</label>
+  <label><input type="checkbox" id="loop"> 循环选区</label>
+  <span id="status">加载中…</span>
+</header>
+<div id="wrap"><div id="at"></div></div>
+<audio id="audio" src="{{AUDIO_URL}}" preload="auto"></audio>
+<script id="tex" type="text/plain">{{ATEX}}</script>
+<script>window.BAR_TIMES = {{BAR_TIMES}};</script>
+<script src="{{ALPHATAB_BASE}}alphaTab.js"></script>
+<script>
+  const base = "{{ALPHATAB_BASE}}";
+  const api = new alphaTab.AlphaTabApi(document.getElementById("at"), {
+    core: { fontDirectory: base + "font/" },
+    player: {
+      playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
+      soundFont: base + "soundfont/sonivox.sf2",
+      scrollElement: document.scrollingElement,
+    },
+  });
+  const status = document.getElementById("status");
+  const audio = document.getElementById("audio");
+  const playBtn = document.getElementById("play");
+  const origBtn = document.getElementById("orig");
+  let currentBar = 0;
+
+  api.tex(document.getElementById("tex").textContent);
+  api.playerReady.on(() => {
+    playBtn.disabled = false;
+    status.textContent = "就绪：点音符选定小节，拖选可设置循环区";
+  });
+  api.error.on((e) => { status.textContent = "出错：" + e.message; });
+  api.beatMouseDown.on((beat) => { currentBar = beat.voice.bar.index; });
+  api.playedBeatChanged.on((beat) => { currentBar = beat.voice.bar.index; });
+
+  playBtn.onclick = () => { audio.pause(); origBtn.textContent = "▶ 原曲（当前小节起）"; api.playPause(); };
+  document.getElementById("speed").onchange = (e) => {
+    const v = parseFloat(e.target.value);
+    api.playbackSpeed = v;
+    audio.playbackRate = v;
+  };
+  document.getElementById("metro").onchange = (e) => { api.metronomeVolume = e.target.checked ? 1 : 0; };
+  document.getElementById("loop").onchange = (e) => { api.isLooping = e.target.checked; };
+
+  if (!window.BAR_TIMES.length) {
+    origBtn.disabled = true;
+    origBtn.title = "缺少原曲小节时间（leadsheet.json）";
+  }
+  origBtn.onclick = () => {
+    if (!audio.paused) {
+      audio.pause();
+      origBtn.textContent = "▶ 原曲（当前小节起）";
+      return;
+    }
+    api.pause();
+    const t = window.BAR_TIMES[Math.min(currentBar, window.BAR_TIMES.length - 1)];
+    audio.currentTime = t[0];
+    audio.play();
+    origBtn.textContent = "⏸ 原曲";
+  };
+</script>
+</body>
+</html>
