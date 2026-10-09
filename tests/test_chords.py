@@ -117,3 +117,21 @@ def test_reference_chords_rotates_power_table_with_transpose():
     assert out["web_transpose"] == 2
     last = [s for s in out["segments"] if s["bar"] == 4]
     assert [(s["label"], s["confidence"]) for s in last] == [("Bm", "medium")]
+
+
+def test_tail_aligns_to_n_run_not_repeat():
+    # 网上谱：段落 + N.C. 段 + 段落重复；音频：段落 + 无和弦的安静尾巴。
+    # 全 N 小节的相似度若是 0，DP 会跳去重复段；对齐时按 MIN_ALIGN_SIM 计，尾巴应落在 N 段上。
+    sec = ["C", "G", "Am", "F"]
+    web = ([WebBar([(c, 1.0)]) for c in sec] + [WebBar([("N", 1.0)]) for _ in range(4)]
+           + [WebBar([(c, 1.0)]) for c in sec])
+    rng = np.random.default_rng(1)
+    tail = np.ones((12, 16)) + 0.2 * rng.random((12, 16))  # 近乎平坦的色度：没有和弦
+    cb = np.concatenate([beats_cb([c for c in sec for _ in range(4)]), tail / np.linalg.norm(tail, axis=0)], axis=1)
+    beats_json = {"time_signature": [4, 4],
+                  "beats": [{"t": 0.5 * i, "bar": i // 4 + 1, "beat": i % 4 + 1, "g": i} for i in range(32)]}
+    out = reference_chords(cb, beats_json, web)
+    assert [a["web_index"] for a in out["web_alignment"]] == list(range(8))
+    assert all(a["sim"] == 0.0 for a in out["web_alignment"][4:])  # 报告的仍是真实相似度
+    tail_segs = [s for s in out["segments"] if s["bar"] >= 5]
+    assert {(s["label"], s["confidence"]) for s in tail_segs} == {("N", "medium")}

@@ -94,12 +94,16 @@ def _dp_align(sim: np.ndarray, jump: float, any_jump: float) -> tuple[float, lis
 
 
 def align_webchart(audio_bars: np.ndarray, web: list[WebBar], jump: float = 1.0, any_jump: float = 2.0) -> dict:
-    """audio_bars: (N, 12) 单位化小节色度。网上谱整体移调 transpose 个半音后与音频最匹配。"""
+    """audio_bars: (N, 12) 单位化小节色度。网上谱整体移调 transpose 个半音后与音频最匹配。
+
+    全 N 小节（N.C. / 只有贝斯）的向量为零，相似度恒为 0，DP 永远不会经过它们；
+    对齐时把这些列按 MIN_ALIGN_SIM 计，返回的 sim 仍是真实相似度（交给 reference_chords 的门槛判断）。"""
     w = np.stack([web_bar_vector(b) for b in web])
+    all_n = np.array([all(c == "N" for c, _ in b.chords) for b in web])
     best = None
     for t in range(12):
         sim = audio_bars @ np.roll(w, t, axis=1).T
-        score, path = _dp_align(sim, jump, any_jump)
+        score, path = _dp_align(np.where(all_n[None, :], MIN_ALIGN_SIM, sim), jump, any_jump)
         if best is None or score > best[0] + 1e-9:
             best = (score, t, path, sim)
     _, t, path, sim = best
