@@ -1,11 +1,13 @@
 import pytest
 
-from guitarize.arrange.finger import bass_events, generate_finger, place_fill, skeleton_notes, written_position
+from guitarize.arrange import finger
+from guitarize.arrange.finger import (bass_events, generate_finger, melody_floor, melody_line, place_fill,
+                                      skeleton_notes, written_position)
 from guitarize.config import Thresholds, load_profile
 from guitarize.render import alphatab
 from guitarize.verify import metrics
 from guitarize.verify.model import load_score
-from guitarize.verify.playability import check_playability
+from guitarize.verify.playability import Violation, check_playability
 
 MID = load_profile("intermediate")
 
@@ -67,3 +69,87 @@ def test_generate_finger_is_playable_and_matches_reference(tmp_path):
     assert s["chord_agreement"] >= 0.85
     v2 = [e for e in score.events if e.voice == 1 and not e.rest]
     assert all(len(e.notes) == 2 for e in v2)    # 每个低音都带一个填充音
+
+
+def test_place_fill_keeps_three_semitones_below_melody():
+    assert place_fill(11, 43, 62) == 59      # B3 比 D4 低 3 个半音：可以
+    assert place_fill(11, 43, 61) == 47      # 比 C#4 只低 2 个半音 → 降到 B2
+    assert place_fill(11, 43, None) == 59    # 无旋律：上限 E4
+
+
+def test_melody_floor_spans_the_whole_sustain():
+    items = [(0.0, 1.0, 71), (1.0, 1.0, 60), (2.0, 2.0, 67)]
+    assert melody_floor(items, 0.0, 2.0) == 60     # 不只看起音时刻的 71
+    assert melody_floor(items, 2.0, 2.0) == 67
+    assert melody_floor(items, 4.0, 2.0) is None
+
+
+def _bar(i, section, chord, mel):
+    return {"bar": i + 1, "section": section, "t_start": i * 2.4, "t_end": (i + 1) * 2.4,
+            "chords": [{"beat": 1, "dur_beats": 4, "label": chord, "confidence": "high"}],
+            "melody": [{"start_beats": i * 4 + o, "dur_beats": d, "midi": m, "conf": 1.0} for o, d, m in mel]}
+
+
+def _sheet(bars, feel="straight"):
+    return {"key": "C", "mode": "major", "tempo_bpm": 100.0, "feel": feel, "beats_per_bar": 4, "bars": bars}
+
+
+def test_melody_octave_is_chosen_per_section():
+    mid = [(0, 1, 60), (1, 1, 62), (2, 1, 64), (3, 1, 65)]
+    lo = [(0, 1, 50), (1, 1, 52), (2, 1, 53), (3, 1, 55)]
+    ls = _sheet([_bar(0, "A", "C", mid), _bar(1, None, "C", mid), _bar(2, "B", "C", lo), _bar(3, None, "C", lo)])
+    line = melody_line(ls, 0, MID)
+    assert {p for pos, p in line if pos < 8} <= {60, 62, 64, 65}       # A 段已在音域中部：不移
+    assert {p for pos, p in line if pos >= 8} <= {62, 64, 65, 67}      # B 段整段升八度（整曲统一移位做不到）
+
+
+def test_fallbacks_are_surfaced_in_bar_comment():
+    # G 和弦低音 G2 + 旋律 B4（1 弦 7 品）跨度放不下 → 低音升八度（填充也放不下）
+    ls = _sheet([_bar(0, None, "G", [(0, 1, 71), (1, 1, 60), (2, 1, 60), (3, 1, 62)])])
+    text = generate_finger(ls, 0, MID, "T")
+    comment = next(line for line in text.splitlines() if line.startswith("// bar 1"))
+    assert comment.startswith("// bar 1 · ") and "bass+12 @1" in comment
+
+
+def _bar_comment(text, n):
+    return next(line for line in text.splitlines() if line == f"// bar {n}" or line.startswith(f"// bar {n} "))
+
+
+def test_repair_loop_with_scripted_check():
+    calls = []
+
+    def check(text):
+        calls.append(text)
+        # 第 2 小节第 1 拍反拍（演奏时间 4 + 2/3 = 记谱 4.5）：C 和弦低音 + 填充仍按着
+        return [Violation(2, 4 + 2 / 3, "span", "x")] if len(calls) == 1 else []
+
+    text = generate_finger(leadsheet(), 4, MID, "T", check=check)
+    assert len(calls) == 2 and calls[-1] == text
+    assert _bar_comment(text, 2) == "// bar 2 · bass cut @1.5 (span)"
+    assert _bar_comment(calls[0], 2) == "// bar 2"
+    v2 = text.split("\\voice")[2]
+    line = v2.split("// bar 2\n")[1].splitlines()[0]
+    assert line.startswith("(2.4 3.5).8 r.")      # 低音 + 填充只留半拍，余下是休止
+
+
+def test_repair_loop_stops_when_nothing_applies():
+    calls = []
+
+    def check(text):
+        calls.append(text)
+        return [Violation(1, 0.0, "bar_length", "x")]
+
+    text = generate_finger(leadsheet(), 4, MID, "T", check=check)
+    assert len(calls) == 1 and calls[0] == text
+
+
+def test_repair_rounds_are_capped(monkeypatch):
+    monkeypatch.setattr(finger, "REPAIR_ROUNDS", 1)
+    calls = []
+
+    def check(text):
+        calls.append(text)
+        return [Violation(1, 2 / 3, "span", "x"), Violation(2, 6.0, "span", "x")]
+
+    generate_finger(leadsheet(), 4, MID, "T", check=check)
+    assert len(calls) == 1
