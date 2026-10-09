@@ -1,6 +1,7 @@
 """文本六线谱：每行若干小节，带小节号、段落、和弦名、扫弦方向。"""
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass, field
 
 from .. import theory
@@ -15,6 +16,23 @@ class _Col:
     frets: dict[int, str] = field(default_factory=dict)
     chord: str = ""
     strum: str = ""
+
+
+def _display_width(text: str) -> int:
+    """终端显示宽度：东亚宽字符（假名、汉字等）占两格。"""
+    return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in text)
+
+
+def _pad_display(text: str, width: int) -> str:
+    return text + " " * (width - _display_width(text))
+
+
+def _widen(blk: dict[str, str], n: int, extra: int) -> None:
+    """小节块右侧补 extra 格：弦行补 '-'，和弦行与扫弦行补空格。"""
+    blk["chord"] += " " * extra
+    blk["strum"] += " " * extra
+    for s in range(1, n + 1):
+        blk[f"s{s}"] += "-" * extra
 
 
 def _columns(score: Score, bar: Bar) -> list[_Col]:
@@ -40,7 +58,9 @@ def _bar_block(score: Score, bar: Bar) -> dict[str, str]:
     cols = _columns(score, bar)
     if not cols:
         width = round(bar.length * CHARS_PER_BEAT)
-        return {k: ("-" * width if k.startswith("s") else " " * width) for k in rows}
+        blank = {"chord": " " * width, "strum": " " * width}
+        blank.update({f"s{s}": "-" * width for s in range(1, n + 1)})
+        return blank
     end = bar.start + bar.length
     for i, c in enumerate(cols):
         nxt = cols[i + 1].start if i + 1 < len(cols) else end
@@ -77,9 +97,14 @@ def render_ascii(score: Score, bars_per_line: int = 4) -> str:
         strings = [names[s - 1].rjust(label_w) + "|" for s in range(1, n + 1)]
         for bar in group:
             blk = _bar_block(score, bar)
-            width = len(blk["s1"])
             label = f"{bar.index + 1}" + (f" [{bar.section}]" if bar.section else "")
-            top += label.ljust(width + 1)
+            # 小节号需要 显示宽度+1 的空间；块太窄时右侧补齐，保证下一小节号对齐它自己的内容
+            width = len(blk["s1"])
+            need = _display_width(label) + 1
+            if width < need:
+                _widen(blk, n, need - width)
+                width = need
+            top += _pad_display(label, width + 1)
             chords += blk["chord"] + " "
             strum += blk["strum"] + " "
             for s in range(1, n + 1):
