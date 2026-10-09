@@ -63,3 +63,15 @@ def test_reference_chords_end_to_end():
     no_web = reference_chords(cb, beats_json)
     assert "web_alignment" not in no_web
     assert {s["confidence"] for s in no_web["segments"]} <= {"medium", "low"}
+
+
+def test_all_n_web_bar_accepted_when_consecutive():
+    cb = beats_cb(["C"] * 8 + ["F"] * 4)
+    beats_json = {"time_signature": [4, 4],
+                  "beats": [{"t": 0.5 * i, "bar": i // 4 + 1, "beat": i % 4 + 1, "g": i} for i in range(12)]}
+    web = [WebBar([("C", 1.0)]), WebBar([("N", 1.0)]), WebBar([("F", 1.0)])]
+    out = reference_chords(cb, beats_json, web)
+    by_bar = {s["bar"]: s for s in out["segments"]}
+    assert by_bar[2]["label"] == "N" and by_bar[2]["confidence"] == "medium"
+    assert by_bar[2]["votes"]["web"] == "N"
+    assert by_bar[1]["confidence"] == "high" and by_bar[3]["confidence"] == "high"

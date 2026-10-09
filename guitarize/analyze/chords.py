@@ -167,9 +167,11 @@ def reference_chords(cb: np.ndarray, beats_json: dict, web: list[WebBar] | None 
             vecs.append(v / (np.linalg.norm(v) + 1e-9))
         alignment = align_webchart(np.stack(vecs), web)
         for k, n in enumerate(numbers):
-            if alignment["sim"][k] < MIN_ALIGN_SIM:
-                continue
             wb = web[alignment["index"][k]]
+            all_n = all(c == "N" for c, _ in wb.chords)
+            consecutive = k > 0 and alignment["index"][k] == alignment["index"][k - 1] + 1
+            if alignment["sim"][k] < MIN_ALIGN_SIM and not (all_n and consecutive):
+                continue
             for i, b in enumerate(beats):
                 if b["bar"] == n:
                     web_at[i] = web_label_at(wb, (b["beat"] - 1) / bpb, alignment["transpose"])
