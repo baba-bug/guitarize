@@ -11,6 +11,7 @@ import numpy as np
 
 from .beats import time_to_beat
 
+CREPE_METHOD = "crepe-quantize"   # melody.json 的 method：本模块的逐格量化（旋律 v7 见 notes.py）
 SR = 16000
 HOP = 160
 VOICED_PERIODICITY = 0.45

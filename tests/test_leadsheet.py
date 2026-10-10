@@ -637,6 +637,107 @@ def test_melody_step_reads_the_lead_vocal(tmp_path, monkeypatch):
         pipeline.run_analysis(paths, cfg3, ["melody"])
 
 
+# ---------- melody 步骤：旋律 v7（GAME + 主唱信号），不可用时退回 crepe 逐格量化 ----------
+
+KARAOKE = "karaoke+lr-mask:mel_band_roformer_karaoke_becruily"
+
+
+def _v7_song(tmp_path, **cfg_changes):
+    """lead 步骤用模型分过的歌：lead / lead_raw / backing 都在（内容无所谓，识别函数都换成假的）。"""
+    import dataclasses
+
+    paths, cfg = _paths_cfg(tmp_path)
+    _write_analysis(paths, beats=_padded_beats(), chords={**CHORDS, "key": {"tonic": "C", "mode": "major", "r": 0.9}})
+    paths.stems_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("vocals", "lead", "lead_raw", "backing"):
+        paths.stem(name).write_bytes(b"RIFF")
+    paths.lead_json.write_text(json.dumps({"method": KARAOKE, "model": "mel_band_roformer_karaoke_becruily.ckpt"}))
+    return paths, dataclasses.replace(cfg, **cfg_changes)
+
+
+def _crepe_stub(used):
+    return lambda wav, bj, pcs, **kw: used.append((wav, kw)) or {"grid": "sixteenth", "notes": []}
+
+
+def test_melody_step_uses_v7_on_the_raw_lead_when_game_is_available(tmp_path, monkeypatch, capsys):
+    # 伴唱漏进来、长音被切碎、滑音被切碎：v7 用 GAME 分音 + 主唱信号检查；GAME / crepe 在模型主唱原样 lead_raw.wav 上更准
+    from guitarize.analyze import pipeline
+    from guitarize.analyze.key import scale_pcs
+
+    paths, cfg = _v7_song(tmp_path, language="ja", overrides={"chords": {3: "F"}})
+    rows, calls = [(1.0, 1.5, 64.2)], {}
+
+    def fake_game(wav, cache, language):
+        calls["game"] = (wav, cache, language)
+        return rows
+
+    def fake_v7(lead_raw, backing, game_rows, beats, pcs, labels, f0_cache=None):
+        calls["v7"] = (lead_raw, backing, game_rows, pcs, labels, f0_cache)
+        return {"grid": "sixteenth", "notes": [
+            {"start_beats": 4.0, "dur_beats": 1.0, "midi": 64, "out_of_key": False, "conf": 0.9},
+            {"start_beats": 5.0, "dur_beats": 1.0, "midi": 65, "out_of_key": False, "conf": 0.9, "legato": True}]}
+
+    monkeypatch.setattr(pipeline, "game_notes", fake_game)
+    monkeypatch.setattr(pipeline, "extract_melody_v7", fake_v7)
+    monkeypatch.setattr(pipeline, "extract_melody", lambda *a, **kw: pytest.fail("crepe path used"))
+    pipeline.run_analysis(paths, cfg, ["melody"])
+    assert calls["game"] == (paths.stem("lead_raw"), paths.game_notes, "ja")
+    lead_raw, backing, game_rows, pcs, labels, f0_cache = calls["v7"]
+    assert (lead_raw, backing, game_rows, f0_cache) == (paths.stem("lead_raw"), paths.stem("backing"), rows, paths.vocal_f0)
+    assert pcs == scale_pcs("C", "major")
+    assert labels == {1: [(1, "C")], 2: [(1, "G"), (3, "N")], 3: [(1, "F")]}   # chords.json + overrides.chords
+    melody = json.loads(paths.melody_json.read_text(encoding="utf-8"))
+    assert melody["method"] == "v7:game+signal"
+    assert melody["source"] == "lead" and melody["lead_method"] == KARAOKE   # 校验对照的分轨、主唱怎么分的：照旧
+    assert melody["notes"][1]["legato"] is True and "legato" not in melody["notes"][0]
+    assert capsys.readouterr().err == ""
+
+
+def test_melody_step_falls_back_to_crepe_when_game_is_unavailable(tmp_path, monkeypatch, capsys):
+    from guitarize.analyze import pipeline
+
+    paths, cfg = _v7_song(tmp_path)
+    used = []
+    monkeypatch.setattr(pipeline, "extract_melody", _crepe_stub(used))
+    pipeline.run_analysis(paths, cfg, ["melody"])               # conftest：GAME 目录不存在
+    assert used == [(paths.stem("lead"), {"f0_cache": paths.vocal_f0})]
+    melody = json.loads(paths.melody_json.read_text(encoding="utf-8"))
+    assert melody["method"] == "crepe-quantize" and melody["source"] == "lead" and melody["lead_method"] == KARAOKE
+    err = capsys.readouterr().err
+    assert err.count("\n") == 2 and "GAME" in err and "crepe-quantize" in err   # GAME 一行 + 退回一行
+    assert not paths.game_notes.exists()
+
+
+def test_melody_step_falls_back_without_the_raw_lead(tmp_path, monkeypatch, capsys):
+    # 主唱只用 L/R 掩码分（模型不可用）、或是 lead_raw 出现之前分的：没有模型主唱原样，v7 用不了
+    from guitarize.analyze import pipeline
+
+    paths, cfg = _v7_song(tmp_path)
+    paths.stem("lead_raw").unlink()
+    used = []
+    monkeypatch.setattr(pipeline, "extract_melody", _crepe_stub(used))
+    monkeypatch.setattr(pipeline, "game_notes", lambda *a: pytest.fail("GAME should not run"))
+    pipeline.run_analysis(paths, cfg, ["melody"])
+    assert used[-1][0] == paths.stem("lead")
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1 and "lead_raw.wav" in err and "--steps lead" in err
+    assert json.loads(paths.melody_json.read_text(encoding="utf-8"))["method"] == "crepe-quantize"
+
+
+def test_melody_source_vocals_keeps_the_crepe_path(tmp_path, monkeypatch, capsys):
+    from guitarize.analyze import pipeline
+
+    paths, cfg = _v7_song(tmp_path, overrides={"melody_source": "vocals"})
+    used = []
+    monkeypatch.setattr(pipeline, "extract_melody", _crepe_stub(used))
+    monkeypatch.setattr(pipeline, "game_notes", lambda *a: pytest.fail("GAME should not run"))
+    pipeline.run_analysis(paths, cfg, ["melody"])
+    assert used[-1][0] == paths.stem("vocals")
+    melody = json.loads(paths.melody_json.read_text(encoding="utf-8"))
+    assert melody["method"] == "crepe-quantize" and melody["source"] == "vocals" and "lead_method" not in melody
+    assert capsys.readouterr().err == ""                         # 自己选的整条人声：不警告
+
+
 # ---------- lead 步骤：主唱 / 伴唱分离，紧跟 stems，可以单独重做（不重跑 Demucs） ----------
 
 def test_lead_step_runs_right_after_stems_and_records_the_method(tmp_path, monkeypatch):
