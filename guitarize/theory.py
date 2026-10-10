@@ -49,6 +49,20 @@ def midi_name(m: int) -> str:
     return f"{pc_name(m)}{m // 12 - 1}"
 
 
+_NOTE_RE = re.compile(r"^([A-Ga-g])([#b♯♭]?)(-?[0-9])$")
+_NATURAL = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+_ACCIDENTAL = {"": 0, "#": 1, "♯": 1, "b": -1, "♭": -1}
+
+
+def note_midi(name: str) -> int:
+    """带八度的音名 → MIDI 音高（科学音高记法，C4 = 60）：'F#4' → 66、'Bb3' → 58；B#3 = C4、Cb4 = B3。
+    写错（没有八度、重升号、不是字符串）→ ValueError。"""
+    m = _NOTE_RE.match(name.strip()) if isinstance(name, str) else None
+    if not m:
+        raise ValueError(f"bad note name {name!r}")
+    return 12 * (int(m.group(3)) + 1) + _NATURAL[m.group(1).upper()] + _ACCIDENTAL[m.group(2)]
+
+
 def parse_chord(label: str) -> tuple[int, str, int | None] | None:
     s = label.strip()
     if s in _NO_CHORD:

@@ -1,11 +1,13 @@
 """合并 beats / chords / melody → leadsheet.json（Phase 1 校验器的参考），并输出便于阅读的小节摘要。"""
 from __future__ import annotations
 
+import math
 import re
 import sys
 
 from .. import theory
 from .beats import beats_signature
+from .key import scale_pcs
 
 _MARK = {"high": "", "medium": "?", "low": "??", "manual": "!"}  # manual = overrides.chords 人耳纠正，等同 high 可信
 _BAR_KEY_RE = re.compile(r"-?[0-9]+")
@@ -42,13 +44,14 @@ def check_melody_key(melody: dict, key: tuple[str, str]) -> None:
                          f"(the leadsheet will use {key[0]} {key[1]})")
 
 
-def _bar_number(key) -> int:
-    """overrides.chords 的小节键：int 或纯数字字符串（YAML 两种写法都有）→ int；其它（含 bool）→ ValueError。"""
+def _bar_number(key, what: str = "chords") -> int:
+    """overrides.chords / overrides.melody 的小节键：int 或纯数字字符串（YAML 两种写法都有）→ int；
+    其它（含 bool）→ ValueError。"""
     if isinstance(key, int) and not isinstance(key, bool):
         return key
     if isinstance(key, str) and _BAR_KEY_RE.fullmatch(key.strip()):
         return int(key.strip())
-    raise ValueError(f"overrides.chords bar {key}: not a bar number (leadsheet bars are numbered from 1)")
+    raise ValueError(f"overrides.{what} bar {key}: not a bar number (leadsheet bars are numbered from 1)")
 
 
 def _override_label(bar: int, token) -> str:
@@ -104,6 +107,73 @@ def parse_chord_overrides(raw, bar_numbers: set[int], bpb: int) -> dict[int, lis
     return dict(sorted(out.items()))
 
 
+TWELFTHS = 12   # overrides.melody 的拍位置与时值就近取到 1/12 拍：⅓ 拍（三连音）和 ¼ 拍（十六分）都能写
+
+
+def _twelfths(x: float) -> int:
+    return int(math.floor(x * TWELFTHS + 0.5))
+
+
+def _number(bar: int, x, what: str) -> float:
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        raise ValueError(f"overrides.melody bar {bar}: {what} must be a number, got {x!r}")
+    return float(x)
+
+
+def _override_note(bar: int, note, bpb: int) -> tuple[int, int, int]:
+    """[拍（小节内，1 起）, 拍数, 带八度的音名] → (小节内起点, 时值, 音高)，起点与时值以 1/12 拍计。"""
+    if not isinstance(note, (list, tuple)) or len(note) != 3:
+        raise ValueError(f"overrides.melody bar {bar}: each note is [beat, beats, pitch], e.g. [3, 1, F#4]; "
+                         f"got {note!r}")
+    beat, dur, name = note
+    start = _twelfths(_number(bar, beat, "beat") - 1)
+    length = _twelfths(_number(bar, dur, "duration"))
+    if not 0 <= start < bpb * TWELFTHS:
+        raise ValueError(f"overrides.melody bar {bar}: beat {beat!r} is outside the bar (1 <= beat < {bpb + 1})")
+    if length <= 0:
+        raise ValueError(f"overrides.melody bar {bar}: duration must be positive (at least 1/12 beat), got {dur!r}")
+    try:
+        midi = theory.note_midi(name)
+    except ValueError:
+        raise ValueError(f"overrides.melody bar {bar}: bad pitch {name!r} (a note name with octave, e.g. F#4 or Bb3)") \
+            from None
+    return start, length, midi
+
+
+def parse_melody_overrides(raw, bar_numbers: set[int], bpb: int) -> dict[int, list[tuple[int, int, int]]]:
+    """overrides.melody → {小节号: [(小节内起点, 时值, 音高)]}（1/12 拍，按起点排序；[] = 这一小节没有旋律）。
+    全部校验完才返回，出错时一个小节都不套用。旋律是单声部：同一小节里的音不能重叠。"""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"overrides.melody must be a mapping of bar number -> notes, got {type(raw).__name__}")
+    out: dict[int, list[tuple[int, int, int]]] = {}
+    for key, value in raw.items():
+        bar = _bar_number(key, "melody")
+        if bar not in bar_numbers:
+            raise ValueError(f"overrides.melody bar {bar}: no such bar (the leadsheet has {len(bar_numbers)} bars, "
+                             "numbered from 1)")
+        if bar in out:
+            raise ValueError(f"overrides.melody bar {bar}: given twice")
+        if not isinstance(value, list):
+            raise ValueError(f"overrides.melody bar {bar}: expected a list of [beat, beats, pitch] notes "
+                             f"([] = no melody in this bar), got {value!r}")
+        notes = sorted(_override_note(bar, note, bpb) for note in value)
+        for (s1, d1, m1), (s2, _, m2) in zip(notes, notes[1:]):
+            if s1 + d1 > s2:
+                raise ValueError(f"overrides.melody bar {bar}: notes overlap ({theory.midi_name(m1)} at beat "
+                                 f"{1 + s1 / TWELFTHS:.4g} lasts past {theory.midi_name(m2)} at beat "
+                                 f"{1 + s2 / TWELFTHS:.4g}; the melody is a single voice)")
+        out[bar] = notes
+    return dict(sorted(out.items()))
+
+
+def manual_notes(notes: list[tuple[int, int, int]], first_beat: int, key_pcs: set[int]) -> list[dict]:
+    """覆盖的音 → leadsheet 旋律音：绝对拍位置（first_beat = 小节第 1 拍），conf 1.0，按调标 out_of_key，manual。"""
+    return [{"start_beats": round(first_beat + s / TWELFTHS, 4), "dur_beats": round(d / TWELFTHS, 4), "midi": m,
+             "conf": 1.0, "out_of_key": m % 12 not in key_pcs, "manual": True} for s, d, m in notes]
+
+
 def _bar_beats(bar: dict, bpb: int, pad_beats: int) -> range:
     """小节里真有拍点的拍号（1-based）：弱起补拍的第 1 小节缺开头的拍，末尾不满的小节缺后面的拍。"""
     n = min(bar.get("beats", bpb), bpb)
@@ -125,9 +195,10 @@ def manual_segments(labels: list[str], bpb: int, beats: range) -> list[dict]:
 
 
 def build_leadsheet(beats: dict, chords: dict, melody: dict, key: tuple[str, str], sections: dict[int, str],
-                    chord_overrides: dict | None = None) -> dict:
-    """chord_overrides 即 song.yaml 的 overrides.chords（格式见 SongConfig）：只替换所指小节的和弦段，
-    chords.json 不动，所以重跑 chords / 重新生成后人耳纠正仍在。"""
+                    chord_overrides: dict | None = None, melody_overrides: dict | None = None) -> dict:
+    """chord_overrides / melody_overrides 即 song.yaml 的 overrides.chords / overrides.melody（格式见 SongConfig）：
+    只替换所指小节的和弦段 / 旋律，chords.json / melody.json 不动，所以重跑分析后人耳纠正仍在。
+    两者都校验完才套用；旋律被覆盖的小节记 melody_manual: true（空覆盖 = 这一小节没有旋律，也要看得出来）。"""
     if beats.get("short_bars"):
         raise ValueError(f"beats.json has short bars {beats['short_bars']}: genuine 2/4 or 3/4 bars (common in "
                          "TV-size edits) are not supported yet — the leadsheet assumes every bar has 4 beats. "
@@ -137,8 +208,13 @@ def build_leadsheet(beats: dict, chords: dict, melody: dict, key: tuple[str, str
     check_melody_key(melody, key)
     bpb = beats["time_signature"][0]
     manual = parse_chord_overrides(chord_overrides, {b["bar"] for b in beats["bars"]}, bpb)
+    manual_mel = parse_melody_overrides(melody_overrides, {b["bar"] for b in beats["bars"]}, bpb)
     for n, labels in manual.items():
         print(f"[leadsheet] bar {n} chords overridden: {' '.join(labels)}", file=sys.stderr)
+    for n, notes in manual_mel.items():
+        sung = " ".join(theory.midi_name(m) for _, _, m in notes) or "(no melody)"
+        print(f"[leadsheet] bar {n} melody overridden: {sung}", file=sys.stderr)
+    key_pcs = scale_pcs(*key)
     by_bar: dict[int, list[dict]] = {}
     for s in chords["segments"]:
         by_bar.setdefault(s["bar"], []).append(s)
@@ -154,9 +230,12 @@ def build_leadsheet(beats: dict, chords: dict, melody: dict, key: tuple[str, str
             "t_start": b["t_start"],
             "t_end": b["t_end"],
             "chords": [{k: s[k] for k in ("beat", "dur_beats", "label", "confidence", "votes")} for s in segments],
-            "melody": [{k: m[k] for k in ("start_beats", "dur_beats", "midi", "conf", "out_of_key")}
-                       for m in melody["notes"] if g0 <= m["start_beats"] < g0 + bpb],
+            "melody": (manual_notes(manual_mel[n], g0, key_pcs) if n in manual_mel else
+                       [{k: m[k] for k in ("start_beats", "dur_beats", "midi", "conf", "out_of_key")}
+                        for m in melody["notes"] if g0 <= m["start_beats"] < g0 + bpb]),
         })
+        if n in manual_mel:
+            bars[-1]["melody_manual"] = True
     return {"key": key[0], "mode": key[1], "tempo_bpm": beats["tempo_bpm"], "feel": beats["feel"],
             "beats_per_bar": bpb, "pickup_beats": beats["pickup_beats"], "bars": bars}
 
@@ -172,7 +251,8 @@ def _votes_note(chord: dict) -> str:
 
 def summary_table(leadsheet: dict, capo: int = 0) -> str:
     """一小节一行：小节号 · 起始秒 · 段落 | 拍:和弦(指法调)置信标记[投票] | 旋律音（* = 调外）。
-    置信标记：无 = high，? = medium，?? = low，! = manual（人耳纠正，括号里写 [manual] 而非投票）。"""
+    置信标记：无 = high，? = medium，?? = low，! = manual（人耳纠正，括号里写 [manual] 而非投票）。
+    旋律列末尾的 ! = 这一小节的旋律是 overrides.melody 人耳纠正的（只有 ! 没有音 = 纠正为没有旋律）。"""
     head = f"key {leadsheet['key']} {leadsheet['mode']} · ♩≈{leadsheet['tempo_bpm']} · {leadsheet['feel']}"
     lines = [head + (f" · capo {capo}" if capo else "")]
     for b in leadsheet["bars"]:
@@ -183,6 +263,8 @@ def summary_table(leadsheet: dict, capo: int = 0) -> str:
                 label = f"{label}({theory.transpose_label(label, -capo)})"
             chords.append(f"{c['beat']}:{label}{_MARK[c['confidence']]}{_votes_note(c)}")
         melody = " ".join(theory.midi_name(m["midi"]) + ("*" if m.get("out_of_key") else "") for m in b["melody"])
+        if b.get("melody_manual"):
+            melody = f"{melody} !".strip()
         section = f"[{b['section']}] " if b["section"] else ""
         lines.append(f"{b['bar']:3d} {b['t_start']:6.1f}s {section}| {'  '.join(chords)} | {melody}")
     return "\n".join(lines)

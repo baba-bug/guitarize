@@ -588,3 +588,107 @@ def test_song_yaml_chord_overrides_round_trip(tmp_path):
     assert [[(c["beat"], c["dur_beats"], c["label"]) for c in b["chords"]] for b in got["bars"]] == [
         [(1, 4, "N")], [(1, 2, "E"), (3, 2, "F#")], [(1, 4, "B")], [(1, 2, "C#m7"), (3, 2, "F#")]]
 
+
+# ---------- overrides.melody：人耳纠正的旋律，在 leadsheet 步骤套用 ----------
+
+def _notes(bar):
+    return [(round(m["start_beats"], 4), round(m["dur_beats"], 4), m["midi"]) for m in bar["melody"]]
+
+
+def test_melody_override_replaces_the_bar_snapped_to_twelfths():
+    beats, chords, melody = _four_bar_inputs()
+    base = build_leadsheet(beats, chords, melody, ("C", "major"), {})
+    got = build_leadsheet(beats, chords, melody, ("C", "major"), {}, None,
+                          {1: [[2.67, 0.33, "F#4"], [3, 1, "F#4"], [4, 0.33, "B3"], [4.33, 1.33, "F#4"]], "3": []})
+    assert _notes(got["bars"][0]) == [(1.6667, 0.3333, 66), (2.0, 1.0, 66), (3.0, 0.3333, 59), (3.3333, 1.3333, 66)]
+    assert all(m["manual"] is True and m["conf"] == 1.0 for m in got["bars"][0]["melody"])
+    assert [m["out_of_key"] for m in got["bars"][0]["melody"]] == [True, True, False, True]   # C 大调里 F# 是调外音
+    assert got["bars"][2]["melody"] == [] and got["bars"][2]["melody_manual"] is True        # 这一小节没有人声旋律
+    assert got["bars"][0]["melody_manual"] is True
+    for n in (1, 3):                                                   # 没覆盖的小节原样
+        assert got["bars"][n] == base["bars"][n] and "melody_manual" not in got["bars"][n]
+    assert {k: v for k, v in got["bars"][0].items() if k not in ("melody", "melody_manual")} == \
+           {k: v for k, v in base["bars"][0].items() if k != "melody"}
+    quarter = build_leadsheet(beats, chords, melody, ("C", "major"), {}, None, {2: [[1.25, 0.25, "Bb3"], [1.5, 2.5, "c4"]]})
+    assert _notes(quarter["bars"][1]) == [(4.25, 0.25, 58), (4.5, 2.5, 60)]           # ¼ 拍同样能写
+
+
+@pytest.mark.parametrize("name, midi", [("F#4", 66), ("Bb3", 58), ("C4", 60), ("c4", 60), ("B#3", 60), ("Cb4", 59),
+                                        ("E♭4", 63), ("G♯2", 44), ("A0", 21)])
+def test_note_names_with_octave(name, midi):
+    from guitarize import theory
+    assert theory.note_midi(name) == midi
+
+
+@pytest.mark.parametrize("raw, bar, what", [
+    ({9: []}, "9", "no such bar"), ({0: []}, "0", "no such bar"), ({"x": []}, "x", "not a bar number"),
+    ({2: [[1, 1, "H4"]]}, "2", "bad pitch 'H4'"), ({2: [[1, 1, "F#"]]}, "2", "bad pitch 'F#'"),
+    ({2: [[1, 1, 66]]}, "2", "bad pitch 66"), ({2: [[1, 1, "F##4"]]}, "2", "bad pitch"),
+    ({2: [[1, -1, "C4"]]}, "2", "duration must be positive"), ({2: [[1, 0, "C4"]]}, "2", "duration must be positive"),
+    ({2: [[1, 0.01, "C4"]]}, "2", "duration must be positive"),
+    ({2: [[5, 1, "C4"]]}, "2", "outside the bar"), ({2: [[0.5, 1, "C4"]]}, "2", "outside the bar"),
+    ({2: [[1, 1]]}, "2", "each note is"), ({2: ["C4"]}, "2", "each note is"), ({2: [[True, 1, "C4"]]}, "2", "beat must be a number"),
+    ({2: [[1, "1", "C4"]]}, "2", "duration must be a number"),
+    ({2: "C4"}, "2", "expected a list"), ({2: None}, "2", "expected a list"),
+    ({2: [[1, 2, "C4"], [2, 1, "D4"]]}, "2", "overlap"),
+    ({2: [], "2": []}, "2", "twice"),
+])
+def test_melody_override_errors_name_the_bar(raw, bar, what):
+    beats, chords, melody = _four_bar_inputs()
+    with pytest.raises(ValueError) as e:
+        build_leadsheet(beats, chords, melody, ("C", "major"), {}, None, raw)
+    msg = str(e.value)
+    assert msg.startswith(f"overrides.melody bar {bar}") and what in msg, msg
+
+
+def test_melody_overrides_must_be_a_mapping():
+    beats, chords, melody = _four_bar_inputs()
+    with pytest.raises(ValueError, match=r"overrides\.melody must be a mapping"):
+        build_leadsheet(beats, chords, melody, ("C", "major"), {}, None, [[1, 1, "C4"]])
+
+
+def test_melody_override_errors_are_raised_before_anything_is_applied(capsys):
+    beats, chords, melody = _four_bar_inputs()
+    with pytest.raises(ValueError, match="bar 9"):
+        build_leadsheet(beats, chords, melody, ("C", "major"), {}, {2: "E"}, {1: [[1, 1, "C4"]], 9: []})
+    assert "overridden" not in capsys.readouterr().err                   # 和弦覆盖也还没套用、没打印
+
+
+def test_melody_override_notes_go_to_stderr(capsys):
+    beats, chords, melody = _four_bar_inputs()
+    build_leadsheet(beats, chords, melody, ("C", "major"), {}, None, {2: [[1, 1, "C4"], [2.5, 0.5, "Eb4"]], 4: []})
+    notes = [line for line in capsys.readouterr().err.splitlines() if "overridden" in line]
+    assert notes == ["[leadsheet] bar 2 melody overridden: C4 D#4", "[leadsheet] bar 4 melody overridden: (no melody)"]
+
+
+def test_summary_table_marks_manual_melody_bars():
+    beats, chords, melody = _four_bar_inputs()
+    ls = build_leadsheet(beats, chords, melody, ("C", "major"), {}, None, {2: [[1, 1, "F#4"]], 3: []})
+    lines = summary_table(ls).splitlines()
+    assert lines[2].endswith("| F#4* !") and lines[3].endswith("| !")
+    assert not lines[1].endswith("!") and not lines[4].endswith("!")
+
+
+def test_leadsheet_step_applies_melody_overrides_from_song_yaml(tmp_path, capsys):
+    import json
+
+    from guitarize.analyze.pipeline import run_analysis
+    from guitarize.config import load_song_config
+    from guitarize.paths import SongPaths
+
+    paths = SongPaths(tmp_path / "song")
+    beats, chords, melody = _four_bar_inputs()
+    _write_analysis(paths, beats=beats, chords={**chords, "key": {"tonic": "C", "mode": "major", "r": None}},
+                    melody=melody)
+    paths.config.write_text(
+        "slug: song\ntitle: t\nartist: a\noverrides:\n  melody:\n"
+        "    1: [[2.67, 0.33, F#4], [3, 1, F#4], [4, 0.33, B3], [4.33, 1.33, F#4]]\n"
+        "    3: []          # 这一小节没有人声旋律\n", encoding="utf-8")
+    cfg = load_song_config(paths)
+    before = paths.melody_json.read_text(encoding="utf-8")
+    run_analysis(paths, cfg, ["leadsheet"])
+    ls = json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))
+    assert [m["midi"] for m in ls["bars"][0]["melody"]] == [66, 66, 59, 66] and ls["bars"][2]["melody"] == []
+    assert [m["midi"] for m in ls["bars"][1]["melody"]] == [61]           # 没覆盖的小节仍是分析出的旋律
+    assert paths.melody_json.read_text(encoding="utf-8") == before        # melody.json 不动：重跑 melody 也不丢纠正
+    assert "[leadsheet] bar 1 melody overridden: F#4 F#4 B3 F#4" in capsys.readouterr().err
