@@ -12,7 +12,8 @@
 - 连奏（leadsheet 的 legato：同一音节里从前一个音滑过来，不重新拨弦）：前一个音一直唱到它（rhythm），
   指法尽量放在同一根弦上（Viterbi 换弦加罚，只是偏好）。同弦时前一个音写音符效果：差 1–2 品击弦 / 勾弦 h，
   3 品以上连奏滑音 sl（有一头是空弦时滑不过去，写 h）；不在同一根弦上就照常拨弦。前一个音丢了、或两个音
-  移了不同的八度时照常拨弦。尾滑（slide_out）写成 sod / sou（连到下一个音时不写：音高的变化已经写了）。
+  移了不同的八度时照常拨弦。尾滑（slide_out）写成 sod / sou（连到下一个音时不写：音高的变化已经写了；
+  空弦滑不出去，指法尽量按弦，还是空弦就不写）。
   效果都挂在前一个音的最后一段（连音线延续）上，紧挨着下一个音（见 atex 模块说明）。
 - 谱面：五线谱 + 六线谱、调号、力度 f；每小节第 1 拍标和弦指型（finger.shape_marks，附和弦图），
   小节中间换指型再标；变调夹与指弹相同（arrange 按同样的旋律音域选）。段落名写成段落第一拍的文字（txt），
@@ -168,13 +169,13 @@ def glide(a: Sung, b: Sung) -> str | None:
 
 def note_effects(line: list[Sung]) -> dict[float, dict[int, list[str]]]:
     """→ {记谱音尾: {弦: [音符效果]}}（finger._voice_lines 的 note_effects）：连到下一个音的 h / sl（见 glide）；
-    没有连到下一个音时，尾滑写成 sod / sou。"""
+    没有连到下一个音时，尾滑写成 sod / sou（空弦滑不出去，不写；指法已尽量避开空弦，见 fretting）。"""
     out: dict[float, dict[int, list[str]]] = {}
     for n, nxt in zip(line, line[1:] + [None]):
         if n.where is None:
             continue
         fx = glide(n, nxt) if nxt is not None else None
-        if fx is None and n.slide_out in SLIDE_OUT:
+        if fx is None and n.slide_out in SLIDE_OUT and n.where[1] > 0:
             fx = SLIDE_OUT[n.slide_out]
         if fx:
             out[n.pos + n.dur] = {n.where[0]: [fx]}
@@ -285,8 +286,8 @@ def generate_melody(leadsheet: dict, capo: int, profile: Profile, title: str,
     feel = leadsheet.get("feel", "straight")
     n_bars = len(leadsheet["bars"])
     line, dropped = melody_line(leadsheet, capo, octave)
-    events = assign_frets([FretEvent(n.perf, n.pitch, None, legato=n.legato) for n in line], profile,
-                          top_strings=TOP_STRINGS)
+    events = assign_frets([FretEvent(n.perf, n.pitch, None, legato=n.legato, slide_out=n.slide_out in SLIDE_OUT)
+                           for n in line], profile, top_strings=TOP_STRINGS)
     remarks: dict[int, list[str]] = {}
 
     def remark(found: Iterable[tuple[float, str]]) -> None:

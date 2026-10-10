@@ -97,3 +97,11 @@ def test_legato_slide_moves_the_hand_for_free_but_keeps_the_shift_rule():
 def test_legato_without_a_melody_before_it_is_ignored():
     evs = assign_frets([FretEvent(0, None, 43), FretEvent(1, 64, None, legato=True)], MID)
     assert evs[1].melody_pos == (1, 0) and evs[1].fallback is None
+
+
+def test_slide_out_note_prefers_a_fretted_position():
+    # 尾滑（音尾滑出）要按着弦才滑得出去：E4 平时弹 1 弦空弦，带尾滑时放到 2 弦 5 品
+    assert assign_frets([FretEvent(0, 64, None)], MID)[0].melody_pos == (1, 0)
+    assert assign_frets([FretEvent(0, 64, None, slide_out=True)], MID)[0].melody_pos == (2, 5)
+    evs = assign_frets([FretEvent(0, 62, None), FretEvent(1, 64, None, slide_out=True)], MID)
+    assert [e.melody_pos for e in evs] == [(2, 3), (2, 5)]

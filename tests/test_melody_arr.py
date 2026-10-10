@@ -276,11 +276,15 @@ def test_legato_to_or_from_an_open_string_is_a_hammer_or_pull(tmp_path):
 
 
 def test_slide_out_marks_the_end_of_the_note(tmp_path):
+    # E4 平时弹 1 弦空弦；空弦滑不出去，带尾滑时放到 2 弦 5 品
     ls = _sheet([_flagged(0, [(0, 1, 62, {"slide_out": "down"}), (2, 1, 64, {"slide_out": "up"})])],
                 feel="straight", tempo=100)
     text = generate_melody(ls, 0, MID, "T", octave=0)
-    assert _voice_bar(text, 1) == "3.2{sod}.4 {dy f} r.4 0.1{sou}.4 r.4 |"
+    assert _voice_bar(text, 1) == "3.2{sod}.4 {dy f} r.4 5.2{sou}.4 r.4 |"
     assert [x[5] for x in _built_effects(_build(text, tmp_path))] == ["out_down", "out_up"]
+    # 指法还是落在空弦上时不写滑出
+    line = [M.Sung(0, 0, 1, 59, (2, 0), slide_out="down"), M.Sung(1, 1, 1, 60, (2, 1))]
+    assert M.note_effects(line) == {}
     # 连到下一个音（h / sl）时音高的变化已经写了：不再写滑出
     ls = _sheet([_flagged(0, [(0, 1, 62, {"slide_out": "up"}), (1, 1, 64, L)])], feel="straight", tempo=100)
     assert _voice_bar(generate_melody(ls, 0, MID, "T", octave=0), 1) == "3.2{h}.4 {dy f} 5.2.4 r.2 |"
