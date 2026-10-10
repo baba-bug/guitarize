@@ -77,6 +77,9 @@ class SongConfig:
     - melody_source：旋律从哪条音频识别。默认 "lead"：analyze 的 lead 步骤从人声分轨分出的主唱（伴唱分离模型
       + 居中掩码；模型不可用时只用居中掩码，见 stems.separate_lead）；"vocals"：整条人声。melody 步骤把用的分轨
       记进 melody.json 的 source（lead 时还有 lead_method），旋律谱校验对照同一条（改了这一项要重跑 --steps melody）
+
+    language（不在 overrides 里）：歌词语言 en / ja / yue / zh，melody 步骤传给 GAME 分音（analyze/game.py）；
+    不写则不传（GAME 不按语言分音）。改了要重跑 --steps melody。
     """
     slug: str
     title: str
@@ -89,6 +92,7 @@ class SongConfig:
     reference_charts: tuple[str, ...] = ()
     overrides: dict = field(default_factory=dict)
     sections: dict = field(default_factory=dict)  # {小节号(1-based): 段落名}
+    language: str | None = None                    # 歌词语言（GAME 分音用）
     thresholds: Thresholds = Thresholds()
 
 

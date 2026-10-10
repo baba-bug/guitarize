@@ -33,3 +33,13 @@ def test_load_song_config(tmp_path: Path):
     assert cfg.thresholds.melody_f1 == 0.7 and cfg.thresholds.chord_strum == 0.90
     assert cfg.arrangements == ("strum", "finger")
     assert ARR_NAMES["finger"] == "指弹"
+    assert cfg.language is None                     # 没写：GAME 不按语言分音
+
+
+def test_song_config_language(tmp_path: Path):
+    # 歌词语言给 GAME 分音用（melody 步骤）：en / ja / yue / zh
+    paths = SongPaths(tmp_path / "demo")
+    paths.root.mkdir()
+    paths.config.write_text("slug: demo\ntitle: T\nartist: A\nlanguage: ja\n", encoding="utf-8")
+    assert load_song_config(paths).language == "ja"
+    assert paths.game_notes == tmp_path / "demo" / "analysis" / "game_notes.csv"
