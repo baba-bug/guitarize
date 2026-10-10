@@ -310,3 +310,16 @@ def test_manual_n_beats_are_skipped(demo_scores):
     assert (bars[0].chord_agree, bars[0].chord_total, bars[0].low_conf_beats) == (2, 2, [])
     bars = metrics.score_bars(score, _bar1_chords((1, 4, "N", "manual")), "strum")
     assert (bars[0].chord_agree, bars[0].chord_total, bars[0].low_conf_beats) == (0, 0, [])
+
+
+def test_an_alternating_fifth_in_the_bass_is_not_heard_as_an_inversion():
+    # 指弹的"根-五"交替低音：第 3–4 拍低音弹 C 和弦的五音 G，上面 C4 + 经过音 D4——听起来仍是 C，
+    # 不该因为"低音是 G"给 G 和弦加分（加了分 G 就赢了，判成转位 / 错和弦）
+    from types import SimpleNamespace as NS
+    from guitarize.verify.metrics import BarScore, score_chords
+    notes = [NS(start=0.0, end=2.0, midi=48), NS(start=2.0, end=4.0, midi=43),   # 低音 C3（拍 1–2）、G2（拍 3–4）
+             NS(start=0.0, end=2.0, midi=64), NS(start=2.0, end=4.0, midi=62), NS(start=0.0, end=4.0, midi=60)]
+    score = NS(sounding=lambda: notes, bars=[NS(start=0.0)], capo=0)
+    bars = [BarScore(bar=1, section=None)]
+    score_chords(score, {"beats_per_bar": 4, "bars": [{"chords": [{"beat": 1, "dur_beats": 4, "label": "C"}]}]}, bars)
+    assert bars[0].chord_agree == 4 and bars[0].chord_total == 4

@@ -93,6 +93,15 @@ def _pc_weights(sounding, t0: float, t1: float) -> tuple[np.ndarray, int | None]
     return w, (None if bass is None else bass % 12)
 
 
+def _fifth(label: str) -> int | None:
+    """和弦标签的五音音名（解析不了时 None）。"""
+    try:
+        parsed = theory.parse_chord(label)
+    except ValueError:
+        return None
+    return None if parsed is None else (parsed[0] + 7) % 12
+
+
 def score_chords(score: Score, leadsheet: dict, bars: list[BarScore]) -> None:
     bpb = int(leadsheet.get("beats_per_bar", 4))
     sounding = score.sounding()
@@ -101,6 +110,8 @@ def score_chords(score: Score, leadsheet: dict, bars: list[BarScore]) -> None:
         for k, (ref, conf, raw) in enumerate(_ref_beats(lbar, bpb)):
             t0 = sbar.start + k
             w, bass = _pc_weights(sounding, t0, t0 + 1)
+            if bass is not None and ref != "N" and bass == _fifth(raw):
+                bass = None   # 交替低音弹到参考和弦的五音（指弹的"根-五"低音）：不算转位，不给五音上的和弦加分
             if w.sum() > 0:
                 cands = theory.infer_majmin(w, bass)
                 prev = cands
