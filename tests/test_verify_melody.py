@@ -157,6 +157,72 @@ def test_vocal_f0_cache_is_reused_until_the_stem_changes(tmp_path, monkeypatch):
     assert len(calls) == 2
 
 
+def _fake_pitch(calls):
+    def fake(path):
+        calls.append(path)
+        return np.arange(3) * 0.01, np.array([60.0, np.nan, 62.0]), np.ones(3)
+    return fake
+
+
+def test_vocal_f0_cache_that_cannot_be_read_is_recomputed(tmp_path, monkeypatch):
+    # 截断 / 损坏 / 缺字段的缓存当作没有缓存：重算并重写，不让 melody 步骤或校验报错
+    wav = _sine_vocal(tmp_path / "vocals.wav", demo_leadsheet())
+    cache = tmp_path / "analysis" / "vocal_f0.npz"
+    calls = []
+    monkeypatch.setattr(amel, "vocal_pitch", _fake_pitch(calls))
+    amel.cached_vocal_pitch(wav, cache)
+    good = cache.read_bytes()
+    with open(cache, "wb") as f:                                # 签名对得上，但缺 times / midi
+        np.savez(f, **amel._stem_signature(wav))
+    junk = [cache.read_bytes(), b"", b"not an npz at all", good[: len(good) // 2]]
+    for i, data in enumerate(junk):
+        cache.write_bytes(data)
+        t, m, _ = amel.cached_vocal_pitch(wav, cache)
+        assert len(calls) == i + 2 and m[2] == 62.0
+        assert amel._read_vocal_f0(cache, amel._stem_signature(wav)) is not None   # 重写成完整的缓存
+    amel.cached_vocal_pitch(wav, cache)
+    assert len(calls) == len(junk) + 1
+
+
+def test_vocal_f0_cache_is_written_atomically(tmp_path, monkeypatch):
+    # 写到一半出错（磁盘满、被打断）不留下半个缓存：旧缓存原样，目录里也没有临时文件
+    wav = _sine_vocal(tmp_path / "vocals.wav", demo_leadsheet())
+    cache = tmp_path / "analysis" / "vocal_f0.npz"
+    amel.write_vocal_f0(cache, wav, np.arange(3) * 0.01, np.array([60.0, 61.0, 62.0]), np.ones(3))
+    before = cache.read_bytes()
+
+    def boom(f, **arrays):
+        f.write(b"PK partial")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(amel.np, "savez", boom)
+    with pytest.raises(OSError, match="disk full"):
+        amel.write_vocal_f0(cache, wav, np.arange(3) * 0.01, np.array([50.0, 51.0, 52.0]), np.ones(3))
+    assert cache.read_bytes() == before
+    assert [p.name for p in cache.parent.iterdir()] == ["vocal_f0.npz"]
+
+
+def test_vocal_f0_cache_records_which_stem_it_came_from(tmp_path, monkeypatch):
+    # lead.wav 与 vocals.wav 共用一个缓存文件：大小、修改时间都一样也不能拿错（签名里有分轨文件名）
+    import os
+    import shutil
+
+    lead = _sine_vocal(tmp_path / "lead.wav", demo_leadsheet())
+    vocals = tmp_path / "vocals.wav"
+    shutil.copyfile(lead, vocals)
+    st = lead.stat()
+    os.utime(vocals, ns=(st.st_atime_ns, st.st_mtime_ns))
+    assert vocals.stat().st_size == st.st_size and vocals.stat().st_mtime_ns == st.st_mtime_ns
+    cache = tmp_path / "analysis" / "vocal_f0.npz"
+    calls = []
+    monkeypatch.setattr(amel, "vocal_pitch", _fake_pitch(calls))
+    amel.cached_vocal_pitch(lead, cache)
+    amel.cached_vocal_pitch(vocals, cache)
+    assert calls == [lead, vocals]
+    amel.cached_vocal_pitch(vocals, cache)
+    assert calls == [lead, vocals]
+
+
 def test_verify_melody_writes_vocal_snippets_pitch_plots_and_report(demo_song, monkeypatch, capsys):
     songs = str(demo_song.root.parent)
     assert main(["--songs-dir", songs, "arrange", "demo", "--arr", "melody"]) == 0
