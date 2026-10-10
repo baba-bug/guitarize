@@ -84,6 +84,37 @@ window.REF_AUDIO = {{REF_AUDIO}};
     refBtn.disabled = true;
     refBtn.title = "缺少原曲小节时间（leadsheet.json）";
   }
+  // 参考音频播放时让谱面光标跟着走：按原曲小节起止时间换算成小节内比例 → alphaTab 的 tick 位置
+  function barAt(sec) {
+    const bt = window.BAR_TIMES;
+    let i = bt.findIndex((b) => sec < b[1]);
+    if (i < 0) i = bt.length - 1;
+    const [a, e] = bt[i];
+    return [i, Math.min(1, Math.max(0, (sec - a) / (e - a)))];
+  }
+  function tickAt(sec) {
+    const [i, frac] = barAt(sec);
+    const mb = api.score && api.score.masterBars[i];
+    return mb ? Math.round(mb.start + frac * mb.calculateDuration()) : null;
+  }
+  window.__tickAt = tickAt;   // 自检用
+  let follow = 0;
+  function followAudio(audio) {
+    cancelAnimationFrame(follow);
+    let last = 0;
+    const step = (now) => {
+      if (audio.paused) return;
+      if (now - last > 80) {   // 约 12 次 / 秒，足够流畅，不给合成器线程塞太多跳转
+        last = now;
+        const tick = tickAt(audio.currentTime);
+        if (tick !== null) api.tickPosition = tick;
+        currentBar = barAt(audio.currentTime)[0];
+      }
+      follow = requestAnimationFrame(step);
+    };
+    follow = requestAnimationFrame(step);
+  }
+
   refBtn.onclick = () => {
     const r = refs[Number(refSel.value)];
     const audio = audioOf(r);
@@ -95,8 +126,16 @@ window.REF_AUDIO = {{REF_AUDIO}};
     audio.playbackRate = api.playbackSpeed;
     audio.currentTime = Math.max(0, t[0]);
     audio.play();
+    followAudio(audio);
     refBtn.textContent = "⏸ 停止（" + r.label + "）";
   };
+  if (location.hash === "#selftest") {   // 无头浏览器自检：第 5 小节中点 → 写进标题
+    api.renderFinished.on(() => {
+      const bt = window.BAR_TIMES[4];
+      document.title = "selftest " + tickAt((bt[0] + bt[1]) / 2) + " expect " +
+        (api.score.masterBars[4].start + api.score.masterBars[4].calculateDuration() / 2);
+    });
+  }
 </script>
 </body>
 </html>
