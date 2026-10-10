@@ -11,8 +11,8 @@ from ..paths import REPO_ROOT, SongPaths
 from .synth import ALPHATAB_DIST
 
 TEMPLATE = REPO_ROOT / "web" / "viewer.html"
-STEM_LABELS = (("vocals", "人声"), ("lead", "主唱（去掉两边的伴唱）"), ("guitar", "吉他"), ("bass", "贝斯"), ("drums", "鼓"), ("other", "其他"),
-               ("piano", "钢琴"), ("harmonic", "和声混合"))
+STEM_LABELS = (("vocals", "人声"), ("lead", "主唱（模型去掉伴唱）"), ("backing", "伴唱"), ("guitar", "吉他"), ("bass", "贝斯"),
+               ("drums", "鼓"), ("other", "其他"), ("piano", "钢琴"), ("harmonic", "和声混合"))
 
 
 def _rel(target: Path, start: Path) -> str:
