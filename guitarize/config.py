@@ -9,7 +9,7 @@ import yaml
 from .paths import SongPaths
 
 PROFILES_PATH = Path(__file__).with_name("profiles.yaml")
-ARR_NAMES = {"strum": "弹唱", "finger": "指弹"}
+ARR_NAMES = {"strum": "弹唱", "finger": "指弹", "melody": "旋律"}
 
 
 @dataclass(frozen=True)
@@ -30,6 +30,7 @@ class Thresholds:
     chord_strum: float = 0.90
     chord_finger: float = 0.85
     melody_f1: float = 0.80
+    melody_line: float = 0.90       # 旋律谱（melody）的旋律 F1 达标线：召回按全部参考音算
     bar_chord_flag: float = 0.75
     bar_melody_flag: float = 0.60
     bar_harmonic_flag: float = 0.60

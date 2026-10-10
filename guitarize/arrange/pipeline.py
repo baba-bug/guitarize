@@ -1,4 +1,4 @@
-"""编配编排：leadsheet → 选变调夹 → 生成弹唱 / 指弹草稿 alphaTex → 自检。默认不覆盖已有编配（那是迭代修改过的成果）。"""
+"""编配编排：leadsheet → 选变调夹 → 生成弹唱 / 指弹 / 旋律谱草稿 alphaTex → 自检。默认不覆盖已有编配（那是迭代修改过的成果）。"""
 from __future__ import annotations
 
 import json
@@ -17,6 +17,7 @@ from ..verify.model import load_score
 from ..verify.playability import Violation, check_playability
 from .capo import CapoOption, choose_capo
 from .finger import generate_finger, section_bars
+from .melody import generate_melody
 from .patterns import DEFAULT, choose_pattern, slots_per_beat
 from .strum import beat_chords, generate_strum
 
@@ -80,7 +81,7 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
         raise ValueError(f"only 4/4 is supported for now (beats_per_bar={bpb})")
     profile = load_profile(cfg.level)
     notes = [(m["start_beats"], m["midi"]) for b in leadsheet["bars"] for m in b["melody"]]
-    melody = sorted(notes) if arr == "finger" else []
+    melody = sorted(notes) if arr in ("finger", "melody") else []   # 旋律谱与指弹按同样的旋律音域选变调夹：指法调一致
     octave = cfg.overrides.get("melody_octave", "song")
     options = choose_capo(chord_beats(leadsheet), profile, melody, section_bars=section_bars(leadsheet), octave=octave)
     wanted = capo if capo is not None else cfg.overrides.get("capo")
@@ -108,6 +109,8 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
     if arr == "strum":
         text = generate_strum(leadsheet, chosen.capo, profile, section_patterns(paths, leadsheet), cfg.title,
                               check=check)
+    elif arr == "melody":
+        text = generate_melody(leadsheet, chosen.capo, profile, cfg.title, check=check, octave=octave)
     else:
         text = generate_finger(leadsheet, chosen.capo, profile, cfg.title, check=check, octave=octave)
     target.parent.mkdir(parents=True, exist_ok=True)
