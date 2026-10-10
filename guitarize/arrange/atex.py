@@ -1,4 +1,4 @@
-"""alphaTex 文本生成：时值拆分、拍子记号、Shuffle 八分对切分、文件头、小节行、多声部文档。"""
+"""alphaTex 文本生成：时值拆分、拍子记号、三连音拍、Shuffle 八分对切分、文件头、小节行、多声部文档。"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,6 +10,7 @@ from .. import theory
 DURATIONS = [(4.0, 1, False), (3.0, 2, True), (2.0, 2, False), (1.5, 4, True), (1.0, 4, False),
              (0.75, 8, True), (0.5, 8, False), (0.25, 16, False)]
 STANDARD_TUNING = "(E4 B3 G3 D3 A2 E2)"
+TUPLET = "tu 3"   # 三连音：alphaTab 1.8.4 的拍效果 {tu 3}（.8 = 1/3 拍、.4 = 2/3 拍，起音正好在 k/3）
 
 
 def split_beats(length: float) -> list[tuple[int, bool]]:
@@ -27,6 +28,15 @@ def split_beats(length: float) -> list[tuple[int, bool]]:
     return out
 
 
+def split_triplet(length: float) -> list[tuple[int, bool]]:
+    """三连音拍里的一段（1/3 的倍数，至多 1 拍）→ [(时值码, 是否三连音)]：1/3 = 三连音八分、2/3 = 三连音四分、
+    整拍 = 普通四分。"""
+    thirds = round(length * 3)
+    if abs(length * 3 - thirds) > 1e-4 or not 1 <= thirds <= 3:
+        raise ValueError(f"cannot express {length} beats inside a triplet beat")
+    return [{1: (8, True), 2: (4, True), 3: (4, False)}[thirds]]
+
+
 def notes_token(notes: Sequence[tuple[int, int]], tie: bool = False, dead: bool = False) -> str:
     """[(弦, 品)] → '3.1' / '(3.6 2.5)'；空 → 'r'。tie 写成连音线延续 '-.弦'，dead 写成闷音 'x.弦'。"""
     if not notes:
@@ -36,13 +46,16 @@ def notes_token(notes: Sequence[tuple[int, int]], tie: bool = False, dead: bool 
 
 
 def beat_tokens(notes: Sequence[tuple[int, int]], length: float, effects: Iterable[str] = (),
-                dead: bool = False, tie: bool = False) -> list[str]:
+                dead: bool = False, tie: bool = False, tuplet: bool = False) -> list[str]:
     """一个音 / 和弦 / 休止持续 length 拍 → 拍子记号列表。需要多个时值时，后续部分用连音线接上（休止、闷音直接拆分）。
-    tie=True 表示整段都是前一个音的延续（第一个记号也写成连音线）。"""
+    tie=True 表示整段都是前一个音的延续（第一个记号也写成连音线）。
+    tuplet=True：这一段在三连音拍里（见 split_triplet），记号带 {tu 3}。"""
     out = []
     first = list(effects)
-    for i, (code, dotted) in enumerate(split_beats(length)):
-        eff = (first if i == 0 else []) + (["d"] if dotted else [])
+    parts = ([(code, False, tu) for code, tu in split_triplet(length)] if tuplet
+             else [(code, dotted, False) for code, dotted in split_beats(length)])
+    for i, (code, dotted, tu) in enumerate(parts):
+        eff = (first if i == 0 else []) + (["d"] if dotted else []) + ([TUPLET] if tu else [])
         tok = notes_token(notes, tie=(tie or i > 0) and bool(notes) and not dead, dead=dead)
         out.append(f"{tok}.{code}" + (" {" + " ".join(eff) + "}" if eff else ""))
     return out
@@ -51,27 +64,66 @@ def beat_tokens(notes: Sequence[tuple[int, int]], length: float, effects: Iterab
 @dataclass
 class Item:
     """一个声部一小节里的一个音 / 和弦 / 休止（小节内记谱位置，拍）。
-    tie=True：没有新的起音，notes 是前面某个和弦里接着响的那几个音（连音线延续，可以只是和弦的一部分）。"""
+    tie=True：没有新的起音，notes 是前面某个和弦里接着响的那几个音（连音线延续，可以只是和弦的一部分）。
+    tuplet=True：在三连音拍里（时值 1/3 或 2/3 拍，写成 {tu 3}），见 split_triplets。"""
     start: float
     length: float
     notes: list
     effects: Sequence[str] = ()
     dead: bool = False
     tie: bool = False
+    tuplet: bool = False
+
+
+def _on_third(x: float) -> bool:
+    """x 落在某拍的 +1/3 或 +2/3 上。"""
+    frac = x % 1
+    return abs(frac - 1 / 3) < 1e-6 or abs(frac - 2 / 3) < 1e-6
+
+
+def triplet_beats(items: Sequence[Item]) -> set[int]:
+    """三连音拍：有音 / 休止的边界（起点或终点）落在 +1/3、+2/3 上的拍（小节内第几拍，0 起）。"""
+    return {int(x) for it in items for x in (it.start, it.start + it.length) if _on_third(x)}
+
+
+def split_triplets(items: Sequence[Item]) -> list[Item]:
+    """在三连音拍的拍线处切开跨拍的音 / 休止，三连音拍里的片段标 tuplet。切出的后续片段没有新起音：
+    有音的写成连音线延续，闷音 / 休止写成休止。没有三连音拍时原样返回。"""
+    beats = triplet_beats(items)
+    if not beats:
+        return list(items)
+    lines = sorted({float(b) for b in beats} | {b + 1.0 for b in beats})
+    out: list[Item] = []
+    for it in items:
+        end = it.start + it.length
+        edges = [it.start, *(x for x in lines if it.start + 1e-6 < x < end - 1e-6), end]
+        for k, (a, b) in enumerate(zip(edges, edges[1:])):
+            tuplet = int(a + 1e-6) in beats
+            if k == 0:
+                out.append(Item(a, b - a, it.notes, it.effects, it.dead, it.tie, tuplet))
+            else:
+                notes = [] if it.dead else it.notes
+                out.append(Item(a, b - a, notes, (), False, bool(notes), tuplet))
+    return out
 
 
 def split_for_swing(items: Sequence[Item], feel: str) -> list[tuple[Item, bool]]:
     """三连音感觉下 alphaTab 只把"拍点八分 + 紧接的八分"按 shuffle 演奏。
     对每个发声的反拍起音 p（连音线延续不是起音），在 p−0.5、p、p+0.5 处切分覆盖这些位置的音符/休止，
-    使其成为八分对的第二个八分。返回 (片段, 是否为前一片段的延续)；直拍原样返回。"""
+    使其成为八分对的第二个八分。三连音拍里的片段（tuplet）既不是反拍起音、也不切：alphaTab 只让普通八分成对，
+    三连音拍照记谱演奏、也不会与前后的八分凑成一对（切点都在拍线或普通拍里，碰不到三连音拍）。
+    返回 (片段, 是否为前一片段的延续)；直拍原样返回。"""
     if feel != "shuffle":
         return [(it, False) for it in items]
     cuts: set[float] = set()
     for it in items:
-        if it.notes and not it.tie and abs(it.start % 1 - 0.5) < 1e-6:
+        if it.notes and not it.tie and not it.tuplet and abs(it.start % 1 - 0.5) < 1e-6:
             cuts |= {it.start - 0.5, it.start, it.start + 0.5}
     out: list[tuple[Item, bool]] = []
     for it in items:
+        if it.tuplet:
+            out.append((it, False))
+            continue
         inner = sorted(c for c in cuts if it.start + 1e-6 < c < it.start + it.length - 1e-6)
         edges = [it.start, *inner, it.start + it.length]
         for k, (a, b) in enumerate(zip(edges, edges[1:])):
@@ -80,13 +132,15 @@ def split_for_swing(items: Sequence[Item], feel: str) -> list[tuple[Item, bool]]
 
 
 def voice_bar_tokens(items: Sequence[Item], feel: str) -> list[str]:
-    """一个声部一小节（items 须首尾相接铺满小节）→ 拍子记号；延续片段与 tie 项写成连音线，闷音 / 休止的延续写成休止。"""
+    """一个声部一小节（items 须首尾相接铺满小节）→ 拍子记号；延续片段与 tie 项写成连音线，闷音 / 休止的延续写成休止。
+    有边界落在 +1/3、+2/3 的拍整拍写成三连音（split_triplets），其余拍按 feel 处理。"""
     tokens: list[str] = []
-    for piece, cont in split_for_swing(items, feel):
+    for piece, cont in split_for_swing(split_triplets(items), feel):
         if cont and (piece.dead or not piece.notes):
             tokens += beat_tokens([], piece.length)
         else:
-            tokens += beat_tokens(piece.notes, piece.length, piece.effects, dead=piece.dead, tie=cont or piece.tie)
+            tokens += beat_tokens(piece.notes, piece.length, piece.effects, dead=piece.dead, tie=cont or piece.tie,
+                                  tuplet=piece.tuplet)
     return tokens
 
 
