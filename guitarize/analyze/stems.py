@@ -1,5 +1,5 @@
 """音源分离：Demucs htdemucs_6s → analysis/stems/*.wav，并合成和声分轨 harmonic.wav（去人声、去鼓）；
-再用伴唱分离模型把人声分轨拆成主唱 lead.wav + 伴唱 backing.wav（旋律只从主唱识别）。"""
+再用伴唱分离模型 + 居中掩码把人声分轨拆成主唱 lead.wav + 伴唱 backing.wav（旋律只从主唱识别）。"""
 from __future__ import annotations
 
 import logging
@@ -62,9 +62,9 @@ LEAD_MASK_POWER = 4.0   # 掩码锐度：越大越只留严格居中的成分
 
 
 def extract_lead(vocals_wav: Path, out_wav: Path, power: float = LEAD_MASK_POWER) -> Path:
-    """主唱 = 人声分轨里左右声道一致（居中、同相）的成分。逐频点软掩码 (声像平衡 × 相位一致)^power 乘在 mid 上。
+    """主唱 = 左右声道一致（居中、同相）的成分。逐频点软掩码 (声像平衡 × 相位一致)^power 乘在 mid 上。
     伴唱 / 和声多半摆在左右（なんもねえ 副歌第 6–8、14–15 小节）；直接用整条人声识别旋律会跳到伴唱的音上。
-    单声道输入原样输出（无法区分）。"""
+    separate_lead 拿它处理伴唱分离模型分出的主唱；模型不可用时直接处理人声分轨。单声道输入原样输出（无法区分）。"""
     import librosa
     import soundfile as sf
 
@@ -90,7 +90,7 @@ KARAOKE_MODEL = "mel_band_roformer_karaoke_becruily.ckpt"
 # audio-separator 按模型名查模型表 download_checks.json、读同名配置：三个文件都在本地才不会去联网下载
 KARAOKE_FILES = (KARAOKE_MODEL, "config_mel_band_roformer_karaoke_becruily.yaml", "download_checks.json")
 KARAOKE_OUTPUTS = {"Vocals": "lead", "Instrumental": "backing"}
-KARAOKE_METHOD = f"karaoke:{Path(KARAOKE_MODEL).stem}"
+KARAOKE_METHOD = f"karaoke+lr-mask:{Path(KARAOKE_MODEL).stem}"   # 模型之后再过一遍居中掩码
 LR_MASK_METHOD = "lr-mask"
 
 
@@ -102,10 +102,11 @@ def karaoke_model_dir() -> Path:
 
 def separate_lead(vocals_wav: Path, lead_wav: Path, backing_wav: Path, model_dir: Path | None = None) -> str:
     """人声分轨 → 主唱 lead_wav + 伴唱 backing_wav，返回用的方法（KARAOKE_METHOD / LR_MASK_METHOD）。
-    伴唱分离模型不管伴唱摆在哪儿都分得开（なんもねえ 副歌的伴唱持续唱 B4，混在中间，L/R 掩码去不掉，会漏进旋律）。
-    设备由 audio-separator 自己选（CUDA > Apple 的 MPS > CPU）。两个文件先写进同目录下的临时目录，都出来了才换上去，
-    中途失败不留下半套。没装 audio-separator 或模型文件不全时退回 extract_lead（L/R 掩码），stderr 打一行警告，
-    不写 backing_wav。"""
+    伴唱分离模型不管伴唱摆在哪儿都分得开（なんもねえ 副歌的伴唱持续唱 B4，混在中间，L/R 掩码去不掉，会漏进旋律）；
+    但模型的主唱里还会留一点摆得很开的伴唱（第二段副歌那几处主唱的左右相关只有 0.05–0.57，真主唱是 0.8–0.95），
+    所以主唱 = 居中掩码(模型的主唱)，伴唱 = 模型的伴唱原样。设备由 audio-separator 自己选（CUDA > Apple 的 MPS > CPU）。
+    两个文件先写进同目录下的临时目录，都出来了才换上去，中途失败不留下半套。没装 audio-separator 或模型文件不全时
+    退回 extract_lead（只用 L/R 掩码），stderr 打一行警告，不写 backing_wav。"""
     model_dir = Path(model_dir) if model_dir is not None else karaoke_model_dir()
     missing = [name for name in KARAOKE_FILES if not (model_dir / name).exists()]
     reason = f"{model_dir} 里没有 {', '.join(missing)}" if missing else None
@@ -132,6 +133,7 @@ def separate_lead(vocals_wav: Path, lead_wav: Path, backing_wav: Path, model_dir
         missing = [f"{name}.wav" for name in KARAOKE_OUTPUTS.values() if f"{name}.wav" not in got]
         if missing:
             raise RuntimeError(f"karaoke model did not produce {missing} in {tmp} (got {sorted(got)})")
-        os.replace(got["lead.wav"], lead_wav)
+        masked = extract_lead(got["lead.wav"], Path(tmp, "lead.masked.wav"))
+        os.replace(masked, lead_wav)
         os.replace(got["backing.wav"], backing_wav)
     return KARAOKE_METHOD
