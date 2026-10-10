@@ -176,6 +176,42 @@ def manual_notes(notes: list[tuple[int, int, int]], first_beat: int, key_pcs: se
              "conf": 1.0, "out_of_key": m % 12 not in key_pcs, "manual": True} for s, d, m in notes]
 
 
+SLIDE_OUTS = ("down", "up")
+_SUNG_KEYS = ("start_beats", "dur_beats", "midi", "conf", "out_of_key")
+
+
+def sung_notes(melody: dict) -> list[dict]:
+    """melody.json 的音 → leadsheet 旋律音（还没分小节）。可选标记：legato（同一音节里滑到这个音，不重新拨弦，
+    紧接前一个音）只写 true；slide_out（音尾下滑 / 上滑 ≥2 个半音）只写 "down" / "up"。旧文件没有这两个键，
+    结果与原来一样。"""
+    out = []
+    for m in melody["notes"]:
+        note = {k: m[k] for k in _SUNG_KEYS}
+        if m.get("legato"):
+            note["legato"] = True
+        slide = m.get("slide_out")
+        if slide is not None:
+            if slide not in SLIDE_OUTS:
+                raise ValueError(f"melody.json note at start_beats {m['start_beats']:g} ({theory.midi_name(m['midi'])}): "
+                                 f"slide_out must be \"down\" or \"up\", got {slide!r}")
+            note["slide_out"] = slide
+        out.append(note)
+    return out
+
+
+def drop_orphan_legato(bars: list[dict], sung: list[dict]) -> None:
+    """连奏音的前一个音（melody.json 里紧挨着的那个）不在 leadsheet 里紧挨着它时（被 overrides.melody 换掉了，
+    或者根本没有前一个音），这个音照常拨弦：去掉 legato（就地修改）。覆盖的音本来就不是连奏。"""
+    order = {id(n): k for k, n in enumerate(sung)}
+    prev = None
+    for b in bars:
+        for m in b["melody"]:
+            k = order.get(id(m))
+            if m.get("legato") and (k is None or prev is None or prev != k - 1):
+                del m["legato"]
+            prev = k
+
+
 def _bar_beats(bar: dict, bpb: int, pad_beats: int) -> range:
     """小节里真有拍点的拍号（1-based）：弱起补拍的第 1 小节缺开头的拍，末尾不满的小节缺后面的拍。"""
     n = min(bar.get("beats", bpb), bpb)
@@ -200,7 +236,8 @@ def build_leadsheet(beats: dict, chords: dict, melody: dict, key: tuple[str, str
                     chord_overrides: dict | None = None, melody_overrides: dict | None = None) -> dict:
     """chord_overrides / melody_overrides 即 song.yaml 的 overrides.chords / overrides.melody（格式见 SongConfig）：
     只替换所指小节的和弦段 / 旋律，chords.json / melody.json 不动，所以重跑分析后人耳纠正仍在。
-    两者都校验完才套用；旋律被覆盖的小节记 melody_manual: true（空覆盖 = 这一小节没有旋律，也要看得出来）。"""
+    两者都校验完才套用；旋律被覆盖的小节记 melody_manual: true（空覆盖 = 这一小节没有旋律，也要看得出来）。
+    melody.json 的 legato / slide_out 标记照带（见 sung_notes）；连奏音的前一个音不在了时照常拨弦（drop_orphan_legato）。"""
     if beats.get("short_bars"):
         raise ValueError(f"beats.json has short bars {beats['short_bars']}: genuine 2/4 or 3/4 bars (common in "
                          "TV-size edits) are not supported yet — the leadsheet assumes every bar has 4 beats. "
@@ -211,6 +248,7 @@ def build_leadsheet(beats: dict, chords: dict, melody: dict, key: tuple[str, str
     bpb = beats["time_signature"][0]
     manual = parse_chord_overrides(chord_overrides, {b["bar"] for b in beats["bars"]}, bpb)
     manual_mel = parse_melody_overrides(melody_overrides, {b["bar"] for b in beats["bars"]}, bpb)
+    analyzed = sung_notes(melody)
     for n, labels in manual.items():
         print(f"[leadsheet] bar {n} chords overridden: {' '.join(labels)}", file=sys.stderr)
     for n, notes in manual_mel.items():
@@ -233,11 +271,11 @@ def build_leadsheet(beats: dict, chords: dict, melody: dict, key: tuple[str, str
             "t_end": b["t_end"],
             "chords": [{k: s[k] for k in ("beat", "dur_beats", "label", "confidence", "votes")} for s in segments],
             "melody": (manual_notes(manual_mel[n], g0, key_pcs) if n in manual_mel else
-                       [{k: m[k] for k in ("start_beats", "dur_beats", "midi", "conf", "out_of_key")}
-                        for m in melody["notes"] if g0 <= m["start_beats"] < g0 + bpb]),
+                       [m for m in analyzed if g0 <= m["start_beats"] < g0 + bpb]),
         })
         if n in manual_mel:
             bars[-1]["melody_manual"] = True
+    drop_orphan_legato(bars, analyzed)
     return {"key": key[0], "mode": key[1], "tempo_bpm": beats["tempo_bpm"], "feel": beats["feel"],
             "beats_per_bar": bpb, "pickup_beats": beats["pickup_beats"], "bars": bars}
 

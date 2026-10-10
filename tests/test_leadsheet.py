@@ -736,3 +736,55 @@ def test_leadsheet_step_applies_melody_overrides_from_song_yaml(tmp_path, capsys
     assert [m["midi"] for m in ls["bars"][1]["melody"]] == [61]           # 没覆盖的小节仍是分析出的旋律
     assert paths.melody_json.read_text(encoding="utf-8") == before        # melody.json 不动：重跑 melody 也不丢纠正
     assert "[leadsheet] bar 1 melody overridden: F#4 F#4 B3 F#4" in capsys.readouterr().err
+
+
+# ---------- 连奏（legato）与尾滑（slide_out）：melody.json 的可选标记，原样带进 leadsheet ----------
+
+def _legato_melody():
+    """四小节，一拍一个音：第 2 拍的 D4 从 C4 滑上来（legato），第 3 拍的 E4 结尾下滑（slide_out），
+    第 5 拍（第 2 小节第一个音）、第 9 拍（第 3 小节第一个音）也是连奏。"""
+    beats, chords, _ = _four_bar_inputs()
+    spec = [(0, 60, {}), (1, 62, {"legato": True}), (2, 64, {"slide_out": "down"}), (3, 65, {"legato": False}),
+            (4, 67, {"legato": True, "slide_out": "up"}), (8, 69, {"legato": True}), (9, 71, {"slide_out": None})]
+    notes = [{"start_beats": float(s), "dur_beats": 1.0, "midi": m, "out_of_key": False, "conf": 0.9, **extra}
+             for s, m, extra in spec]
+    return beats, chords, {"grid": "sixteenth", "notes": notes}
+
+
+def _flags(ls):
+    return [(m["midi"], m.get("legato"), m.get("slide_out")) for b in ls["bars"] for m in b["melody"]]
+
+
+def test_legato_and_slide_out_pass_through_to_the_leadsheet():
+    beats, chords, melody = _legato_melody()
+    ls = build_leadsheet(beats, chords, melody, ("C", "major"), {})
+    assert _flags(ls) == [(60, None, None), (62, True, None), (64, None, "down"), (65, None, None),
+                          (67, True, "up"), (69, True, None), (71, None, None)]
+    # 没有标记的音与旧文件一样只有这五个键（legato: false、slide_out: null 不写）
+    assert set(ls["bars"][0]["melody"][0]) == set(ls["bars"][0]["melody"][3]) == \
+           {"start_beats", "dur_beats", "midi", "conf", "out_of_key"}
+
+
+def test_old_melody_json_without_flags_is_unchanged():
+    beats, chords, melody = _four_bar_inputs()
+    ls = build_leadsheet(beats, chords, melody, ("C", "major"), {})
+    assert all(set(m) == {"start_beats", "dur_beats", "midi", "conf", "out_of_key"} for b in ls["bars"] for m in b["melody"])
+
+
+def test_legato_needs_its_sung_predecessor_in_the_leadsheet():
+    # 覆盖的音不是连奏；前一个音被 overrides.melody 换掉了（第 2 小节被覆盖 → 第 3 小节第一个音），
+    # 或者根本没有前一个音（第一个音）：照常拨弦，legato 去掉；slide_out 只属于这个音自己，保留
+    beats, chords, melody = _legato_melody()
+    melody["notes"][0]["legato"] = True
+    ls = build_leadsheet(beats, chords, melody, ("C", "major"), {}, None, {2: [[1, 1, "G4"], [2, 3, "A4"]]})
+    assert _flags(ls) == [(60, None, None), (62, True, None), (64, None, "down"), (65, None, None),
+                          (67, None, None), (69, None, None), (69, None, None), (71, None, None)]
+    assert all("legato" not in m and "slide_out" not in m for m in ls["bars"][1]["melody"])
+
+
+def test_bad_slide_out_names_the_note():
+    beats, chords, melody = _legato_melody()
+    melody["notes"][2]["slide_out"] = "sideways"
+    with pytest.raises(ValueError, match=r"melody\.json note at start_beats 2 \(E4\): "
+                                         r"slide_out must be \"down\" or \"up\", got 'sideways'"):
+        build_leadsheet(beats, chords, melody, ("C", "major"), {})
