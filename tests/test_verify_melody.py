@@ -58,6 +58,40 @@ def test_melody_summary_has_no_chord_check_and_a_stricter_line(build_tex):
     assert ok["melody_f1"] == 1.0 and ok["pass"] is True
 
 
+def test_tab_notes_where_the_reference_melody_is_empty_count_against_precision(build_tex):
+    # 旋律谱：参考这一小节没有旋律（人声没唱），谱上却有音——每个音都算进精确率（指弹照旧跳过这样的小节），
+    # 这一小节标成问题小节
+    ls = _one_bar(REF)
+    ls["bars"].append({**ls["bars"][0], "bar": 2, "t_start": 2.4, "t_end": 4.8, "melody": []})
+    score = build_tex("1.2.4 r.8 3.2.8 0.1.2 |\n1.2.4 3.2.4 0.1.2 |", head=TEX_HEAD)
+    bars = metrics.score_bars(score, ls, "melody")
+    assert (bars[0].mel_hit, bars[0].mel_est, bars[0].mel_found, bars[0].mel_ref) == (3, 3, 3, 3)
+    assert (bars[1].mel_hit, bars[1].mel_est, bars[1].mel_ref) == (0, 3, 0) and bars[1].mel_f1 is None
+    assert bars[1].mel_issues == ["多余/错音：拍 1 C4", "多余/错音：拍 2 D4", "多余/错音：拍 3 E4"]
+    s = metrics.summarize(bars, [], Thresholds(), "melody")
+    assert s["melody_precision"] == pytest.approx(0.5) and s["melody_recall"] == 1.0
+    assert s["checks"]["melody"] is False and s["pass"] is False
+    assert metrics.problem_bars(bars, [], Thresholds(), "melody") == [2]
+    from guitarize.verify.report import render_report
+    report = render_report("melody", "iter-01", s, None, [], bars, [2], {}, {}, score)
+    assert "- 参考这一小节没有旋律，谱上却有 3 个音\n  - 多余/错音：拍 1 C4\n" in report
+    finger = metrics.score_bars(score, ls, "finger")
+    assert finger[1].mel_est == 0 and metrics.summarize(finger, [], Thresholds(), "finger")["melody_precision"] == 1.0
+
+
+def test_melody_onset_tolerance_is_half_a_triplet(build_tex):
+    # 旋律谱照原唱落到三连音 / 十六分格（演奏时间）：差一个三连音格（1/3 拍）的音不算命中；指弹的容差不变
+    ref = [(1 / 3, 2 / 3, 60), (2, 2, 64)]                     # C4 唱在 1+⅓
+    score = build_tex("1.2.2 0.1.2 |", head=TEX_HEAD)           # 谱上 C4 在拍点：早了 1/3 拍
+    finger = metrics.score_bars(score, _one_bar(ref), "finger")
+    assert (finger[0].mel_hit, finger[0].mel_est) == (2, 2)
+    bars = metrics.score_bars(score, _one_bar(ref), "melody")
+    assert (bars[0].mel_hit, bars[0].mel_est, bars[0].mel_found, bars[0].mel_ref) == (1, 2, 1, 2)
+    assert bars[0].mel_issues == ["多余/错音：拍 1 C4", "漏掉旋律音：拍 1+⅓ C4（指法调 C4）"]
+    near = metrics.score_bars(score, _one_bar([(1 / 6, 5 / 6, 60), (2, 2, 64)]), "melody")   # 半格以内照样命中
+    assert near[0].mel_hit == 2
+
+
 def test_ear_check_lists_out_of_key_and_low_confidence_notes(build_tex):
     ls = _one_bar(REF)
     ls["bars"][0]["melody"][1].update(out_of_key=True)

@@ -15,7 +15,10 @@ from ..skeleton import skeleton_mask
 from .model import Attack, Bar, Score
 from .positions import beat_label
 
-MELODY_TOL = 1 / 3 + 1e-6  # 起音容差（拍）
+MELODY_TOL = 1 / 3 + 1e-6  # 起音容差（拍）：指弹（骨架音按八分 / 三连音格放，摇摆位置有出入）
+# 旋律谱的起音容差：谱上照原唱落到三连音 / 十六分格（演奏时间，三连音格精确），最大落格误差是半格 1/6 拍；
+# 差一个三连音格（1/3 拍）就不算命中。1e-3 容下 leadsheet 拍位置 4 位小数的舍入
+LINE_TOL = 1 / 6 + 1e-3
 SLOTS = 12                 # 4/4 小节的三连音八分格数
 
 
@@ -159,23 +162,27 @@ def _match(a: Sequence[tuple[float, int]], b: Sequence[tuple[float, int]], tol: 
 
 
 def score_melody(score: Score, leadsheet: dict, bars: list[BarScore], skeleton: bool = True) -> None:
-    """精确率：编配旋律音命中任一参考音；召回率：skeleton 时只考参考骨架音（指弹只弹骨架），否则考全部参考音（旋律谱）。"""
+    """精确率：编配旋律音命中任一参考音；召回率：skeleton 时只考参考骨架音（指弹只弹骨架），否则考全部参考音（旋律谱）。
+    指弹（skeleton）：参考没有旋律的小节不计精确率（间奏里弹旋律线不算错）；起音容差 MELODY_TOL。
+    旋律谱：被评分小节里谱上的每个音都计精确率，参考没有旋律的小节也算（人声没唱的地方谱上有音就是多余音）；
+    起音容差 LINE_TOL。"""
     n = len(bars)
+    tol = MELODY_TOL if skeleton else LINE_TOL
     ref_all = sorted((m for b in leadsheet["bars"][:n] for m in b.get("melody", [])), key=lambda m: m["start_beats"])
     mask = skeleton_mask([m["start_beats"] for m in ref_all], [m["dur_beats"] for m in ref_all])
     skel = [m for m, keep in zip(ref_all, mask) if keep or not skeleton]
     missed = "漏掉骨架音" if skeleton else "漏掉旋律音"
     ref_bars = {_bar_of(score, m["start_beats"]) for m in ref_all} - {None}
     # 匹配用被评分小节内的全部编配旋律音，这样落在邻小节（无参考旋律）的同名音也能覆盖参考骨架音；
-    # “该小节有参考旋律”的过滤只用于精确率一侧的计数
+    # 指弹“该小节有参考旋律”的过滤只用于精确率一侧的计数
     est = [e for e in score.melody(voice=0) if (_bar_of(score, e.start) is not None and _bar_of(score, e.start) < n)]
 
-    hits = _match([(e.start, e.midi) for e in est], [(m["start_beats"], m["midi"]) for m in ref_all])
-    founds = _match([(m["start_beats"], m["midi"]) for m in skel], [(e.start, e.midi) for e in est])
+    hits = _match([(e.start, e.midi) for e in est], [(m["start_beats"], m["midi"]) for m in ref_all], tol)
+    founds = _match([(m["start_beats"], m["midi"]) for m in skel], [(e.start, e.midi) for e in est], tol)
 
     for i, e in enumerate(est):
         bi = _bar_of(score, e.start)
-        if bi not in ref_bars:
+        if skeleton and bi not in ref_bars:
             continue
         bs, pos = bars[bi], beat_label(e.start - score.bars[bi].start)
         bs.mel_est += 1
@@ -390,11 +397,12 @@ def summarize(bars: list[BarScore], violations: list, th: Thresholds, arr: str,
 
 
 def problem_bars(bars: list[BarScore], violations: list, th: Thresholds, arr: str) -> list[int]:
-    """旋律谱：每个音都要对上（小节旋律 F1 < melody_line 就标出），以及与人声分轨相似度低的小节。"""
+    """旋律谱：每个音都要对上（小节旋律 F1 < melody_line 就标出；参考没有旋律、谱上却有音的小节也标出），
+    以及与人声分轨相似度低的小节。"""
     bad = {v.bar for v in violations}
     for b in bars:
         if arr == "melody":
-            if (b.mel_f1 is not None and b.mel_f1 < th.melody_line) or \
+            if (b.mel_f1 is not None and b.mel_f1 < th.melody_line) or (b.mel_ref == 0 and b.mel_est > 0) or \
                     (b.vocal_sim is not None and b.vocal_sim < th.bar_vocal_flag):
                 bad.add(b.bar)
             continue

@@ -376,6 +376,9 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
                 cover = "覆盖" if arr == "melody" else "骨架覆盖"
                 lines.append(f"- 旋律 F1 {b.mel_f1:.2f}（命中 {b.mel_hit}/{b.mel_est}，{cover} {b.mel_found}/{b.mel_ref}）")
                 lines += [f"  - {x}" for x in b.mel_issues]
+            elif arr == "melody" and b.mel_est:   # 参考没有旋律：F1 无定义，谱上的音都列出来
+                lines.append(f"- 参考这一小节没有旋律，谱上却有 {b.mel_est} 个音")
+                lines += [f"  - {x}" for x in b.mel_issues]
             lines += [f"- 和弦标记不符：{x}" for x in b.mark_issues]
             if b.harmonic_sim is not None:
                 lines.append(f"- 和声相似度 {b.harmonic_sim:.2f}")
