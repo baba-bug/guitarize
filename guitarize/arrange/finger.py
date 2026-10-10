@@ -306,9 +306,19 @@ def _strings(it: Placed) -> set[int]:
     return {w[0] for w in it.where if w is not None}
 
 
+def _on_beat_stop(it: Placed, t: float) -> float:
+    """伴奏（声部 2）止音点落在拍内 ⅓ / ⅔（三连音位置）时提前到该拍拍点：伴奏本身都在拍上，
+    不必为一个止音在低音声部写出三连音和连音线；提前的那 ⅓ 拍反正被同弦 / 更高的旋律音盖住。"""
+    whole = float(np.floor(t + EPS))
+    frac = t - whole
+    if (abs(frac - 1 / 3) < EPS or abs(frac - 2 / 3) < EPS) and whole > it.pos + EPS:
+        return whole
+    return t
+
+
 def _cut_note(it: Placed, k: int, t: float) -> None:
-    """只让 where[k] 在 t 止音；剩下的音都比它先停时整体截短。"""
-    it.stop[k] = t
+    """只让 where[k] 在 t 止音（伴奏的三连音位置提前到拍点）；剩下的音都比它先停时整体截短。"""
+    it.stop[k] = _on_beat_stop(it, t)
     it.dur = max(it.end(j) for j, w in enumerate(it.where) if w is not None) - it.pos
     it.stop = {j: e for j, e in it.stop.items() if e < it.pos + it.dur - EPS}
 
@@ -353,7 +363,7 @@ def cut_crossings(v1: list[Placed], v2: list[Placed]) -> list[tuple[float, str]]
                    and any(_pitch(o.where[0]) - _pitch(it.where[k]) < FILL_GAP for k in it.sounding(o.pos))),
                   default=None)
         if hit is not None:
-            it.cut(hit)
+            it.cut(_on_beat_stop(it, hit))
             out.append((hit, f"bass cut {_at(hit)} (crossing)"))
     return out
 
@@ -391,11 +401,11 @@ def jump(v1: list[Placed], v2: list[Placed], t: float, feel: str) -> int:
     return abs(here[0] - hand(v1, v2, prev)[0])
 
 
-def _cut_held(items: list[Placed], t: float) -> bool:
-    """截短第一个 t 之前起音、t 时仍有按弦音在响的音 / 和弦。"""
+def _cut_held(items: list[Placed], t: float, voice2: bool = False) -> bool:
+    """截短第一个 t 之前起音、t 时仍有按弦音在响的音 / 和弦（伴奏的三连音位置提前到拍点）。"""
     for it in items:
         if any(_fretted(it.where[k]) for k in it.sounding(t)):
-            it.cut(t)
+            it.cut(_on_beat_stop(it, t) if voice2 else t)
             return True
     return False
 
@@ -414,7 +424,7 @@ Step = tuple[float, str, Callable[[list[Placed], list[Placed]], bool]]   # (修�
 
 def _steps_at(t: float) -> list[Step]:
     """t 时的修补顺序：截短仍按着的低音 / 填充 → 截短仍按着的旋律 → 去掉 t 时起音的填充 → 去掉 t 时起音的低音。"""
-    return [(t, "bass cut", lambda v1, v2: _cut_held(v2, t)), (t, "melody cut", lambda v1, v2: _cut_held(v1, t)),
+    return [(t, "bass cut", lambda v1, v2: _cut_held(v2, t, True)), (t, "melody cut", lambda v1, v2: _cut_held(v1, t)),
             (t, "drop fill", lambda v1, v2: _drop(v2, t, 0)), (t, "drop bass", lambda v1, v2: _drop(v2, t, 1))]
 
 
@@ -424,7 +434,7 @@ def _shift_steps(t: float, prev: float | None) -> list[Step]:
     at_t = _steps_at(t)
     if prev is None:
         return at_t
-    return (at_t[:2] + [(prev, "bass cut", lambda v1, v2: _cut_held(v2, prev))] + at_t[2:]
+    return (at_t[:2] + [(prev, "bass cut", lambda v1, v2: _cut_held(v2, prev, True))] + at_t[2:]
             + [(prev, "drop fill", lambda v1, v2: _drop(v2, prev, 0)),
                (prev, "drop bass", lambda v1, v2: _drop(v2, prev, 1))])
 

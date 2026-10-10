@@ -74,7 +74,7 @@ def finger(text: str) -> str:
             edits2[n] = (b7_top, "B7-shape top F#")
     v2 = _edit(v2, edits2)
     def marks(old: str, name: str) -> list[str]:      # 指型名可能和别的拍效果写在一起（三连音拍里是 {ch "D" tu 3}）
-        return ["{" + m + "}" for m in re.findall(f'ch "{name}"', old)]
+        return ["{" + m + "}" for m in re.findall('ch "' + re.escape(name) + '"', old)]
 
     v1 = _edit(v1, {
         21: (lambda old: " ".join(["r.2", *marks(old, "C"), "r.2", *marks(old, "D")]) + " |", "riff bar: melody rests"),

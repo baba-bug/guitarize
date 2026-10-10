@@ -232,14 +232,14 @@ def test_repair_maps_a_triplet_violation_to_its_attack():
     v1, v2 = triplet_voices()
     assert hand(v1, v2, 3 + 1 / 3) == [2, 7]
     assert repair(v1, v2, [V(3 + 1 / 3)], "shuffle", 12) == [(3 + 1 / 3, "bass cut @4+⅓ (span)")]
-    assert v2[0].dur == pytest.approx(4 / 3)
+    assert v2[0].dur == pytest.approx(1.0)        # 伴奏止音提前到第 4 拍拍点（不在低音声部写三连音碎片）
 
 
 def test_repair_maps_two_thirds_to_the_triplet_attack_not_the_offbeat_eighth():
     v1 = [Placed(3.0, 1 / 3, [(2, 0)]), Placed(3 + 1 / 3, 1 / 3, [(2, 0)]), Placed(3 + 2 / 3, 1 / 3, [(1, 7)])]
     v2 = [Placed(2.0, 2.0, [None, (5, 2)])]
     assert repair(v1, v2, [V(3 + 2 / 3)], "shuffle", 12) == [(3 + 2 / 3, "bass cut @4+⅔ (span)")]
-    assert v2[0].dur == pytest.approx(5 / 3)
+    assert v2[0].dur == pytest.approx(1.0)        # 修补定位在 4+⅔ 的起音；伴奏止音提前到第 4 拍拍点
 
 
 def test_repair_still_maps_a_swung_offbeat_to_the_written_eighth():
@@ -254,3 +254,12 @@ def test_jump_measures_the_gap_in_performed_time():
     v1 = [Placed(2.0, 2 / 3, [(1, 0)]), Placed(2 + 2 / 3, 5 / 6, [(1, 1)]), Placed(3.5, 0.5, [(1, 8)])]
     assert jump(v1, [], 3.5, "shuffle") == 0
     assert jump(v1, [], 3.5, "straight") == 7
+
+
+def test_voice2_stops_on_the_beat_instead_of_a_triplet_third():
+    # 旋律在 1+⅓ 弹到填充那根弦：填充提前到第 2 拍拍点止音（不在伴奏声部制造三连音碎片；旋律反正会盖住它）
+    v1 = [Placed(0.0, 1.0, [(1, 0)]), Placed(4 / 3, 2 / 3, [(2, 1)])]
+    v2 = [Placed(0.0, 2.0, [(2, 0), (5, 3)])]
+    found = cut_same_string(v1, v2)
+    assert found == [(4 / 3, "fill cut @2+⅓ (same string)")] or found[0][1].startswith("fill cut")
+    assert v2[0].end(0) == 1.0 and v2[0].end(1) == 2.0
