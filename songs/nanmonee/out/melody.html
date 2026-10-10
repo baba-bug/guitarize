@@ -215,7 +215,19 @@ window.REF_AUDIO = [{"label": "原曲", "url": "../source/original.wav"}, {"labe
     status.textContent = "就绪：点音符选定小节，拖选可设置循环区";
   });
   api.error.on((e) => { status.textContent = "出错：" + e.message; });
-  api.beatMouseDown.on((beat) => { currentBar = beat.voice.bar.index; });
+  // 参考音频正在放时点谱面：音频跳到点中的那一拍（按原曲小节起止时间换算），光标随之跳过去
+  const playingRef = () => refs.find((r) => r.audio && !r.audio.paused);
+  function timeOfBeat(beat) {
+    const bt = window.BAR_TIMES[Math.min(beat.voice.bar.index, window.BAR_TIMES.length - 1)];
+    const frac = beat.playbackStart / beat.voice.bar.masterBar.calculateDuration();
+    return Math.max(0, bt[0] + Math.min(1, Math.max(0, frac)) * (bt[1] - bt[0]));
+  }
+  window.__timeOfBeat = timeOfBeat;   // 自检用
+  api.beatMouseDown.on((beat) => {
+    currentBar = beat.voice.bar.index;
+    const r = playingRef();
+    if (r && window.BAR_TIMES.length) r.audio.currentTime = timeOfBeat(beat);
+  });
   api.playedBeatChanged.on((beat) => { currentBar = beat.voice.bar.index; });
 
   playBtn.onclick = () => { stopRefs(); api.playPause(); };
