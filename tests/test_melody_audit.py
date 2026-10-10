@@ -66,8 +66,9 @@ def _song(tmp_path):
                             encoding="utf-8")
     paths.beats_json.write_text(json.dumps(_beats()), encoding="utf-8")
     paths.melody_json.write_text(json.dumps({"method": "v7:game+signal", "notes": NOTES}), encoding="utf-8")
-    for name in ("lead_raw", "backing"):
-        paths.stem(name).write_bytes(b"RIFF")
+    paths.stem("lead_raw").write_bytes(b"RIFF")
+    (tmp_path / "backing_elsewhere.wav").write_bytes(b"RIFF")
+    paths.stem("backing").symlink_to(tmp_path / "backing_elsewhere.wav")   # 链到别处的分轨也按歌目录写
     return paths
 
 

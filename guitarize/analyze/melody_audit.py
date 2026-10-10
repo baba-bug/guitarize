@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -121,9 +122,9 @@ def repeat_consistency(notes: list[dict], sections: dict[int, str], beats: dict)
 
 
 def _label(path: Path, root: Path) -> str:
-    """报告里的文件名：在歌目录里的写相对路径，其余照传进来的写。"""
+    """报告里的文件名：在歌目录里的写相对路径（不跟随符号链接：分轨可能链到别处），其余照传进来的写。"""
     try:
-        return Path(path).resolve().relative_to(root.resolve()).as_posix()
+        return Path(os.path.abspath(path)).relative_to(os.path.abspath(root)).as_posix()
     except ValueError:
         return str(path)
 
