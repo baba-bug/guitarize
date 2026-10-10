@@ -26,7 +26,7 @@ description: 把一首歌（歌名或 B 站 / 网易云链接）做成可弹的�
 
 ## 4. 分析
 `$PY -m guitarize analyze <slug>`（步骤 stems → lead → beats → chords → melody → leadsheet），再 `$PY -m guitarize summary <slug> --capo <预期变调夹>` 逐小节阅读：
-- lead 步骤把人声分轨拆成主唱 `stems/lead.wav` + 伴唱 `stems/backing.wav`（becruily 的 Mel-Band Roformer 伴唱分离模型，再过一遍居中掩码；整首几分钟），旋律只从主唱识别；用的方法记在 `stems/lead.json` 与 melody.json 的 `lead_method`。模型放在 `tools/karaoke/models/`（或环境变量 `GUITARIZE_KARAOKE_DIR`）；不在或没装 audio-separator 时会警告并退回只用居中掩码（`lr-mask`，没有伴唱分轨）。只重做主唱：`--steps lead,melody,leadsheet`，不必重跑 Demucs。
+- lead 步骤把人声分轨拆成主唱 `stems/lead.wav` + 伴唱 `stems/backing.wav`（becruily 的 Mel-Band Roformer 伴唱分离模型，再过一遍居中掩码；整首几分钟），模型的主唱原样（立体声、没过掩码）留作 `stems/lead_raw.wav`，旋律只从主唱识别；用的方法记在 `stems/lead.json` 与 melody.json 的 `lead_method`。模型放在 `tools/karaoke/models/`（或环境变量 `GUITARIZE_KARAOKE_DIR`）；不在或没装 audio-separator 时会警告并退回只用居中掩码（`lr-mask`，没有伴唱分轨）。只重做主唱：`--steps lead,melody,leadsheet`，不必重跑 Demucs。
 - 小节数、速度、Shuffle 是否合理；`short_bars` 应为空（否则用 `overrides.downbeat_shift` 调整）。
 - 低置信（`??`）小节记下来，稍后列入"需人耳确认"。
 - 低置信（`??`）多集中在 TV 版剪辑处、尾奏；不要为追分修改这些小节。

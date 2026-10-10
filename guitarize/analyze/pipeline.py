@@ -36,8 +36,9 @@ def _need(path: Path, slug: str, step: str) -> dict:
 
 
 def _separate_lead(paths: SongPaths) -> str:
-    """人声分轨 → 主唱 lead.wav + 伴唱 backing.wav（stems.separate_lead）；用的方法记进 stems/lead.json。"""
-    method = separate_lead(paths.stem("vocals"), paths.stem("lead"), paths.stem("backing"))
+    """人声分轨 → 主唱 lead.wav + 伴唱 backing.wav + 模型的主唱原样 lead_raw.wav（stems.separate_lead）；
+    用的方法记进 stems/lead.json。"""
+    method = separate_lead(paths.stem("vocals"), paths.stem("lead"), paths.stem("backing"), paths.stem("lead_raw"))
     _write(paths.lead_json, {"method": method, "model": KARAOKE_MODEL if method == KARAOKE_METHOD else None})
     return method
 
@@ -59,8 +60,9 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
     slug = paths.slug
     if "stems" in steps:
         separate(paths.original_wav, paths.stems_dir)
-        for stale in (paths.stem("lead"), paths.stem("backing"), paths.lead_json):   # 从旧人声分出来的：作废
-            stale.unlink(missing_ok=True)
+        for name in ("lead", "backing", "lead_raw"):   # 从旧人声分出来的：作废
+            paths.stem(name).unlink(missing_ok=True)
+        paths.lead_json.unlink(missing_ok=True)
     if "lead" in steps:
         if not paths.stem("vocals").exists():
             raise ValueError(f"missing vocals.wav; run `guitarize analyze {slug} --steps stems` first")

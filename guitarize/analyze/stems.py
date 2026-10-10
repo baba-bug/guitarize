@@ -1,5 +1,6 @@
 """音源分离：Demucs htdemucs_6s → analysis/stems/*.wav，并合成和声分轨 harmonic.wav（去人声、去鼓）；
-再用伴唱分离模型 + 居中掩码把人声分轨拆成主唱 lead.wav + 伴唱 backing.wav（旋律只从主唱识别）。"""
+再用伴唱分离模型 + 居中掩码把人声分轨拆成主唱 lead.wav + 伴唱 backing.wav（旋律只从主唱识别），
+模型分出的主唱原样（立体声、没过掩码）留作 lead_raw.wav（旋律 v7 的 GAME / crepe 在它上面识别）。"""
 from __future__ import annotations
 
 import logging
@@ -100,13 +101,16 @@ def karaoke_model_dir() -> Path:
     return Path(env) if env else REPO_ROOT / "tools" / "karaoke" / "models"
 
 
-def separate_lead(vocals_wav: Path, lead_wav: Path, backing_wav: Path, model_dir: Path | None = None) -> str:
-    """人声分轨 → 主唱 lead_wav + 伴唱 backing_wav，返回用的方法（KARAOKE_METHOD / LR_MASK_METHOD）。
+def separate_lead(vocals_wav: Path, lead_wav: Path, backing_wav: Path, raw_wav: Path,
+                  model_dir: Path | None = None) -> str:
+    """人声分轨 → 主唱 lead_wav + 伴唱 backing_wav + 模型的主唱原样 raw_wav，返回用的方法（KARAOKE_METHOD / LR_MASK_METHOD）。
     伴唱分离模型不管伴唱摆在哪儿都分得开（なんもねえ 副歌的伴唱持续唱 B4，混在中间，L/R 掩码去不掉，会漏进旋律）；
     但模型的主唱里还会留一点摆得很开的伴唱（第二段副歌那几处主唱的左右相关只有 0.05–0.57，真主唱是 0.8–0.95），
-    所以主唱 = 居中掩码(模型的主唱)，伴唱 = 模型的伴唱原样。设备由 audio-separator 自己选（CUDA > Apple 的 MPS > CPU）。
-    两个文件先写进同目录下的临时目录，都出来了才换上去，中途失败不留下半套。没装 audio-separator 或模型文件不全时
-    退回 extract_lead（只用 L/R 掩码），stderr 打一行警告，不写 backing_wav。"""
+    所以主唱 = 居中掩码(模型的主唱)，伴唱 = 模型的伴唱原样。raw_wav 是没过掩码的模型主唱（立体声）：GAME / crepe 在它上面
+    比在掩码后的主唱上准（两遍副歌一致 0.83 vs 0.74），旋律 v7 也靠它的左右相关找摆开的伴唱。设备由 audio-separator
+    自己选（CUDA > Apple 的 MPS > CPU）。三个文件先写进同目录下的临时目录，都出来了才换上去，中途失败不留下半套。
+    没装 audio-separator 或模型文件不全时退回 extract_lead（只用 L/R 掩码），stderr 打一行警告，不写 backing_wav /
+    raw_wav，并删掉上次用模型分出的这两个文件：留下的一套总是同一次分离的结果。"""
     model_dir = Path(model_dir) if model_dir is not None else karaoke_model_dir()
     missing = [name for name in KARAOKE_FILES if not (model_dir / name).exists()]
     reason = f"{model_dir} 里没有 {', '.join(missing)}" if missing else None
@@ -119,8 +123,10 @@ def separate_lead(vocals_wav: Path, lead_wav: Path, backing_wav: Path, model_dir
         print(f"warning: 伴唱分离模型不可用（{reason}），主唱改用 L/R 掩码（{LR_MASK_METHOD}），不出伴唱分轨",
               file=sys.stderr)
         extract_lead(vocals_wav, lead_wav)
+        for stale in (backing_wav, raw_wav):
+            Path(stale).unlink(missing_ok=True)
         return LR_MASK_METHOD
-    lead_wav, backing_wav = Path(lead_wav), Path(backing_wav)
+    lead_wav, backing_wav, raw_wav = Path(lead_wav), Path(backing_wav), Path(raw_wav)
     lead_wav.parent.mkdir(parents=True, exist_ok=True)
     # Separator 构造时会全局 warnings.filterwarnings("ignore")：关在 catch_warnings 里，不影响之后的警告
     with tempfile.TemporaryDirectory(prefix=".guitarize-karaoke-", dir=lead_wav.parent) as tmp, \
@@ -136,4 +142,5 @@ def separate_lead(vocals_wav: Path, lead_wav: Path, backing_wav: Path, model_dir
         masked = extract_lead(got["lead.wav"], Path(tmp, "lead.masked.wav"))
         os.replace(masked, lead_wav)
         os.replace(got["backing.wav"], backing_wav)
+        os.replace(got["lead.wav"], raw_wav)
     return KARAOKE_METHOD

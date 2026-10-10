@@ -591,10 +591,11 @@ def test_song_yaml_chord_overrides_round_trip(tmp_path):
 
 
 def _fake_separate_lead(calls, method="karaoke+lr-mask:mel_band_roformer_karaoke_becruily"):
-    def fake(vocals, lead, backing):
-        calls.append((vocals, lead, backing))
+    def fake(vocals, lead, backing, raw):
+        calls.append((vocals, lead, backing, raw))
         lead.write_bytes(vocals.read_bytes())
         backing.write_bytes(b"RIFF")
+        raw.write_bytes(b"RIFF")
         return method
     return fake
 
@@ -618,7 +619,7 @@ def test_melody_step_reads_the_lead_vocal(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "extract_melody", lambda wav, bj, pcs, **kw: used.append(wav) or {"grid": "sixteenth", "notes": []})
     monkeypatch.setattr(pipeline, "separate_lead", _fake_separate_lead(split))
     pipeline.run_analysis(paths, cfg, ["melody"])
-    assert split == [(paths.stem("vocals"), paths.stem("lead"), paths.stem("backing"))]
+    assert split == [(paths.stem("vocals"), paths.stem("lead"), paths.stem("backing"), paths.stem("lead_raw"))]
     assert used[-1] == paths.stem("lead") and paths.stem("lead").exists()
     melody = json.loads(paths.melody_json.read_text(encoding="utf-8"))
     assert melody["source"] == "lead"   # 校验据此选对照的分轨
@@ -654,19 +655,21 @@ def test_lead_step_runs_right_after_stems_and_records_the_method(tmp_path, monke
     split = []
     monkeypatch.setattr(pipeline, "separate_lead", _fake_separate_lead(split))
     paths.stems_dir.mkdir(parents=True)
-    for stale in (paths.stem("lead"), paths.stem("backing"), paths.lead_json):   # 从旧人声分出来的
-        stale.write_bytes(b"old")
+    stale = (paths.stem("lead"), paths.stem("backing"), paths.stem("lead_raw"), paths.lead_json)   # 从旧人声分出来的
+    for p in stale:
+        p.write_bytes(b"old")
     pipeline.run_analysis(paths, cfg, ["stems"])
     assert calls == ["stems"] and split == []                 # stems 步骤不再自己分主唱
-    assert not any(p.exists() for p in (paths.stem("lead"), paths.stem("backing"), paths.lead_json))
+    assert not any(p.exists() for p in stale)
     pipeline.run_analysis(paths, cfg, ["lead"])               # 只重做主唱：不重跑 Demucs
     assert calls == ["stems"] and len(split) == 1
     assert paths.stem("lead").read_bytes() == b"new vocals" and paths.stem("backing").exists()
+    assert paths.stem("lead_raw").exists()
     assert json.loads(paths.lead_json.read_text(encoding="utf-8")) == {
         "method": "karaoke+lr-mask:mel_band_roformer_karaoke_becruily", "model": "mel_band_roformer_karaoke_becruily.ckpt"}
     order = []
     monkeypatch.setattr(pipeline, "separate", lambda mix, d: order.append("stems"))
-    monkeypatch.setattr(pipeline, "separate_lead", lambda v, l, b: order.append("lead") or "lr-mask")
+    monkeypatch.setattr(pipeline, "separate_lead", lambda v, l, b, r: order.append("lead") or "lr-mask")
     pipeline.run_analysis(paths, cfg, ["lead", "stems"])     # 按 STEPS 的顺序跑，与传入顺序无关
     assert order == ["stems", "lead"]
     assert json.loads(paths.lead_json.read_text(encoding="utf-8")) == {"method": "lr-mask", "model": None}
