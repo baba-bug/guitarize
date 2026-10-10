@@ -1,0 +1,98 @@
+{
+ "reference": {
+  "lead_raw": "analysis/stems/lead_raw.wav",
+  "backing": "analysis/stems/backing.wav"
+ },
+ "rows": [
+  {
+   "melody": "analysis/melody.json",
+   "method": "v7:game+signal",
+   "notes": 179,
+   "legato": 18,
+   "coverage": 0.941,
+   "pitch_ok": 0.806,
+   "wrong": 34,
+   "backing_or_empty": 4,
+   "chopped_held": 0,
+   "onset_recall": 0.88,
+   "pluck_ms": 20,
+   "repeat_f1": 0.816,
+   "repeats": [
+    {
+     "section": "サビ",
+     "bars": [
+      [
+       2,
+       17
+      ],
+      [
+       38,
+       53
+      ]
+     ],
+     "f1": 0.816
+    }
+   ]
+  },
+  {
+   "melody": "/private/tmp/claude-502/-Users-s4146265-Desktop-Guitar/a8abd083-ae5e-4c29-b56a-229bca88d838/scratchpad/v4/melody_old_crepe.json",
+   "method": null,
+   "notes": 300,
+   "legato": 0,
+   "coverage": 0.961,
+   "pitch_ok": 0.761,
+   "wrong": 62,
+   "backing_or_empty": 41,
+   "chopped_held": 34,
+   "onset_recall": 0.923,
+   "pluck_ms": 40,
+   "repeat_f1": 0.662,
+   "repeats": [
+    {
+     "section": "サビ",
+     "bars": [
+      [
+       2,
+       17
+      ],
+      [
+       38,
+       53
+      ]
+     ],
+     "f1": 0.662
+    }
+   ]
+  },
+  {
+   "melody": "/private/tmp/claude-502/-Users-s4146265-Desktop-Guitar/a8abd083-ae5e-4c29-b56a-229bca88d838/scratchpad/v4/v7.json",
+   "method": null,
+   "notes": 179,
+   "legato": 58,
+   "coverage": 0.939,
+   "pitch_ok": 0.807,
+   "wrong": 34,
+   "backing_or_empty": 3,
+   "chopped_held": 0,
+   "onset_recall": 0.852,
+   "pluck_ms": 20,
+   "repeat_f1": 0.827,
+   "repeats": [
+    {
+     "section": "サビ",
+     "bars": [
+      [
+       2,
+       17
+      ],
+      [
+       38,
+       53
+      ]
+     ],
+     "f1": 0.827
+    }
+   ]
+  }
+ ]
+}
