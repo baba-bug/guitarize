@@ -15,6 +15,8 @@ class Note:
     midi: int    # 含变调夹的实际音高
     tie: bool
     dead: bool
+    hammer: bool = False       # 击弦 / 勾弦的起点（alphaTab 找到了同弦的下一个音）
+    slide: str | None = None   # 滑音：legato（连到同弦的下一个音）/ out_down / out_up；None = 没有
 
 
 @dataclass(frozen=True)
@@ -167,7 +169,8 @@ def load_score(path: Path) -> Score:
         for vi, voice in enumerate(b["voices"]):
             raw = [(bt["start"] / TPQ, bt["duration"] / TPQ, bt["tuplet"]) for bt in voice]
             for bt, (rs, rd, _), (ps, pd) in zip(voice, raw, performed_times(raw, feel)):
-                notes = tuple(Note(n["string"], n["fret"], n["midi"], n["tie"], n["dead"]) for n in bt["notes"])
+                notes = tuple(Note(n["string"], n["fret"], n["midi"], n["tie"], n["dead"], n.get("hammer", False),
+                                   n.get("slide")) for n in bt["notes"])
                 events.append(Event(b["index"], vi, bar_start + ps, pd, bar_start + rs, rd, notes,
                                     bt["chord"], bt["pick"], bt["brush"], bt["rest"], bt["tuplet"], bt.get("text")))
     return Score(data["title"], float(data["tempo"]), int(data["capo"]), list(data["tuning"]), bars, events)

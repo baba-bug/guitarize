@@ -190,12 +190,16 @@ def _split_at_bars(items: list[tuple[float, float, list, bool]]) -> list[tuple[f
 
 
 def _voice_lines(n_bars: int, items: list[tuple[float, float, list, bool]], sections: list[str | None],
-                 feel: str, effects: dict[float, list[str]] | None = None, tie_effects: bool = False) -> list[str]:
+                 feel: str, effects: dict[float, list[str]] | None = None, tie_effects: bool = False,
+                 note_effects: dict[float, dict[int, list[str]]] | None = None) -> list[str]:
     """items：(记谱位置, 时值, [(弦, 品)], 是否连音线延续)（见 Placed.pieces）；按小节铺满（空隙补休止），
     Shuffle 下按八分对切分。effects：{记谱位置: 拍效果}（和弦指型、力度），挂在该位置起音的音 / 休止上
     （休止在这些位置切开，保证有一拍从这里开始）；tie_effects 时也挂在从该位置开始的连音线延续上
-    （单声部的旋律谱：小节以连音线开头时指型名没有别的地方挂）。"""
+    （单声部的旋律谱：小节以连音线开头时指型名没有别的地方挂）。
+    note_effects：{记谱音尾: {弦: 音符效果}}（击勾弦、滑音，见 atex 模块说明），挂在到这里结束的那一段上：
+    切开的音（跨小节线、换指型处）只挂在最后一段。"""
     marks = {round(k, 6): v for k, v in (effects or {}).items()}
+    tails = {round(k, 6): v for k, v in (note_effects or {}).items()}
     by_bar: dict[int, list] = {}
     for item in sorted(_split_at_bars(items), key=lambda x: x[0]):
         by_bar.setdefault(int(round(item[0], 6) // 4), []).append(item)
@@ -213,7 +217,8 @@ def _voice_lines(n_bars: int, items: list[tuple[float, float, list, bool]], sect
                 rests(t, pos)
             dur = min(dur, end - pos)
             mark = marks.get(round(pos, 6), ()) if tie_effects or not tie else ()
-            bar_items.append(atex.Item(pos - i * 4.0, dur, notes, mark, tie=tie))
+            bar_items.append(atex.Item(pos - i * 4.0, dur, notes, mark, tie=tie,
+                                       note_effects=tails.get(round(pos + dur, 6)) if notes else None))
             t = pos + dur
         if t < end - 1e-6:
             rests(t, end)

@@ -10,6 +10,10 @@
 自检修补循环兜底（finger.repair）。
 音高从高到低必须是 旋律 > 填充 > 低音。某时刻无解时按顺序降级：低音降八度 → 低音升八度 → 去掉填充 →
 （去掉填充后）低音降 / 升八度 → 去掉低音 → 旋律升八度 → 旋律降八度，并记录在 fallback。
+连奏（FretEvent.legato：旋律音在同一音节里从前一个旋律音滑过来，不重新拨弦）：旋律换弦加罚 LEGATO，
+同弦才能弹成击勾弦 / 滑音。只是偏好：换弦也有路径，那就照常拨弦。同弦、两头都按弦时手顺着弦滑过去，
+不计手型移动的距离代价（滑音本身就是换把），换把硬规则照旧。尾滑（FretEvent.slide_out：音尾滑出）要按着弦
+才滑得出去：旋律放空弦加罚 OPEN_SLIDE_OUT。
 """
 from __future__ import annotations
 
@@ -30,6 +34,8 @@ class FretEvent:
     fill_pos: tuple[int, int] | None = None
     bass_pos: tuple[int, int] | None = None
     fallback: str | None = None
+    legato: bool = False       # 旋律音与前一个事件的旋律音连奏（见模块说明）
+    slide_out: bool = False    # 旋律音音尾滑出（见模块说明）
 
 
 def _candidates(pitches: list[int], profile: Profile) -> list[tuple]:
@@ -67,15 +73,19 @@ def _position(combo: tuple, span: int) -> tuple[int, int] | None:
 
 
 HARD = 1000.0  # 违反校验硬规则的转移罚分（不设为无穷：总要有一条路径）
+LEGATO = 5.0   # 连奏的两个旋律音不在同一根弦上（只能重新拨弦）的罚分：用户最在意滑音别被切开，比低把位、1–4 弦的偏好重
+OPEN_SLIDE_OUT = 1.5   # 要滑出的旋律音放在空弦上（滑不出去）的罚分
 
 
-def _transition(pa: tuple[int, int] | None, pb: tuple[int, int] | None, gap: float, profile: Profile) -> float:
+def _transition(pa: tuple[int, int] | None, pb: tuple[int, int] | None, gap: float, profile: Profile,
+                glide: bool = False) -> float:
     """手型框 pa → pb 的代价；任一为 None（尚无按弦）不计。框的 hi 是这一起音自己的最低按弦品；
-    校验的把位还算上仍在发声的持续音，不是同一个量——差别由 finger.repair 兜底（见模块说明）。"""
+    校验的把位还算上仍在发声的持续音，不是同一个量——差别由 finger.repair 兜底（见模块说明）。
+    glide：同弦滑过去（连奏），移动不计距离代价，只看换把硬规则。"""
     if pa is None or pb is None:
         return 0.0
     dist = max(0, pa[0] - pb[1], pb[0] - pa[1])
-    cost = dist * (1.0 + 1.0 / max(gap, 0.25))
+    cost = 0.0 if glide else dist * (1.0 + 1.0 / max(gap, 0.25))
     if gap < 1.0 - 1e-6 and abs(pa[1] - pb[1]) > profile.max_shift:
         cost += HARD
     return cost
@@ -132,19 +142,33 @@ def assign_frets(events: list[FretEvent], profile: Profile, top_strings: int = 3
         else:
             layers.append(([()], (None, None, None), "dropped"))
     span = profile.max_span
+
+    def static_cost(i: int, c: tuple) -> float:
+        has_melody = layers[i][1][0] is not None
+        open_slide = has_melody and events[i].slide_out and c[0][1] == 0   # 旋律音在组合的第一个位置
+        return _static(c, has_melody, top_strings) + (OPEN_SLIDE_OUT if open_slide else 0.0)
+
     # 状态 = (候选下标, 手型框)；全空弦候选继承前驱状态的手型框，每种来路各成一个状态
     states = [[(k, _position(c, span)) for k, c in enumerate(layers[0][0])]]
-    cost = [_static(c, layers[0][1][0] is not None, top_strings) for c in layers[0][0]]
+    cost = [static_cost(0, c) for c in layers[0][0]]
     back = []
     for i in range(1, len(layers)):
         gap = events[i].start - events[i - 1].start
         cands, used, _ = layers[i]
+        prev_cands, prev_used, _ = layers[i - 1]
+        legato = events[i].legato and used[0] is not None and prev_used[0] is not None
         best: dict[tuple, tuple[float, int]] = {}  # 状态 → (累计代价, 前驱状态下标)
         for k, c in enumerate(cands):
-            own, static = _position(c, span), _static(c, used[0] is not None, top_strings)
-            for j, (_, hand) in enumerate(states[-1]):
+            own, static = _position(c, span), static_cost(i, c)
+            for j, (kp, hand) in enumerate(states[-1]):
                 key = (k, hand if own is None else own)
-                total = cost[j] + _transition(hand, own, gap, profile) + static
+                if legato:   # 旋律音都在组合的第一个位置
+                    (s0, f0), (s1, f1) = prev_cands[kp][0], c[0]
+                    step = (_transition(hand, own, gap, profile, glide=s0 == s1 and f0 > 0 and f1 > 0)
+                            + (0.0 if s0 == s1 else LEGATO))
+                else:
+                    step = _transition(hand, own, gap, profile)
+                total = cost[j] + step + static
                 if key not in best or total < best[key][0]:
                     best[key] = (total, j)
         states.append(list(best))

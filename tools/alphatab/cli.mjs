@@ -9,6 +9,8 @@ alphaTab.Logger.logLevel = alphaTab.LogLevel.None;
 
 const PICK = { 0: null, 1: 'up', 2: 'down' };
 const BRUSH = { 0: null, 1: 'up', 2: 'down', 3: 'up', 4: 'down' };
+// SlideOutType → 名字（只导出旋律谱用到的几种；其余记 null）
+const SLIDE = { 2: 'legato', 3: 'out_up', 4: 'out_down' };
 const FEEL = { 0: 'none', 1: 'triplet16th', 2: 'triplet8th', 3: 'dotted16th', 4: 'dotted8th', 5: 'scottish16th', 6: 'scottish8th' };
 
 function toModel(score) {
@@ -47,6 +49,8 @@ function toModel(score) {
                 midi: n.realValue,
                 tie: n.isTieDestination,
                 dead: n.isDead,
+                hammer: n.isHammerPullOrigin, // finish() 之后：同弦确有下一个音才为 true
+                slide: SLIDE[n.slideOutType] ?? null,
               })),
             })),
         ),
