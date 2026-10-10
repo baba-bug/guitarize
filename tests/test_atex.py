@@ -188,6 +188,60 @@ def test_split_for_swing_does_not_cut_or_pair_tuplets(tmp_path):
     assert snd[0].start == pytest.approx(2 / 3) and snd[0].end == pytest.approx(4 / 3)
 
 
+def test_rest_cuts_only_at_the_beat_lines_next_to_its_offbeat_ends():
+    # 从反拍开始：本拍余下的部分单独切出；结束在反拍：最后一条拍线处切开；中间的整拍不切
+    assert atex.rest_cuts(0.5, 3.0) == [1.0]
+    assert atex.rest_cuts(1.0, 2.5) == [2.0]
+    assert atex.rest_cuts(0.5, 1.5) == [1.0]
+    assert atex.rest_cuts(1.5, 3.5) == [2.0, 3.0]
+    assert atex.rest_cuts(0.0, 4.0) == [] and atex.rest_cuts(2.0, 3.0) == []
+    assert atex.rest_cuts(0.5, 1.0) == [] and atex.rest_cuts(2.0, 2.5) == []   # 不跨拍线
+
+
+def test_shuffle_rest_after_a_beat_eighth_is_split_at_the_beat_line():
+    # 拍点八分 + 从反拍开始、跨过拍线的休止：休止先写本拍余下的八分（与前面的音凑成八分对），再写整拍
+    items = [atex.Item(0, 0.5, [(1, 0)]), atex.Item(0.5, 2.5, [], ['txt "A"']), atex.Item(3, 1, [(1, 3)])]
+    assert atex.voice_bar_tokens(items, "shuffle") == ["0.1.8", 'r.8 {txt "A"}', "r.2", "3.1.4"]
+    assert atex.voice_bar_tokens(items, "straight") == ["0.1.8", 'r.2 {txt "A"}', "r.8", "3.1.4"]   # 直拍不变
+    # 连音线延续的拍点八分同样成对；音和连音线延续照旧（附点四分音不切：只改休止）
+    items = [atex.Item(0, 1, [(2, 0)]), atex.Item(1, 0.5, [(2, 0)], tie=True), atex.Item(1.5, 1.5, []),
+             atex.Item(3, 1, [(1, 3)])]
+    assert atex.voice_bar_tokens(items, "shuffle") == ["0.2.4", "-.2.8", "r.8", "r.4", "3.1.4"]
+    assert atex.voice_bar_tokens(items, "straight") == ["0.2.4", "-.2.8", "r.4 {d}", "3.1.4"]
+    items = [atex.Item(0, 1.5, [(2, 0)]), atex.Item(1.5, 1.5, []), atex.Item(3, 1, [(1, 3)])]
+    assert atex.voice_bar_tokens(items, "shuffle") == ["0.2.4 {d}", "r.8", "r.4", "3.1.4"]
+    # 从拍点开始的整拍休止照旧合并；从拍点开始、结束在反拍的休止在最后一条拍线处切开
+    items = [atex.Item(0, 1, [(1, 0)]), atex.Item(1, 3, [])]
+    assert atex.voice_bar_tokens(items, "shuffle") == ["0.1.4", "r.2 {d}"]
+    pieces = atex.split_for_swing([atex.Item(0, 1, [(1, 0)]), atex.Item(1, 1.5, []),
+                                   atex.Item(2.5, 1.5, [(1, 0)], tie=True)], "shuffle")
+    assert [(p.start, p.length, cont) for p, cont in pieces] == [
+        (0, 1, False), (1, 1.0, False), (2.0, 0.5, True), (2.5, 1.5, False)]
+
+
+def test_shuffle_beat_eighth_before_an_offbeat_rest_plays_swung(tmp_path):
+    # 用户听感：拍点八分后面跟着跨拍的反拍休止时，alphaTab 把这个八分按直拍（半拍）播放，旋律节奏发飘。
+    # 切开之后它与休止的前一个八分成对：演奏时值 2/3 拍，休止从 +2/3 开始
+    bar1 = [atex.Item(0, 0.5, [(1, 0)]), atex.Item(0.5, 2.5, []), atex.Item(3, 1, [(1, 3)])]
+    bar2 = [atex.Item(0, 1, [(2, 0)]), atex.Item(1, 0.5, [(2, 0)], tie=True), atex.Item(1.5, 1.5, []),
+            atex.Item(3, 0.5, [(1, 3)]), atex.Item(3.5, 0.5, [(1, 5)])]
+    head = atex.header("T", 120, 0, "shuffle", "tabs")
+    lines = [atex.bar_line(atex.voice_bar_tokens(items, "shuffle"), i + 1) for i, items in enumerate([bar1, bar2])]
+    src = tmp_path / "s.atex"
+    src.write_text(atex.document(head, [lines]), encoding="utf-8")
+    score = load_score(alphatab.build(src, tmp_path / "b", "s")["json"])
+    first = score.events[0]
+    assert first.start == 0 and first.written_dur == 0.5 and first.dur == pytest.approx(2 / 3)
+    rest = score.events[1]
+    assert rest.rest and rest.start == pytest.approx(2 / 3) and rest.dur == pytest.approx(1 / 3)
+    held = [s for s in score.sounding() if 4 <= s.start < 5]                 # 0.2 连音线延续到第 2 拍的拍点八分
+    assert len(held) == 1 and held[0].end == pytest.approx(4 + 1 + 2 / 3)
+    assert [round(a.start, 4) for a in score.attacks()] == [0.0, 3.0, 4.0, 7.0, round(7 + 2 / 3, 4)]
+    from guitarize.config import load_profile
+    from guitarize.verify.playability import check_playability
+    assert check_playability(score, load_profile("intermediate"), "finger") == []   # 含 straight_offbeat
+
+
 def test_straight_items_are_untouched_by_triplet_splitting():
     items = [atex.Item(0, 1, [(1, 3)]), atex.Item(1, 0.5, []), atex.Item(1.5, 2.5, [(1, 5)], ["sd"])]
     assert atex.split_triplets(items) == items

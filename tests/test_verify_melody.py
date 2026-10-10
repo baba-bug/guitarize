@@ -58,6 +58,40 @@ def test_melody_summary_has_no_chord_check_and_a_stricter_line(build_tex):
     assert ok["melody_f1"] == 1.0 and ok["pass"] is True
 
 
+def test_tab_notes_where_the_reference_melody_is_empty_count_against_precision(build_tex):
+    # 旋律谱：参考这一小节没有旋律（人声没唱），谱上却有音——每个音都算进精确率（指弹照旧跳过这样的小节），
+    # 这一小节标成问题小节
+    ls = _one_bar(REF)
+    ls["bars"].append({**ls["bars"][0], "bar": 2, "t_start": 2.4, "t_end": 4.8, "melody": []})
+    score = build_tex("1.2.4 r.8 3.2.8 0.1.2 |\n1.2.4 3.2.4 0.1.2 |", head=TEX_HEAD)
+    bars = metrics.score_bars(score, ls, "melody")
+    assert (bars[0].mel_hit, bars[0].mel_est, bars[0].mel_found, bars[0].mel_ref) == (3, 3, 3, 3)
+    assert (bars[1].mel_hit, bars[1].mel_est, bars[1].mel_ref) == (0, 3, 0) and bars[1].mel_f1 is None
+    assert bars[1].mel_issues == ["多余/错音：拍 1 C4", "多余/错音：拍 2 D4", "多余/错音：拍 3 E4"]
+    s = metrics.summarize(bars, [], Thresholds(), "melody")
+    assert s["melody_precision"] == pytest.approx(0.5) and s["melody_recall"] == 1.0
+    assert s["checks"]["melody"] is False and s["pass"] is False
+    assert metrics.problem_bars(bars, [], Thresholds(), "melody") == [2]
+    from guitarize.verify.report import render_report
+    report = render_report("melody", "iter-01", s, None, [], bars, [2], {}, {}, score)
+    assert "- 参考这一小节没有旋律，谱上却有 3 个音\n  - 多余/错音：拍 1 C4\n" in report
+    finger = metrics.score_bars(score, ls, "finger")
+    assert finger[1].mel_est == 0 and metrics.summarize(finger, [], Thresholds(), "finger")["melody_precision"] == 1.0
+
+
+def test_melody_onset_tolerance_is_half_a_triplet(build_tex):
+    # 旋律谱照原唱落到三连音 / 十六分格（演奏时间）：差一个三连音格（1/3 拍）的音不算命中；指弹的容差不变
+    ref = [(1 / 3, 2 / 3, 60), (2, 2, 64)]                     # C4 唱在 1+⅓
+    score = build_tex("1.2.2 0.1.2 |", head=TEX_HEAD)           # 谱上 C4 在拍点：早了 1/3 拍
+    finger = metrics.score_bars(score, _one_bar(ref), "finger")
+    assert (finger[0].mel_hit, finger[0].mel_est) == (2, 2)
+    bars = metrics.score_bars(score, _one_bar(ref), "melody")
+    assert (bars[0].mel_hit, bars[0].mel_est, bars[0].mel_found, bars[0].mel_ref) == (1, 2, 1, 2)
+    assert bars[0].mel_issues == ["多余/错音：拍 1 C4", "漏掉旋律音：拍 1+⅓ C4（指法调 C4）"]
+    near = metrics.score_bars(score, _one_bar([(1 / 6, 5 / 6, 60), (2, 2, 64)]), "melody")   # 半格以内照样命中
+    assert near[0].mel_hit == 2
+
+
 def test_ear_check_lists_out_of_key_and_low_confidence_notes(build_tex):
     ls = _one_bar(REF)
     ls["bars"][0]["melody"][1].update(out_of_key=True)
@@ -123,6 +157,72 @@ def test_vocal_f0_cache_is_reused_until_the_stem_changes(tmp_path, monkeypatch):
     assert len(calls) == 2
 
 
+def _fake_pitch(calls):
+    def fake(path):
+        calls.append(path)
+        return np.arange(3) * 0.01, np.array([60.0, np.nan, 62.0]), np.ones(3)
+    return fake
+
+
+def test_vocal_f0_cache_that_cannot_be_read_is_recomputed(tmp_path, monkeypatch):
+    # 截断 / 损坏 / 缺字段的缓存当作没有缓存：重算并重写，不让 melody 步骤或校验报错
+    wav = _sine_vocal(tmp_path / "vocals.wav", demo_leadsheet())
+    cache = tmp_path / "analysis" / "vocal_f0.npz"
+    calls = []
+    monkeypatch.setattr(amel, "vocal_pitch", _fake_pitch(calls))
+    amel.cached_vocal_pitch(wav, cache)
+    good = cache.read_bytes()
+    with open(cache, "wb") as f:                                # 签名对得上，但缺 times / midi
+        np.savez(f, **amel._stem_signature(wav))
+    junk = [cache.read_bytes(), b"", b"not an npz at all", good[: len(good) // 2]]
+    for i, data in enumerate(junk):
+        cache.write_bytes(data)
+        t, m, _ = amel.cached_vocal_pitch(wav, cache)
+        assert len(calls) == i + 2 and m[2] == 62.0
+        assert amel._read_vocal_f0(cache, amel._stem_signature(wav)) is not None   # 重写成完整的缓存
+    amel.cached_vocal_pitch(wav, cache)
+    assert len(calls) == len(junk) + 1
+
+
+def test_vocal_f0_cache_is_written_atomically(tmp_path, monkeypatch):
+    # 写到一半出错（磁盘满、被打断）不留下半个缓存：旧缓存原样，目录里也没有临时文件
+    wav = _sine_vocal(tmp_path / "vocals.wav", demo_leadsheet())
+    cache = tmp_path / "analysis" / "vocal_f0.npz"
+    amel.write_vocal_f0(cache, wav, np.arange(3) * 0.01, np.array([60.0, 61.0, 62.0]), np.ones(3))
+    before = cache.read_bytes()
+
+    def boom(f, **arrays):
+        f.write(b"PK partial")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(amel.np, "savez", boom)
+    with pytest.raises(OSError, match="disk full"):
+        amel.write_vocal_f0(cache, wav, np.arange(3) * 0.01, np.array([50.0, 51.0, 52.0]), np.ones(3))
+    assert cache.read_bytes() == before
+    assert [p.name for p in cache.parent.iterdir()] == ["vocal_f0.npz"]
+
+
+def test_vocal_f0_cache_records_which_stem_it_came_from(tmp_path, monkeypatch):
+    # lead.wav 与 vocals.wav 共用一个缓存文件：大小、修改时间都一样也不能拿错（签名里有分轨文件名）
+    import os
+    import shutil
+
+    lead = _sine_vocal(tmp_path / "lead.wav", demo_leadsheet())
+    vocals = tmp_path / "vocals.wav"
+    shutil.copyfile(lead, vocals)
+    st = lead.stat()
+    os.utime(vocals, ns=(st.st_atime_ns, st.st_mtime_ns))
+    assert vocals.stat().st_size == st.st_size and vocals.stat().st_mtime_ns == st.st_mtime_ns
+    cache = tmp_path / "analysis" / "vocal_f0.npz"
+    calls = []
+    monkeypatch.setattr(amel, "vocal_pitch", _fake_pitch(calls))
+    amel.cached_vocal_pitch(lead, cache)
+    amel.cached_vocal_pitch(vocals, cache)
+    assert calls == [lead, vocals]
+    amel.cached_vocal_pitch(vocals, cache)
+    assert calls == [lead, vocals]
+
+
 def test_verify_melody_writes_vocal_snippets_pitch_plots_and_report(demo_song, monkeypatch, capsys):
     songs = str(demo_song.root.parent)
     assert main(["--songs-dir", songs, "arrange", "demo", "--arr", "melody"]) == 0
@@ -139,13 +239,16 @@ def test_verify_melody_writes_vocal_snippets_pitch_plots_and_report(demo_song, m
     ls["bars"][1]["melody"][0]["midi"] = 71                     # 参考第 2 小节第 1 个音改成 B4：这一小节被标出
     ls["bars"][2]["melody"][0]["out_of_key"] = True             # 第 3 小节有调外音：需人耳确认
     demo_song.leadsheet_json.write_text(json.dumps(ls), encoding="utf-8")
+    from guitarize.verify import report as vreport
+    monkeypatch.setattr(vreport, "MAX_SNIPPETS", 1)             # 旋律谱列出的小节全部出试听和音高图，不受这个上限截断
     assert main(["--songs-dir", songs, "verify", "demo", "--arr", "melody"]) == 0
     it = demo_song.report_root("melody") / "iter-01"
     scores = json.loads((it / "scores.json").read_text(encoding="utf-8"))
     s = scores["summary"]
     assert 2 in scores["problems"] and s["violations"] == 0 and s["vocal_similarity"] is not None
     assert s["ear_check_bars"] == 1 and "chord" not in s["checks"]
-    for name in ("plots/bar-002.png", "plots/bar-003.png", "snippets/bar-002_vocal.wav", "snippets/bar-002_synth.wav"):
+    for name in ("plots/bar-002.png", "plots/bar-003.png", "snippets/bar-002_vocal.wav", "snippets/bar-002_synth.wav",
+                 "snippets/bar-003_vocal.wav", "snippets/bar-003_synth.wav"):
         assert (it / name).exists(), name
     assert not (it / "snippets" / "bar-002_orig.wav").exists()
     report = (it / "report.md").read_text(encoding="utf-8")
@@ -174,3 +277,20 @@ def test_melody_is_checked_against_the_stem_it_was_transcribed_from(tmp_path):
     assert melody_reference(paths, {}) == paths.stem("lead")
     assert melody_reference(paths, {"melody_source": "lead"}) == paths.stem("lead")
     assert melody_reference(paths, {"melody_source": "vocals"}) == paths.stem("vocals")
+    with pytest.raises(ValueError, match=r'overrides\.melody_source must be "lead" or "vocals"'):
+        melody_reference(paths, {"melody_source": "mix"})
+    # melody.json 记着旋律是从哪条分轨识别的（melody 步骤写的 "source"）：以它为准，不看 song.yaml 现在怎么写
+    paths.melody_json.write_text(json.dumps({"notes": [], "source": "vocals"}), encoding="utf-8")
+    assert melody_reference(paths, {}) == paths.stem("vocals")
+    assert melody_reference(paths, {"melody_source": "lead"}) == paths.stem("vocals")
+    paths.melody_json.write_text(json.dumps({"notes": [], "source": "lead"}), encoding="utf-8")
+    assert melody_reference(paths, {"melody_source": "vocals"}) == paths.stem("lead")
+    paths.stem("lead").unlink()                                 # lead.wav 不在了：退回整条人声
+    assert melody_reference(paths, {}) == paths.stem("vocals")
+    paths.melody_json.write_text(json.dumps({"notes": [], "source": "mix"}), encoding="utf-8")
+    with pytest.raises(ValueError, match=r'melody\.json source must be "lead" or "vocals", got \'mix\''):
+        melody_reference(paths, {})
+    paths.melody_json.write_text(json.dumps({"notes": []}), encoding="utf-8")   # 旧的 melody.json：按 song.yaml
+    paths.stem("lead").write_bytes(b"RIFF")
+    assert melody_reference(paths, {"melody_source": "vocals"}) == paths.stem("vocals")
+    assert melody_reference(paths, {}) == paths.stem("lead")

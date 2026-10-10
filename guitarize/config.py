@@ -10,6 +10,7 @@ from .paths import SongPaths
 
 PROFILES_PATH = Path(__file__).with_name("profiles.yaml")
 ARR_NAMES = {"strum": "弹唱", "finger": "指弹", "melody": "旋律"}
+MELODY_SOURCES = ("lead", "vocals")   # 旋律从哪条分轨识别：居中的主唱 stems/lead.wav、整条人声 stems/vocals.wav
 
 
 @dataclass(frozen=True)
@@ -73,7 +74,8 @@ class SongConfig:
     - melody_octave：指弹 / 旋律谱的旋律八度（arrange/capo.py 的 octave_plan）。默认 "song"：整曲一个移位，
       保持人声原有的高低关系；"section"：按段落各自选；整数（12 的倍数）：整曲固定移；{小节: 移位}：从该小节起移。
     - capo：指定变调夹（arrange）
-    - melody_source：旋律从哪条音频识别。默认 "lead"：人声分轨里居中的主唱（去掉摆在左右的伴唱）；"vocals"：整条人声
+    - melody_source：旋律从哪条音频识别。默认 "lead"：人声分轨里居中的主唱（去掉摆在左右的伴唱）；"vocals"：整条人声。
+      melody 步骤把用的分轨记进 melody.json 的 source，旋律谱校验对照同一条（改了这一项要重跑 --steps melody）
     """
     slug: str
     title: str
@@ -87,6 +89,16 @@ class SongConfig:
     overrides: dict = field(default_factory=dict)
     sections: dict = field(default_factory=dict)  # {小节号(1-based): 段落名}
     thresholds: Thresholds = Thresholds()
+
+
+def melody_source(value, where: str = "overrides.melody_source") -> str:
+    """旋律识别用的分轨名（MELODY_SOURCES 之一），None 取默认 "lead"。analyze 的 melody 步骤（song.yaml 的
+    overrides.melody_source）与 verify 选旋律谱对照的分轨（melody.json 的 source）共用这一份校验；where 写进报错。"""
+    if value is None:
+        return "lead"
+    if value not in MELODY_SOURCES:
+        raise ValueError(f'{where} must be "lead" or "vocals", got {value!r}')
+    return value
 
 
 def load_profile(name: str) -> Profile:

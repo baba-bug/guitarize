@@ -37,6 +37,21 @@ def test_verify_flags_problem_bar_with_snippet(demo_song):
     assert "### 第 2 小节" in report and "参考 D" in report
 
 
+def test_verify_snippets_for_strum_stop_at_the_cap(demo_song, monkeypatch):
+    # 弹唱 / 指弹：只有前 MAX_SNIPPETS 个问题小节出试听片段和色度图（旋律谱不截断，见 test_verify_melody）
+    from guitarize.verify import report
+
+    ls = json.loads(demo_song.leadsheet_json.read_text(encoding="utf-8"))
+    for i in (1, 3):
+        ls["bars"][i]["chords"] = [{"beat": 1, "dur_beats": 4, "label": "D", "confidence": "high"}]
+    demo_song.leadsheet_json.write_text(json.dumps(ls), encoding="utf-8")
+    monkeypatch.setattr(report, "MAX_SNIPPETS", 1)
+    main(["--songs-dir", str(demo_song.root.parent), "verify", "demo", "--arr", "strum"])
+    it = demo_song.report_root("strum") / "iter-01"
+    assert json.loads((it / "scores.json").read_text(encoding="utf-8"))["problems"] == [2, 4]
+    assert sorted(p.name for p in (it / "snippets").iterdir()) == ["bar-002_synth.wav"]
+
+
 def test_verify_without_reference_is_not_a_pass(demo_song):
     demo_song.leadsheet_json.unlink()
     assert main(["--songs-dir", str(demo_song.root.parent), "verify", "demo", "--arr", "strum"]) == 0

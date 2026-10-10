@@ -1,4 +1,5 @@
 import copy
+import json
 
 import numpy as np
 import pytest
@@ -608,9 +609,14 @@ def test_melody_step_reads_the_lead_vocal(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "extract_melody", lambda wav, bj, pcs, **kw: used.append(wav) or {"grid": "sixteenth", "notes": []})
     pipeline.run_analysis(paths, cfg, ["melody"])
     assert used[-1] == paths.stem("lead") and paths.stem("lead").exists()
+    assert json.loads(paths.melody_json.read_text(encoding="utf-8"))["source"] == "lead"   # 校验据此选对照的分轨
     cfg2 = dataclasses.replace(cfg, overrides={**cfg.overrides, "melody_source": "vocals"})
     pipeline.run_analysis(paths, cfg2, ["melody"])
     assert used[-1] == paths.stem("vocals")
+    assert json.loads(paths.melody_json.read_text(encoding="utf-8"))["source"] == "vocals"
+    cfg3 = dataclasses.replace(cfg, overrides={**cfg.overrides, "melody_source": "mix"})
+    with pytest.raises(ValueError, match=r'overrides\.melody_source must be "lead" or "vocals", got \'mix\''):
+        pipeline.run_analysis(paths, cfg3, ["melody"])
 
 
 # ---------- overrides.melody：人耳纠正的旋律，在 leadsheet 步骤套用 ----------
@@ -663,6 +669,20 @@ def test_melody_override_errors_name_the_bar(raw, bar, what):
         build_leadsheet(beats, chords, melody, ("C", "major"), {}, None, raw)
     msg = str(e.value)
     assert msg.startswith(f"overrides.melody bar {bar}") and what in msg, msg
+
+
+@pytest.mark.parametrize("text, what", [("[[.nan, 1, C4]]", "beat must be a finite number, got nan"),
+                                        ("[[1, .inf, C4]]", "duration must be a finite number, got inf"),
+                                        ("[[-.inf, 1, C4]]", "beat must be a finite number, got -inf")])
+def test_melody_override_nan_and_inf_name_the_bar(text, what):
+    # YAML 的 .nan / .inf 是合法的浮点数：报错要指出小节，而不是取整时冒出一个不知在哪的 ValueError / OverflowError
+    import yaml
+
+    beats, chords, melody = _four_bar_inputs()
+    with pytest.raises(ValueError) as e:
+        build_leadsheet(beats, chords, melody, ("C", "major"), {}, None, yaml.safe_load(f"2: {text}"))
+    msg = str(e.value)
+    assert msg.startswith("overrides.melody bar 2") and what in msg, msg
 
 
 def test_melody_overrides_must_be_a_mapping():

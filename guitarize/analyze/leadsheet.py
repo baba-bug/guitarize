@@ -117,6 +117,8 @@ def _twelfths(x: float) -> int:
 def _number(bar: int, x, what: str) -> float:
     if isinstance(x, bool) or not isinstance(x, (int, float)):
         raise ValueError(f"overrides.melody bar {bar}: {what} must be a number, got {x!r}")
+    if not math.isfinite(x):   # YAML 的 .nan / .inf
+        raise ValueError(f"overrides.melody bar {bar}: {what} must be a finite number, got {x!r}")
     return float(x)
 
 

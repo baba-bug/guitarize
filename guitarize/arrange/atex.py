@@ -1,6 +1,7 @@
 """alphaTex 文本生成：时值拆分、拍子记号、三连音拍、Shuffle 八分对切分、文件头、小节行、多声部文档。"""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Iterable, Sequence
 
@@ -107,10 +108,19 @@ def split_triplets(items: Sequence[Item]) -> list[Item]:
     return out
 
 
+def rest_cuts(start: float, end: float) -> list[float]:
+    """Shuffle 下一段休止 [start, end) 的切点：从拍中间开始的，在下一条拍线处切开（本拍余下的部分单独成一个休止，
+    拍点八分后面的反拍休止就是八分，两者成对，前面的音才按 shuffle 演奏）；结束在拍中间的，在最后一条拍线处切开。
+    中间从拍点开始的整拍照旧合并（r.2、r.1）：除此之外没有休止跨过拍线。"""
+    head, tail = math.ceil(start - 1e-6), math.floor(end + 1e-6)
+    return sorted({float(x) for x in (head, tail) if start + 1e-6 < x < end - 1e-6})
+
+
 def split_for_swing(items: Sequence[Item], feel: str) -> list[tuple[Item, bool]]:
     """三连音感觉下 alphaTab 只把"拍点八分 + 紧接的八分"按 shuffle 演奏。
     对每个发声的反拍起音 p（连音线延续不是起音），在 p−0.5、p、p+0.5 处切分覆盖这些位置的音符/休止，
-    使其成为八分对的第二个八分。三连音拍里的片段（tuplet）既不是反拍起音、也不切：alphaTab 只让普通八分成对，
+    使其成为八分对的第二个八分；休止另在 rest_cuts 处切开（拍点八分后面跨拍的反拍休止先写成一个八分，与它成对）。
+    三连音拍里的片段（tuplet）既不是反拍起音、也不切：alphaTab 只让普通八分成对，
     三连音拍照记谱演奏、也不会与前后的八分凑成一对（切点都在拍线或普通拍里，碰不到三连音拍）。
     返回 (片段, 是否为前一片段的延续)；直拍原样返回。"""
     if feel != "shuffle":
@@ -124,7 +134,8 @@ def split_for_swing(items: Sequence[Item], feel: str) -> list[tuple[Item, bool]]
         if it.tuplet:
             out.append((it, False))
             continue
-        inner = sorted(c for c in cuts if it.start + 1e-6 < c < it.start + it.length - 1e-6)
+        own = rest_cuts(it.start, it.start + it.length) if not it.notes else []
+        inner = sorted(c for c in cuts.union(own) if it.start + 1e-6 < c < it.start + it.length - 1e-6)
         edges = [it.start, *inner, it.start + it.length]
         for k, (a, b) in enumerate(zip(edges, edges[1:])):
             out.append((Item(a, b - a, it.notes, list(it.effects) if k == 0 else [], it.dead, it.tie), k > 0))
