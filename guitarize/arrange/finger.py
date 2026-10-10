@@ -53,8 +53,13 @@ def skeleton_notes(leadsheet: dict, profile: Profile) -> list[tuple[float, int]]
     feel = leadsheet.get("feel", "straight")
     at: dict[float, int] = {}
     for m, keep in zip(notes, mask):
-        if keep:
-            at.setdefault(written_position(m["start_beats"], feel), m["midi"])
+        if not keep:
+            continue
+        pos = written_position(m["start_beats"], feel)
+        if pos in at and pos + 0.5 not in at and m["dur_beats"] >= 1 - EPS:
+            pos += 0.5   # 长音与前一个音落在同一个八分位（如 B3 后紧跟进副歌的长音 F#4）：顺延半拍，两个都保留；
+            #             短的三连音经过音照旧丢掉（顺延会让它比原唱晚 1/3 拍）
+        at.setdefault(pos, m["midi"])
     out, per_beat = [], {}
     for pos in sorted(at):
         beat = int(pos)
@@ -131,6 +136,18 @@ def bass_events(leadsheet: dict, capo: int, profile: Profile) -> list[tuple[floa
     return out
 
 
+def _split_at_bars(items: list[tuple[float, float, list, bool]]) -> list[tuple[float, float, list, bool]]:
+    """跨小节线的音在小节线处切开，后半段写成连音线延续（有音时）或休止。"""
+    out = []
+    for pos, dur, notes, tie in items:
+        while dur > EPS:
+            bar_end = (int(round(pos, 6) // 4) + 1) * 4.0
+            part = min(dur, bar_end - pos)
+            out.append((pos, part, notes, tie))
+            pos, dur, tie = bar_end, dur - part, bool(notes)
+    return out
+
+
 def _voice_lines(n_bars: int, items: list[tuple[float, float, list, bool]], sections: list[str | None],
                  feel: str, effects: dict[float, list[str]] | None = None) -> list[str]:
     """items：(记谱位置, 时值, [(弦, 品)], 是否连音线延续)（见 Placed.pieces）；按小节铺满（空隙补休止），
@@ -138,8 +155,8 @@ def _voice_lines(n_bars: int, items: list[tuple[float, float, list, bool]], sect
     （休止在这些位置切开，保证有一拍从这里开始）。"""
     marks = {round(k, 6): v for k, v in (effects or {}).items()}
     by_bar: dict[int, list] = {}
-    for item in sorted(items, key=lambda x: x[0]):
-        by_bar.setdefault(int(item[0] // 4), []).append(item)
+    for item in sorted(_split_at_bars(items), key=lambda x: x[0]):
+        by_bar.setdefault(int(round(item[0], 6) // 4), []).append(item)
     lines = []
     for i in range(n_bars):
         t, end, bar_items = i * 4.0, i * 4.0 + 4.0, []
@@ -251,7 +268,8 @@ def _cut_note(it: Placed, k: int, t: float) -> None:
 
 def cut_same_string(v1: list[Placed], v2: list[Placed]) -> list[tuple[float, str]]:
     """同一根弦不能一边按住一边再弹：低音 / 填充持续期间有旋律音弹在它的弦上 → 只截这根弦上的音（"fill cut" /
-    "bass cut"），另一个音接着响（写成连音线延续）；旋律音持续期间有低音 / 填充弹在它的弦上 → 旋律截止到该处。
+    "bass cut"），另一个音接着响（写成连音线延续）；旋律音持续期间有低音 / 填充弹在它的弦上：
+    是填充 → 去掉该填充（旋律 > 低音 > 填充，进副歌的长音不能被填充截断）；是低音 → 旋律截止到该处。
     返回 (记谱位置, 说明)。"""
     out = []
     for it in v2:
@@ -263,7 +281,12 @@ def cut_same_string(v1: list[Placed], v2: list[Placed]) -> list[tuple[float, str
                 _cut_note(it, k, hit)
                 out.append((hit, f"{name} {_at(hit)} (same string)"))
     for it in v1:
-        hit = min((o.pos for o in v2 if it.holds(o.pos) and _strings(it) & _strings(o)), default=None)
+        mine = _strings(it)
+        for o in sorted(v2, key=lambda o: o.pos):
+            if it.holds(o.pos) and o.where[0] is not None and o.where[0][0] in mine:
+                o.where[0] = None
+                out.append((o.pos, f"drop fill {_at(o.pos)} (same string)"))
+        hit = min((o.pos for o in v2 if it.holds(o.pos) and mine & _strings(o)), default=None)
         if hit is not None:
             it.cut(hit)
             out.append((hit, f"melody cut {_at(hit)} (same string)"))
@@ -479,7 +502,7 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
     items = []
     for j, (pos, p) in enumerate(mel):
         nxt = mel[j + 1][0] if j + 1 < len(mel) else pos + MAX_MELODY_NOTE
-        items.append((pos, min(nxt, pos + MAX_MELODY_NOTE, (int(pos // 4) + 1) * 4.0) - pos, p))
+        items.append((pos, min(nxt, pos + MAX_MELODY_NOTE, n_bars * 4.0) - pos, p))   # 可以跨小节线（连音线）
     bass = bass_events(leadsheet, capo, profile)
     m_at = {pos: p for pos, _, p in items}
     b_at = {pos: (p, place_fill(fill_pc, p, melody_floor(items, pos, dur))) for pos, dur, p, fill_pc in bass}

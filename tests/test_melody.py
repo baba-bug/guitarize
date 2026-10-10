@@ -140,3 +140,20 @@ def test_merge_glides_fall_off_ends_where_glide_ended():
     # 前一个音的终点与滑音起点只在 1e-3 容差内相接：合并后的终点取滑音的终点，而不是两段时值相加
     got = merge_glides([N(2.0, 0.6667, 66), N(2.6663, 0.3337, 67, True), N(3.0, 1.0, 71)])
     assert _sd(got) == [(2.0, 1.0, 66), (3.0, 1.0, 71)]
+
+
+def _n(start, dur, midi, conf=0.8, ook=False):
+    return {"start_beats": start, "dur_beats": dur, "midi": midi, "out_of_key": ook, "conf": conf}
+
+
+def test_fill_gaps_adds_confident_stable_notes_only_where_the_main_track_is_silent():
+    # なんもねえ 第 1 小节：平滑（Viterbi）解码把 F#4→B3→F#4 的短促大跳抹成无声；逐帧解码那里有稳定的 B3
+    from guitarize.analyze.melody import fill_gaps
+    main = [_n(2.0, 1.0, 66), _n(3.3333, 0.3333, 66)]
+    alt = [_n(2.0, 1.0, 66), _n(3.0, 0.3333, 59, conf=0.76), _n(4.0, 0.3333, 64, conf=0.65),
+           _n(5.0, 0.3333, 62, conf=0.9)]
+    stable = {3.0: True, 4.0: True, 5.0: False}
+    out = fill_gaps(main, alt, lambda n: stable[n["start_beats"]])
+    assert [(n["start_beats"], n["midi"]) for n in out] == [(2.0, 66), (3.0, 59), (3.3333, 66)]
+    # 与主音轨重叠的不补；主音轨不变、输入不被修改
+    assert fill_gaps(main, [_n(2.5, 0.3333, 59, conf=0.95)], lambda n: True) == main

@@ -91,11 +91,12 @@ def test_cut_same_string_lone_fill_cuts_the_item():
     assert v2[0].dur == 1.0 and v2[0].pieces() == [(0.0, 1.0, [(2, 0)], False)]
 
 
-def test_cut_same_string_melody_over_new_bass():
+def test_cut_same_string_melody_over_new_fill():
+    # 第 3 拍新和弦的填充弹在旋律长音那根弦上：去掉填充，旋律接着响（以前是截旋律）
     v1 = [Placed(0.0, 4.0, [(3, 2)])]
     v2 = [Placed(0.0, 2.0, [None, (6, 3)]), Placed(2.0, 2.0, [(3, 0), (5, 3)])]
-    assert cut_same_string(v1, v2) == [(2.0, "melody cut @3 (same string)")]
-    assert v1[0].dur == 2.0 and v2[0].dur == 2.0
+    assert cut_same_string(v1, v2) == [(2.0, "drop fill @3 (same string)")]
+    assert v1[0].dur == 4.0 and v2[1].where == [None, (5, 3)]
 
 
 def test_annotate_appends_to_bar_comment():
@@ -200,3 +201,18 @@ def test_shift_already_fixed_this_round_is_not_repaired_again():
     v2 = [Placed(1.0, 1.0, [(3, 2), (5, 3)])]
     assert repair(v1, v2, [V(2.0, "shift")], "straight", 12, max_shift=4) == []
     assert v2[0].where == [(3, 2), (5, 3)] and v2[0].dur == 1.0
+
+
+def test_held_melody_beats_a_fill_on_its_string():
+    # 进副歌的长音（2 弦 3 品）还在响，下一拍的填充音要弹同一根弦：去掉填充，旋律不截（旋律 > 低音 > 填充）
+    v1 = [Placed(0.0, 3.0, [(2, 3)])]
+    v2 = [Placed(2.0, 2.0, [(2, 0), (6, 3)])]
+    assert cut_same_string(v1, v2) == [(2.0, "drop fill @3 (same string)")]
+    assert v1[0].dur == 3.0 and v2[0].where == [None, (6, 3)]
+
+
+def test_held_melody_still_yields_to_a_bass_on_its_string():
+    v1 = [Placed(0.0, 3.0, [(5, 3)])]
+    v2 = [Placed(2.0, 2.0, [None, (5, 0)])]
+    assert cut_same_string(v1, v2) == [(2.0, "melody cut @3 (same string)")]
+    assert v1[0].dur == 2.0

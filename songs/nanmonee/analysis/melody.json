@@ -16,18 +16,18 @@
    "conf": 0.628
   },
   {
-   "start_beats": 3.3333,
-   "dur_beats": 0.3334,
-   "midi": 66,
+   "start_beats": 3.0,
+   "dur_beats": 0.3333,
+   "midi": 59,
    "out_of_key": false,
-   "conf": 0.605
+   "conf": 0.76
   },
   {
-   "start_beats": 3.6667,
-   "dur_beats": 1.0,
+   "start_beats": 3.3333,
+   "dur_beats": 1.3334,
    "midi": 66,
    "out_of_key": false,
-   "conf": 0.762
+   "conf": 0.736
   },
   {
    "start_beats": 6.0,
@@ -277,8 +277,8 @@
   {
    "start_beats": 29.6667,
    "dur_beats": 0.3333,
-   "midi": 61,
-   "out_of_key": false,
+   "midi": 62,
+   "out_of_key": true,
    "conf": 0.55
   },
   {
@@ -521,7 +521,14 @@
   },
   {
    "start_beats": 60.6667,
-   "dur_beats": 0.6666,
+   "dur_beats": 0.3333,
+   "midi": 61,
+   "out_of_key": false,
+   "conf": 0.797
+  },
+  {
+   "start_beats": 61.0,
+   "dur_beats": 0.3333,
    "midi": 61,
    "out_of_key": false,
    "conf": 0.795
@@ -584,7 +591,14 @@
   },
   {
    "start_beats": 69.6667,
-   "dur_beats": 0.6666,
+   "dur_beats": 0.3333,
+   "midi": 61,
+   "out_of_key": false,
+   "conf": 0.726
+  },
+  {
+   "start_beats": 70.0,
+   "dur_beats": 0.3333,
    "midi": 59,
    "out_of_key": false,
    "conf": 0.456
@@ -1312,14 +1326,14 @@
   },
   {
    "start_beats": 154.0,
-   "dur_beats": 0.6667,
+   "dur_beats": 1.0,
    "midi": 68,
    "out_of_key": false,
-   "conf": 0.794
+   "conf": 0.795
   },
   {
-   "start_beats": 154.6667,
-   "dur_beats": 1.6666,
+   "start_beats": 155.0,
+   "dur_beats": 1.3333,
    "midi": 68,
    "out_of_key": false,
    "conf": 0.92
@@ -1683,17 +1697,10 @@
   },
   {
    "start_beats": 197.6667,
-   "dur_beats": 0.3333,
+   "dur_beats": 0.6666,
    "midi": 68,
    "out_of_key": false,
    "conf": 0.847
-  },
-  {
-   "start_beats": 198.0,
-   "dur_beats": 0.3333,
-   "midi": 66,
-   "out_of_key": false,
-   "conf": 0.915
   },
   {
    "start_beats": 198.3333,
@@ -1837,14 +1844,14 @@
   },
   {
    "start_beats": 213.6667,
-   "dur_beats": 0.3333,
+   "dur_beats": 0.6666,
    "midi": 68,
    "out_of_key": false,
-   "conf": 0.87
+   "conf": 0.873
   },
   {
-   "start_beats": 214.0,
-   "dur_beats": 0.6667,
+   "start_beats": 214.3333,
+   "dur_beats": 0.3334,
    "midi": 66,
    "out_of_key": false,
    "conf": 0.655
@@ -1862,6 +1869,13 @@
    "midi": 71,
    "out_of_key": false,
    "conf": 0.432
+  },
+  {
+   "start_beats": 215.3333,
+   "dur_beats": 0.3334,
+   "midi": 64,
+   "out_of_key": false,
+   "conf": 0.805
   },
   {
    "start_beats": 215.6667,
@@ -1893,14 +1907,14 @@
   },
   {
    "start_beats": 217.6667,
-   "dur_beats": 1.0,
+   "dur_beats": 1.3333,
    "midi": 63,
    "out_of_key": false,
-   "conf": 0.925
+   "conf": 0.911
   },
   {
-   "start_beats": 218.6667,
-   "dur_beats": 1.0,
+   "start_beats": 219.0,
+   "dur_beats": 0.6667,
    "midi": 63,
    "out_of_key": false,
    "conf": 0.896
@@ -2026,14 +2040,7 @@
   },
   {
    "start_beats": 245.0,
-   "dur_beats": 0.3333,
-   "midi": 73,
-   "out_of_key": false,
-   "conf": 0.568
-  },
-  {
-   "start_beats": 245.3333,
-   "dur_beats": 0.3334,
+   "dur_beats": 0.6667,
    "midi": 71,
    "out_of_key": false,
    "conf": 0.61

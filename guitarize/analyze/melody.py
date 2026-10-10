@@ -17,7 +17,10 @@ GLIDE_MAX_SEMITONES = 2
 OUT_OF_KEY_GUARD = 0.3   # 调外音比例超过它 → 调性多半错了，不做滑音合并
 
 
-def vocal_pitch(vocals_wav: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def vocal_pitch(vocals_wav: Path, decoder: str = "viterbi",
+                voiced_periodicity: float = VOICED_PERIODICITY) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """人声基频（帧时间, MIDI 浮点音高或 nan, 周期性）。decoder："viterbi"（平滑，整体稳定，但会把很短的大跳
+    抹成无声）或 "weighted_argmax"（逐帧，保留短促的音，抖动也多）。"""
     import librosa
     import torch
     import torchcrepe
@@ -25,12 +28,13 @@ def vocal_pitch(vocals_wav: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     y, _ = librosa.load(str(vocals_wav), sr=SR, mono=True)
     device = "mps" if torch.backends.mps.is_available() else "cpu"
     f0, per = torchcrepe.predict(torch.tensor(y)[None], SR, HOP, 65.0, 1000.0, "full",
+                                 decoder=getattr(torchcrepe.decode, decoder),
                                  return_periodicity=True, batch_size=1024, device=device)
     f0 = f0[0].cpu().numpy()
     per = torchcrepe.filter.median(per.cpu(), 3)[0].numpy()
     rms = librosa.feature.rms(y=y, frame_length=1024, hop_length=HOP)[0][: len(f0)]
     rms = np.pad(rms, (0, len(f0) - len(rms)))
-    voiced = (per > VOICED_PERIODICITY) & (rms > 0.02 * rms.max())
+    voiced = (per > voiced_periodicity) & (rms > 0.02 * rms.max())
     midi = np.where(voiced, 69 + 12 * np.log2(np.maximum(f0, 1e-6) / 440.0), np.nan)
     return np.arange(len(f0)) * HOP / SR, midi, per
 
@@ -134,13 +138,41 @@ def tidy_notes(notes: list[dict]) -> list[dict]:
     return merge_glides(notes)
 
 
+FILL_PERIODICITY = 0.6    # 补空隙用的逐帧音轨的有声阈值
+FILL_CONF = 0.7           # 补进来的音平均周期性至少这么高
+FILL_MAX_STD = 0.5        # 且音高稳定（帧间标准差 < 半个半音；滑音不算）
+
+
+def fill_gaps(main: list[dict], alt: list[dict], stable) -> list[dict]:
+    """main：Viterbi 解码量化出的音（平滑可靠，但会把短促的大跳抹成无声，如 なんもねえ 第 1 小节的 B3）；
+    alt：逐帧解码量化出的音。只把落在 main 空隙里（与 main 任何音都不重叠）、平均周期性 ≥ FILL_CONF、
+    且 stable(音) 为真的 alt 音补进来。返回按开始时间排好的新列表，不修改输入。"""
+    def overlaps(n: dict) -> bool:
+        a, b = n["start_beats"], n["start_beats"] + n["dur_beats"]
+        return any(m["start_beats"] < b - 1e-6 and m["start_beats"] + m["dur_beats"] > a + 1e-6 for m in main)
+
+    extra = [dict(n) for n in alt if n["conf"] >= FILL_CONF and not overlaps(n) and stable(n)]
+    return sorted([dict(n) for n in main] + extra, key=lambda n: n["start_beats"])
+
+
 def extract_melody(vocals_wav: Path, beats_json: dict, key_pcs: set[int]) -> dict:
     import librosa
 
-    times, midi, per = vocal_pitch(vocals_wav)
     y, _ = librosa.load(str(vocals_wav), sr=SR, mono=True)
-    onsets = librosa.onset.onset_detect(y=y, sr=SR, hop_length=HOP, units="time")
+    onsets = time_to_beat(beats_json, librosa.onset.onset_detect(y=y, sr=SR, hop_length=HOP, units="time"))
     slot = 1 / 3 if beats_json.get("feel") == "shuffle" else 1 / 4
-    notes = quantize(time_to_beat(beats_json, times), midi, per, time_to_beat(beats_json, onsets), key_pcs, slot)
-    notes = tidy_notes(notes)
+    times, midi, per = vocal_pitch(vocals_wav)
+    beat_pos = time_to_beat(beats_json, times)
+    main = quantize(beat_pos, midi, per, onsets, key_pcs, slot)
+    times_w, midi_w, per_w = vocal_pitch(vocals_wav, "weighted_argmax", FILL_PERIODICITY)
+    beat_w = time_to_beat(beats_json, times_w)
+    alt = quantize(beat_w, midi_w, per_w, onsets, key_pcs, slot)
+
+    def stable(n: dict) -> bool:
+        m = (beat_w >= n["start_beats"]) & (beat_w < n["start_beats"] + n["dur_beats"])
+        v = midi_w[m]
+        v = v[~np.isnan(v)]
+        return len(v) >= 4 and float(np.std(v)) < FILL_MAX_STD
+
+    notes = tidy_notes(fill_gaps(main, alt, stable))
     return {"grid": "triplet8" if slot == 1 / 3 else "sixteenth", "notes": notes}

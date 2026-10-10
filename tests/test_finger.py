@@ -251,3 +251,20 @@ def test_every_bar_shows_its_chord_shape():
     assert marks == {0.0: "C", 4.0: "C", 8.0: "C"}
     text = generate_finger(ls, 0, MID, "T")
     assert text.count('ch "C"') == 3
+
+
+def test_skeleton_keeps_both_notes_that_land_on_the_same_eighth():
+    # なんもねえ 第 1 小节：B3（第 3 拍，1/3 拍）后紧跟长音 F#4（3+1/3）——Shuffle 记谱都落在第 3 拍；
+    # 后一个顺延到下一个空着的八分位，不能丢掉进副歌的长音
+    ls = _sheet([_bar(0, None, "N", [(1 + 2 / 3, 1 / 3, 66), (2, 1, 66), (3, 1 / 3, 59), (3 + 1 / 3, 4 / 3, 66)])],
+                feel="shuffle")
+    assert skeleton_notes(ls, MID) == [(1.5, 66), (2.0, 66), (3.0, 59), (3.5, 66)]
+
+
+def test_held_melody_note_ties_across_the_bar_line():
+    # 拍 3.5 起的长音唱到下一小节：写成连音线延续，下一小节不能以休止开头
+    ls = _sheet([_bar(0, None, "N", [(3.5, 2.0, 67)]), _bar(1, None, "N", [(2, 2, 69)])])
+    text = generate_finger(ls, 0, MID, "T")
+    v1 = text.split("\\voice")[1]
+    bar2 = v1.split("// bar 2\n")[1].splitlines()[0]
+    assert _plain(bar2).startswith("-.")
