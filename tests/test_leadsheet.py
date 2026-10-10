@@ -1,4 +1,5 @@
 import copy
+import json
 
 import numpy as np
 import pytest
@@ -608,9 +609,14 @@ def test_melody_step_reads_the_lead_vocal(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "extract_melody", lambda wav, bj, pcs, **kw: used.append(wav) or {"grid": "sixteenth", "notes": []})
     pipeline.run_analysis(paths, cfg, ["melody"])
     assert used[-1] == paths.stem("lead") and paths.stem("lead").exists()
+    assert json.loads(paths.melody_json.read_text(encoding="utf-8"))["source"] == "lead"   # 校验据此选对照的分轨
     cfg2 = dataclasses.replace(cfg, overrides={**cfg.overrides, "melody_source": "vocals"})
     pipeline.run_analysis(paths, cfg2, ["melody"])
     assert used[-1] == paths.stem("vocals")
+    assert json.loads(paths.melody_json.read_text(encoding="utf-8"))["source"] == "vocals"
+    cfg3 = dataclasses.replace(cfg, overrides={**cfg.overrides, "melody_source": "mix"})
+    with pytest.raises(ValueError, match=r'overrides\.melody_source must be "lead" or "vocals", got \'mix\''):
+        pipeline.run_analysis(paths, cfg3, ["melody"])
 
 
 # ---------- overrides.melody：人耳纠正的旋律，在 leadsheet 步骤套用 ----------

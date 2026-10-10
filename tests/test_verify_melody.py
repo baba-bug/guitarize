@@ -274,3 +274,20 @@ def test_melody_is_checked_against_the_stem_it_was_transcribed_from(tmp_path):
     assert melody_reference(paths, {}) == paths.stem("lead")
     assert melody_reference(paths, {"melody_source": "lead"}) == paths.stem("lead")
     assert melody_reference(paths, {"melody_source": "vocals"}) == paths.stem("vocals")
+    with pytest.raises(ValueError, match=r'overrides\.melody_source must be "lead" or "vocals"'):
+        melody_reference(paths, {"melody_source": "mix"})
+    # melody.json 记着旋律是从哪条分轨识别的（melody 步骤写的 "source"）：以它为准，不看 song.yaml 现在怎么写
+    paths.melody_json.write_text(json.dumps({"notes": [], "source": "vocals"}), encoding="utf-8")
+    assert melody_reference(paths, {}) == paths.stem("vocals")
+    assert melody_reference(paths, {"melody_source": "lead"}) == paths.stem("vocals")
+    paths.melody_json.write_text(json.dumps({"notes": [], "source": "lead"}), encoding="utf-8")
+    assert melody_reference(paths, {"melody_source": "vocals"}) == paths.stem("lead")
+    paths.stem("lead").unlink()                                 # lead.wav 不在了：退回整条人声
+    assert melody_reference(paths, {}) == paths.stem("vocals")
+    paths.melody_json.write_text(json.dumps({"notes": [], "source": "mix"}), encoding="utf-8")
+    with pytest.raises(ValueError, match=r'melody\.json source must be "lead" or "vocals", got \'mix\''):
+        melody_reference(paths, {})
+    paths.melody_json.write_text(json.dumps({"notes": []}), encoding="utf-8")   # 旧的 melody.json：按 song.yaml
+    paths.stem("lead").write_bytes(b"RIFF")
+    assert melody_reference(paths, {"melody_source": "vocals"}) == paths.stem("vocals")
+    assert melody_reference(paths, {}) == paths.stem("lead")

@@ -13,7 +13,7 @@ import numpy as np
 import soundfile as sf
 
 from .. import theory
-from ..config import ARR_NAMES, SongConfig, load_profile
+from ..config import ARR_NAMES, SongConfig, load_profile, melody_source
 from ..paths import SongPaths
 from ..render import alphatab
 from ..render.synth import midi_to_wav
@@ -43,12 +43,14 @@ def _load_json(path: Path) -> dict | None:
 
 
 def melody_reference(paths: SongPaths, overrides: dict) -> Path:
-    """旋律谱对照的人声：识别旋律用的那条分轨。默认居中的主唱 stems/lead.wav（去掉了左右的伴唱）；
-    overrides.melody_source: vocals、或还没有 lead.wav 时用整条人声 stems/vocals.wav。"""
+    """旋律谱对照的人声：识别旋律用的那条分轨。melody.json 记着它（melody 步骤写的 source），以它为准；
+    没有记（旧的 melody.json、还没跑 melody 步骤）时按 overrides.melody_source（默认 lead）。
+    lead 是居中的主唱 stems/lead.wav（去掉了左右的伴唱）；vocals、或 lead.wav 不在时用整条人声 stems/vocals.wav。"""
+    recorded = (_load_json(paths.melody_json) or {}).get("source")
+    source = (melody_source(recorded, "melody.json source") if recorded is not None
+              else melody_source(overrides.get("melody_source")))
     lead = paths.stem("lead")
-    if overrides.get("melody_source", "lead") == "lead" and lead.exists():
-        return lead
-    return paths.stem("vocals")
+    return lead if source == "lead" and lead.exists() else paths.stem("vocals")
 
 
 def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
@@ -58,7 +60,7 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
     synth = midi_to_wav(built["mid"], paths.build(arr, "wav"))
     violations = check_playability(score, profile, arr)
     leadsheet = _load_json(paths.leadsheet_json)
-    vocals = melody_reference(paths, cfg.overrides)
+    vocals = melody_reference(paths, cfg.overrides) if arr == "melody" else None   # 只有旋律谱对照人声
     bars = metrics.score_bars(score, leadsheet, arr, synth_wav=synth, harmonic_wav=paths.stem("harmonic"),
                               onset_wavs=(paths.stem("drums"), paths.stem("guitar")), vocal_wav=vocals,
                               low_conf=cfg.thresholds.melody_conf_flag)
