@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..config import Profile, SongConfig, finger_style, load_profile
+from ..config import Profile, SongConfig, finger_bass, finger_style, load_profile
 from ..paths import SongPaths
 from ..render import alphatab
 from ..render.alphatab import AlphaTexError
@@ -113,7 +113,7 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
         text = generate_melody(leadsheet, chosen.capo, profile, cfg.title, check=check, octave=octave)
     else:
         text = generate_finger(leadsheet, chosen.capo, profile, cfg.title, check=check, octave=octave,
-                               style=finger_style(cfg.overrides))
+                               style=finger_style(cfg.overrides), bass=finger_bass(cfg.overrides))
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
     return target, chosen, result(text)

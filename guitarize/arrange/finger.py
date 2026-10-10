@@ -2,8 +2,8 @@
 
 - full（默认，"旋律优先"）：voice 1 是旋律谱的每一个音（melody.melody_line：同样的起音、时值、三连音、连音线、
   八度移位，连奏 / 尾滑在同一根弦上时同样写 h / sl / sod / sou；只有指法可以不同，让左手按着和弦指型）。
-  voice 2 是低音与合音：第 1 拍弹和弦的低音（斜杠和弦弹斜杠低音），第 3 拍换和弦弹新低音、不换弹五音
-  （交替低音，Shuffle 的 boom-chick；五音放不下换根音），低音响到下一个低音；第 2、4 拍旋律没有正好在拍上起音时
+  voice 2 是低音与合音：第 1 拍弹和弦的低音（斜杠和弦弹斜杠低音），第 3 拍换和弦弹新低音、不换再弹根音
+  （overrides.finger_bass: alternate 时弹五音 = 交替低音；五音放不下换根音），低音响到下一个低音；第 2、4 拍旋律没有正好在拍上起音时
   弹两个和弦内音的短音（STAB：Shuffle 一个三连音八分），在低音之上、比附近的旋律至少低 3 个半音；
   拍上 / 摇摆反拍起音、唱满 1 拍的旋律长音下面加一个低 3–9 个半音的和弦内音（双音，优先三度、六度）。
   合音一律可丢：Viterbi 里放不下就不取，自检违规时先丢合音，旋律和低音从不为合音让路；旋律的音高、时值也从不修改。
@@ -209,10 +209,11 @@ def _fifth(label: str) -> int:
     return (root + {"dim": 6, "min7b5": 6, "aug": 8}.get(quality, 7)) % 12
 
 
-def bass_line(leadsheet: dict, capo: int, profile: Profile) -> list[tuple[float, float, int, int | None]]:
+def bass_line(leadsheet: dict, capo: int, profile: Profile,
+              alternate: bool = False) -> list[tuple[float, float, int, int | None]]:
     """完整旋律指弹的低音 → [(位置, 时值, 指法调音高, 放不下时换的低音)]。第 1 拍弹和弦的低音（斜杠和弦弹斜杠低音）；
-    第 3 拍换和弦弹新和弦的低音；和弦不变且难度允许时弹五音（交替低音），五音放不下换根音（五音就是第 1 拍的低音时
-    直接弹根音）。每个低音响到下一个低音（第 3 拍没有低音时响满一小节，第 3 拍无和弦时响到第 3 拍）。"""
+    第 3 拍换和弦弹新和弦的低音；和弦不变且难度允许时再弹根音（alternate：弹五音 = 交替低音，五音放不下换根音；
+    五音就是第 1 拍的低音时直接弹根音）。每个低音响到下一个低音（第 3 拍没有低音时响满一小节，第 3 拍无和弦时响到第 3 拍）。"""
     out = []
     for i, b in enumerate(leadsheet["bars"]):
         chords = [c if c == "N" else theory.transpose_label(c, -capo) for c in beat_chords(b)]
@@ -221,7 +222,7 @@ def bass_line(leadsheet: dict, capo: int, profile: Profile) -> list[tuple[float,
         if first != "N":
             low, root = _bass_and_fill(first)[0], _low(_parse(first)[0])
             if third == first and profile.bass_on_beat3:
-                fifth = _low(_fifth(first))
+                fifth = _low(_fifth(first)) if alternate else root
                 out += [(start, 2.0, low, None),
                         (start + 2, 2.0, root, None) if fifth == low else (start + 2, 2.0, fifth, root)]
             else:
@@ -283,7 +284,7 @@ def _sounding_at(items: list[tuple[float, float, int, int | None]], t: float) ->
 
 
 def _full_voices(leadsheet: dict, capo: int, profile: Profile, octave: OctavePolicy,
-                 feel: str) -> tuple[list[Placed], list[Placed], list[Sung], list[tuple[float, str]]]:
+                 feel: str, bass_policy: str = "root") -> tuple[list[Placed], list[Placed], list[Sung], list[tuple[float, str]]]:
     """完整旋律的两个声部（见模块说明）→ (voice 1, voice 2, 旋律音（与 voice 1 一一对应）, 注释 [(记谱位置, 说明)])。
     每个起音时刻（旋律、低音、短音）一个 FretEvent；还在响的旋律音 / 低音作为接着响的音放进去（held_*），
     所以 Viterbi 不会把低音、合音放到旋律长音的弦上，旋律也尽量和响着的低音一起按得住。"""
@@ -291,7 +292,7 @@ def _full_voices(leadsheet: dict, capo: int, profile: Profile, octave: OctavePol
     n_bars = len(leadsheet["bars"])
     labels = [c if c == "N" else theory.transpose_label(c, -capo) for b in leadsheet["bars"] for c in beat_chords(b)]
     shapes = {c: _shape(c, profile) for c in set(labels)}
-    bass = bass_line(leadsheet, capo, profile)
+    bass = bass_line(leadsheet, capo, profile, alternate=bass_policy == "alternate")
     stab = STAB.get(feel, 0.5)
     attacks = {round(n.pos, 6): n for n in line}
     stabs = {round(i * 4.0 + k, 6) for i in range(n_bars) for k in (1, 3)
@@ -747,10 +748,11 @@ def _glides(line: list[Sung], v1: list[Placed]) -> dict[float, dict[int, list[st
 
 def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
                     check: Callable[[str], list[Violation]] | None = None, octave: OctavePolicy = "song",
-                    style: str = "full") -> str:
+                    style: str = "full", bass: str = "root") -> str:
     """check：自检（alphaTex → 违规列表）。给出时渲染后按违规修补、重新渲染，最多 10 轮。
     octave：旋律八度策略（song.yaml 的 overrides.melody_octave，见 capo.octave_plan）。
-    style：full（默认，完整旋律 + 交替低音 + 合音）/ skeleton（骨架旋律 + 低音与填充），见模块说明。
+    style：full（默认，完整旋律 + 低音 + 合音）/ skeleton（骨架旋律 + 低音与填充），见模块说明。
+    bass：full 时第 3 拍（和弦没换）的低音，root（默认）/ alternate（根-五交替），见 config.finger_bass。
     谱上标出该按的和弦指型（附和弦图）；旋律 f、伴奏 mf：试听时旋律稍突出（伴奏再轻会让与原曲器乐分轨的和声相似度下降）。"""
     if style not in FINGER_STYLES:
         raise ValueError(f"finger style must be one of {FINGER_STYLES}, got {style!r}")
@@ -759,7 +761,7 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
     n_bars = len(leadsheet["bars"])
     full = style == "full"
     if full:
-        v1, v2, line, found = _full_voices(leadsheet, capo, profile, octave, feel)
+        v1, v2, line, found = _full_voices(leadsheet, capo, profile, octave, feel, bass)
     else:
         (v1, v2, found), line = _skeleton_voices(leadsheet, capo, profile, octave), []
     remarks: dict[int, list[str]] = {}

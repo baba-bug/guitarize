@@ -426,20 +426,24 @@ def test_full_style_writes_the_sung_glides():
 
 
 def test_alternating_bass_on_beat_three():
-    # 和弦不变：第 3 拍弹五音（C → G2，放不下时换根音 C3）；斜杠和弦第 1 拍弹斜杠低音、第 3 拍弹五音；
+    # alternate：和弦不变时第 3 拍弹五音（C → G2，放不下时换根音 C3）；斜杠和弦第 1 拍弹斜杠低音、第 3 拍弹五音；
     # 换和弦弹新和弦的低音；初级（bass_on_beat3 = False）整小节一个低音
     ls = _sheet([_bar(0, None, "C", []), _bar(1, None, "G/B", []),
                  {**_bar(2, None, "C", []), "chords": [{"beat": 1, "dur_beats": 2, "label": "C", "confidence": "high"},
                                                        {"beat": 3, "dur_beats": 2, "label": "G", "confidence": "high"}]}])
-    assert finger.bass_line(ls, 0, MID) == [(0.0, 2.0, 48, None), (2.0, 2.0, 43, 48),
-                                            (4.0, 2.0, 47, None), (6.0, 2.0, 50, 43),
+    assert finger.bass_line(ls, 0, MID, alternate=True) == [(0.0, 2.0, 48, None), (2.0, 2.0, 43, 48),
+                                                            (4.0, 2.0, 47, None), (6.0, 2.0, 50, 43),
+                                                            (8.0, 2.0, 48, None), (10.0, 2.0, 43, None)]
+    # 默认（overrides.finger_bass: root）：第 3 拍再弹根音（斜杠和弦弹和弦的根音 G2）
+    assert finger.bass_line(ls, 0, MID) == [(0.0, 2.0, 48, None), (2.0, 2.0, 48, None),
+                                            (4.0, 2.0, 47, None), (6.0, 2.0, 43, 43),
                                             (8.0, 2.0, 48, None), (10.0, 2.0, 43, None)]
     assert finger.bass_line(ls, 0, load_profile("beginner"))[:2] == [(0.0, 4.0, 48, None), (4.0, 4.0, 47, None)]
 
 
 def test_alternating_bass_is_written_and_rings_to_the_next_bass(tmp_path):
     ls = _sheet([_bar(0, None, "C", [(0, 1, 64), (1, 1, 67), (2, 1, 64), (3, 1, 67)])])
-    score = _built(generate_finger(ls, 0, MID, "T"), tmp_path)
+    score = _built(generate_finger(ls, 0, MID, "T", bass="alternate"), tmp_path)
     basses = [(round(s.start, 4), round(s.end, 4), s.midi) for s in score.sounding() if s.voice == 1 and s.midi < 50]
     assert basses == [(0.0, 2.0, 48), (2.0, 4.0, 43)]
 
@@ -451,7 +455,7 @@ def test_backbeat_stab_only_where_the_melody_does_not_attack(tmp_path):
     text = generate_finger(ls, 0, MID, "T")
     score = _built(text, tmp_path)
     v2 = _voice2_attacks(score)
-    assert sorted(v2) == [0.0, 1.0, 2.0] and v2[0.0] == [48] and v2[2.0] == [43]
+    assert sorted(v2) == [0.0, 1.0, 2.0] and v2[0.0] == [48] and v2[2.0] == [48]
     stab = v2[1.0]
     assert len(stab) == 2 and all(p % 12 in (0, 4, 7) for p in stab) and max(stab) <= 64 - 3
     lows = [s for s in score.sounding() if s.voice == 1 and s.start == 1.0]
@@ -476,7 +480,7 @@ def test_double_stop_under_a_long_note_and_none_under_short_notes(tmp_path):
     v2 = _voice2_attacks(score)
     harmony = [p for p in v2[0.0] if p != 48]                    # 第 1 拍：低音 C3 + 一个双音
     assert len(harmony) == 1 and 64 - harmony[0] in (3, 4, 8, 9) and harmony[0] % 12 in (0, 4, 7)
-    assert v2[2.0] == [43]                                       # 第 3 拍的短音下面只有低音（五音 G2）
+    assert v2[2.0] == [48]                                       # 第 3 拍的短音下面只有低音（根音 C3）
     assert 2.5 not in v2 and 3.5 not in v2 and 3.0 not in v2
     assert check_playability(score, MID, "finger") == []
 

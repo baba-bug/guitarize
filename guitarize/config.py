@@ -75,8 +75,10 @@ class SongConfig:
     - melody_octave：指弹 / 旋律谱的旋律八度（arrange/capo.py 的 octave_plan）。默认 "song"：整曲一个移位，
       保持人声原有的高低关系；"section"：按段落各自选；整数（12 的倍数）：整曲固定移；{小节: 移位}：从该小节起移。
     - capo：指定变调夹（arrange）
-    - finger_style：指弹写法（arrange/finger.py）。默认 "full"：旋律谱的每一个音 + 交替低音 + 合音，verify 按全部参考音
+    - finger_style：指弹写法（arrange/finger.py）。默认 "full"：旋律谱的每一个音 + 低音 + 合音，verify 按全部参考音
       评旋律；"skeleton"：旧的骨架旋律 + 低音 / 填充（适合初级），verify 只考骨架音
+    - finger_bass：完整旋律指弹第 3 拍（和弦没换时）的低音。默认 "root"：再弹根音（摇滚贝斯多半一直弹根音，
+      なんもねえ 原曲贝斯第 3 拍 7/16 是根音、5/16 是五音）；"alternate"：根-五交替低音（民谣 / 乡村味）
     - melody_source：旋律从哪条音频识别。默认 "lead"：analyze 的 lead 步骤从人声分轨分出的主唱（伴唱分离模型
       + 居中掩码；模型不可用时只用居中掩码，见 stems.separate_lead）；"vocals"：整条人声。melody 步骤把用的分轨
       记进 melody.json 的 source（lead 时还有 lead_method），旋律谱校验对照同一条（改了这一项要重跑 --steps melody）
@@ -106,6 +108,17 @@ def melody_source(value, where: str = "overrides.melody_source") -> str:
         return "lead"
     if value not in MELODY_SOURCES:
         raise ValueError(f'{where} must be "lead" or "vocals", got {value!r}')
+    return value
+
+
+FINGER_BASSES = ("root", "alternate")
+
+
+def finger_bass(overrides: dict) -> str:
+    """overrides.finger_bass（默认 "root"）：完整旋律指弹第 3 拍的低音是根音还是五音（交替低音）。"""
+    value = overrides.get("finger_bass", "root")
+    if value not in FINGER_BASSES:
+        raise ValueError(f'overrides.finger_bass must be "root" or "alternate", got {value!r}')
     return value
 
 
