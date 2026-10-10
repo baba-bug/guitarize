@@ -16,7 +16,7 @@ def section_bars(leadsheet: dict) -> list[int]:
     return [i for i, b in enumerate(leadsheet["bars"]) if b.get("section")]
 
 
-def _split_at_bars(items: list[tuple[float, float, list, bool]]) -> list[tuple[float, float, list, bool]]:
+def _split_at_bars(items: list[tuple]) -> list[tuple]:
     """跨小节线的音在小节线处切开，后半段写成连音线延续（有音时）或休止。"""
     out = []
     for pos, dur, notes, tie in items:
@@ -28,10 +28,11 @@ def _split_at_bars(items: list[tuple[float, float, list, bool]]) -> list[tuple[f
     return out
 
 
-def _voice_lines(n_bars: int, items: list[tuple[float, float, list, bool]], sections: list[str | None],
+def _voice_lines(n_bars: int, items: list[tuple], sections: list[str | None],
                  feel: str, effects: dict[float, list[str]] | None = None, tie_effects: bool = False,
                  note_effects: dict[float, dict[int, list[str]]] | None = None) -> list[str]:
-    """items：(记谱位置, 时值, [(弦, 品)], 是否连音线延续)（见 Placed.pieces）；按小节铺满（空隙补休止），
+    """items：(记谱位置, 时值, [(弦, 品)], 是否连音线延续)（见 Placed.pieces；连音线也可以是接着响的那几根弦，
+    frozenset，见 finger.merged_pieces）；按小节铺满（空隙补休止），
     Shuffle 下按八分对切分。effects：{记谱位置: 拍效果}（和弦指型、力度），挂在该位置起音的音 / 休止上
     （休止在这些位置切开，保证有一拍从这里开始）；tie_effects 时也挂在从该位置开始的连音线延续上
     （单声部的旋律谱：小节以连音线开头时指型名没有别的地方挂）。
@@ -55,8 +56,10 @@ def _voice_lines(n_bars: int, items: list[tuple[float, float, list, bool]], sect
             if pos > t + 1e-6:
                 rests(t, pos)
             dur = min(dur, end - pos)
+            held = tie if isinstance(tie, frozenset) else frozenset()   # 同一拍里只有这些弦接着响
+            tie = tie is True
             mark = marks.get(round(pos, 6), ()) if tie_effects or not tie else ()
-            bar_items.append(atex.Item(pos - i * 4.0, dur, notes, mark, tie=tie,
+            bar_items.append(atex.Item(pos - i * 4.0, dur, notes, mark, tie=tie, held=held,
                                        note_effects=tails.get(round(pos + dur, 6)) if notes else None))
             t = pos + dur
         if t < end - 1e-6:

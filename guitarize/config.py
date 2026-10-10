@@ -11,6 +11,7 @@ from .paths import SongPaths
 PROFILES_PATH = Path(__file__).with_name("profiles.yaml")
 ARR_NAMES = {"strum": "弹唱", "finger": "指弹", "melody": "旋律"}
 MELODY_SOURCES = ("lead", "vocals")   # 旋律从哪条分轨识别：主唱 stems/lead.wav（去掉伴唱）、整条人声 stems/vocals.wav
+FINGER_STYLES = ("full", "skeleton")  # 指弹写法：完整旋律（默认）/ 骨架旋律，见 arrange/finger.py
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,8 @@ class SongConfig:
     - melody_octave：指弹 / 旋律谱的旋律八度（arrange/capo.py 的 octave_plan）。默认 "song"：整曲一个移位，
       保持人声原有的高低关系；"section"：按段落各自选；整数（12 的倍数）：整曲固定移；{小节: 移位}：从该小节起移。
     - capo：指定变调夹（arrange）
+    - finger_style：指弹写法（arrange/finger.py）。默认 "full"：旋律谱的每一个音 + 交替低音 + 合音，verify 按全部参考音
+      评旋律；"skeleton"：旧的骨架旋律 + 低音 / 填充（适合初级），verify 只考骨架音
     - melody_source：旋律从哪条音频识别。默认 "lead"：analyze 的 lead 步骤从人声分轨分出的主唱（伴唱分离模型
       + 居中掩码；模型不可用时只用居中掩码，见 stems.separate_lead）；"vocals"：整条人声。melody 步骤把用的分轨
       记进 melody.json 的 source（lead 时还有 lead_method），旋律谱校验对照同一条（改了这一项要重跑 --steps melody）
@@ -103,6 +106,14 @@ def melody_source(value, where: str = "overrides.melody_source") -> str:
         return "lead"
     if value not in MELODY_SOURCES:
         raise ValueError(f'{where} must be "lead" or "vocals", got {value!r}')
+    return value
+
+
+def finger_style(overrides: dict) -> str:
+    """overrides.finger_style（默认 "full"）。arrange 写指弹、verify 评指弹旋律共用这一份，评法跟着写法走。"""
+    value = overrides.get("finger_style", "full")
+    if value not in FINGER_STYLES:
+        raise ValueError(f'overrides.finger_style must be "full" or "skeleton", got {value!r}')
     return value
 
 

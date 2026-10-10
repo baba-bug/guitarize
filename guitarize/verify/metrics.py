@@ -1,5 +1,6 @@
 """编配 vs 参考（leadsheet.json）的逐小节评分。
-弹唱 / 指弹：和弦一致率、旋律（指弹：召回只考骨架音）、与和声分轨的色度相似度、节奏（弹唱）。
+弹唱 / 指弹：和弦一致率、旋律（指弹按写法：完整旋律与旋律谱一样考全部参考音，骨架写法只考骨架音）、
+与和声分轨的色度相似度、节奏（弹唱）。
 旋律谱（melody）：只评旋律（召回按全部参考音）和与人声分轨的色度相似度，并列出要人耳确认的参考音；不评和弦。"""
 from __future__ import annotations
 
@@ -311,8 +312,10 @@ def score_rhythm(score: Score, leadsheet: dict, bars: list[BarScore], onset_wavs
 
 def score_bars(score: Score, leadsheet: dict | None, arr: str, synth_wav: Path | None = None,
                harmonic_wav: Path | None = None, onset_wavs: Sequence[Path] = (), vocal_wav: Path | None = None,
-               low_conf: float = Thresholds.melody_conf_flag) -> list[BarScore]:
+               low_conf: float = Thresholds.melody_conf_flag, finger_style: str = "full") -> list[BarScore]:
     """vocal_wav / low_conf 只用于旋律谱（arr = melody）：人声分轨相似度、要人耳确认的低置信参考音。
+    finger_style 只用于指弹（config.finger_style）：full 的旋律按全部参考音评（与旋律谱同一套：召回考全部音、
+    起音容差 LINE_TOL、参考没有旋律的小节里谱上的音也算精确率）；skeleton 只考骨架音。
     旋律谱是单旋律线：不评和弦、也不核对谱上的和弦名（只是标出该按的指型，一条旋律线听不出和弦）。"""
     if leadsheet is None:
         bars = [BarScore(bar=b.index + 1, section=b.section) for b in score.bars]
@@ -330,7 +333,7 @@ def score_bars(score: Score, leadsheet: dict | None, arr: str, synth_wav: Path |
     chord_mark_issues(score, bars)
     score_chords(score, leadsheet, bars)
     if arr == "finger":
-        score_melody(score, leadsheet, bars)
+        score_melody(score, leadsheet, bars, skeleton=finger_style == "skeleton")
     if synth_wav is not None and harmonic_wav is not None and Path(harmonic_wav).exists():
         score_harmonic(score, leadsheet, bars, Path(synth_wav), Path(harmonic_wav))
     if arr == "strum" and onset_wavs and all(Path(w).exists() for w in onset_wavs):

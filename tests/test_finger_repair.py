@@ -263,3 +263,35 @@ def test_voice2_stops_on_the_beat_instead_of_a_triplet_third():
     found = cut_same_string(v1, v2)
     assert found == [(4 / 3, "fill cut @2+⅓ (same string)")] or found[0][1].startswith("fill cut")
     assert v2[0].end(0) == 1.0 and v2[0].end(1) == 2.0
+
+
+# ---------- 完整旋律（full）：合音先丢，旋律不截短、不移八度 ----------
+
+def test_full_repair_drops_harmony_first_and_never_cuts_the_melody():
+    # t = 2：旋律长音（1 弦 7 品）跨过 t；伴奏有一直响着的低音、t 之前起音还在响的合音、t 时的和弦短音、t 时的新低音
+    v1 = [Placed(0.0, 3.0, [(1, 7)]), Placed(3.0, 1.0, [(1, 0)])]
+    v2 = [Placed(0.0, 4.0, [None, (6, 3)]), Placed(1.5, 1.0, [(3, 5), None]),
+          Placed(2.0, 1 / 3, [(2, 8), (4, 0), None]), Placed(2.0, 2.0, [None, (5, 3)])]
+    steps = [repair(v1, v2, [V(2.0)], "straight", 12, full=True) for _ in range(5)]
+    assert steps == [[(2.0, "drop harmony @3 (span)")], [(2.0, "harmony cut @3 (span)")],
+                     [(2.0, "bass cut @3 (span)")], [(2.0, "drop bass @3 (span)")], []]
+    assert v1[0].dur == 3.0                                    # 旋律的时值不改
+    assert v2[2].where == [None, (4, 0), None]                 # 空弦合音不占手型，留着
+    assert v2[1].end(0) == 2.0 and v2[0].dur == 2.0 and v2[3].where == [None, None]
+
+
+def test_full_shift_repair_refrets_instead_of_moving_an_octave():
+    # F4（1 弦 1 品）→ C5（1 弦 8 品）：音高不能改，F4 换到 2 弦 6 品
+    v1 = [Placed(0.0, 1.0, [(1, 1)]), Placed(1.0, 1.0, [(1, 8)])]
+    assert repair(v1, [], [V(1.0, "shift")], "straight", 12, full=True) == [(0.0, "refret @1 (shift)")]
+    assert v1[0].where == [(2, 6)] and v1[1].where == [(1, 8)]
+
+
+def test_full_same_string_rules_keep_the_melody_whole():
+    # 旋律长音（3 弦）的弦上来了低音：去掉低音，旋律不截；伴奏自己的两个音同弦：先响的那个截短
+    v1 = [Placed(0.0, 4.0, [(3, 2)])]
+    v2 = [Placed(2.0, 2.0, [None, (3, 0)]), Placed(0.0, 2.0, [None, (5, 3)]), Placed(1.0, 1 / 3, [(5, 2), None])]
+    found = cut_same_string(v1, v2, full=True)
+    assert (2.0, "drop bass @3 (same string)") in found and (1.0, "bass cut @2 (same string)") in found
+    assert v1[0].dur == 4.0 and v2[0].where == [None, None] and v2[1].end(1) == 1.0
+

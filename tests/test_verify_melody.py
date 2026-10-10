@@ -34,8 +34,10 @@ TAB_WITHOUT_D4 = "1.2.4 r.4 0.1.2 |"
 
 def test_melody_recall_counts_every_reference_note(build_tex):
     score = build_tex(TAB_WITHOUT_D4, head=TEX_HEAD)
+    skeleton = metrics.score_bars(score, _one_bar(REF), "finger", finger_style="skeleton")
+    assert metrics.summarize(skeleton, [], Thresholds(), "finger")["melody_recall"] == 1.0   # 骨架指弹：D4 不算漏
     finger = metrics.summarize(metrics.score_bars(score, _one_bar(REF), "finger"), [], Thresholds(), "finger")
-    assert finger["melody_recall"] == 1.0                       # 指弹只考骨架音：D4 不算漏
+    assert finger["melody_recall"] == pytest.approx(2 / 3)     # 完整旋律的指弹（默认）和旋律谱一样考每一个音
     bars = metrics.score_bars(score, _one_bar(REF), "melody")
     s = metrics.summarize(bars, [], Thresholds(), "melody")
     assert s["melody_precision"] == 1.0 and s["melody_recall"] == pytest.approx(2 / 3)
@@ -75,16 +77,19 @@ def test_tab_notes_where_the_reference_melody_is_empty_count_against_precision(b
     from guitarize.verify.report import render_report
     report = render_report("melody", "iter-01", s, None, [], bars, [2], {}, {}, score)
     assert "- 参考这一小节没有旋律，谱上却有 3 个音\n  - 多余/错音：拍 1 C4\n" in report
-    finger = metrics.score_bars(score, ls, "finger")
+    finger = metrics.score_bars(score, ls, "finger", finger_style="skeleton")
     assert finger[1].mel_est == 0 and metrics.summarize(finger, [], Thresholds(), "finger")["melody_precision"] == 1.0
+    full = metrics.score_bars(score, ls, "finger")
+    assert full[1].mel_est == 3 and metrics.summarize(full, [], Thresholds(), "finger")["melody_precision"] == 0.5
 
 
 def test_melody_onset_tolerance_is_half_a_triplet(build_tex):
     # 旋律谱照原唱落到三连音 / 十六分格（演奏时间）：差一个三连音格（1/3 拍）的音不算命中；指弹的容差不变
     ref = [(1 / 3, 2 / 3, 60), (2, 2, 64)]                     # C4 唱在 1+⅓
     score = build_tex("1.2.2 0.1.2 |", head=TEX_HEAD)           # 谱上 C4 在拍点：早了 1/3 拍
-    finger = metrics.score_bars(score, _one_bar(ref), "finger")
+    finger = metrics.score_bars(score, _one_bar(ref), "finger", finger_style="skeleton")
     assert (finger[0].mel_hit, finger[0].mel_est) == (2, 2)
+    assert metrics.score_bars(score, _one_bar(ref), "finger")[0].mel_hit == 1   # 完整旋律的指弹与旋律谱同一容差
     bars = metrics.score_bars(score, _one_bar(ref), "melody")
     assert (bars[0].mel_hit, bars[0].mel_est, bars[0].mel_found, bars[0].mel_ref) == (1, 2, 1, 2)
     assert bars[0].mel_issues == ["多余/错音：拍 1 C4", "漏掉旋律音：拍 1+⅓ C4（指法调 C4）"]
