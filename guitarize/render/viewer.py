@@ -1,4 +1,4 @@
-"""生成本地交互谱页面：alphaTab 渲染 + 合成播放 + 按小节跳转原曲。需从仓库根目录起 HTTP 服务打开。"""
+"""生成本地交互谱页面：alphaTab 渲染 + 合成播放 + 从当前小节播放原曲 / 提取的人声（对照旋律）。需从仓库根目录起 HTTP 服务打开。"""
 from __future__ import annotations
 
 import html
@@ -24,10 +24,13 @@ def build_viewer(paths: SongPaths, arr: str, title: str) -> Path:
     if paths.leadsheet_json.exists():
         leadsheet = json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))
         bar_times = [[b["t_start"], b["t_end"]] for b in leadsheet["bars"]]
+    refs = [{"label": "原曲", "url": _rel(paths.original_wav, out.parent)}]
+    if paths.stem("vocals").exists():   # 提取出的人声：对照旋律用
+        refs.append({"label": "人声", "url": _rel(paths.stem("vocals"), out.parent)})
     replacements = {
         "{{TITLE}}": html.escape(f"{title} · {ARR_NAMES[arr]}"),
         "{{ALPHATAB_BASE}}": _rel(ALPHATAB_DIST, out.parent) + "/",
-        "{{AUDIO_URL}}": _rel(paths.original_wav, out.parent),
+        "{{REF_AUDIO}}": json.dumps(refs, ensure_ascii=False),
         "{{BAR_TIMES}}": json.dumps(bar_times),
         "{{ATEX}}": paths.atex(arr).read_text(encoding="utf-8").replace("</script", "<\\/script"),
     }

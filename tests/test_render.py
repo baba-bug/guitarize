@@ -29,3 +29,22 @@ def test_render_all(demo_song):
     assert "alphaTab.js" in page and "\\voice" in page
     bar_times = json.loads(page.split("window.BAR_TIMES = ")[1].split(";")[0])
     assert len(bar_times) == 8 and bar_times[1] == [2.4, 4.8]
+
+
+def test_viewer_offers_original_and_vocal_playback_from_the_current_bar(demo_song):
+    # 用户要求：谱面网页上能直接从当前小节听提取出来的人声，和合成音对照
+    from guitarize.render.viewer import build_viewer
+    vocals = demo_song.stem("vocals")
+    page = build_viewer(demo_song, "finger", "T").read_text(encoding="utf-8")
+    refs = json.loads(page.split("window.REF_AUDIO = ")[1].split(";\n")[0])
+    if not vocals.exists():
+        assert [r["label"] for r in refs] == ["原曲"]
+        vocals.parent.mkdir(parents=True, exist_ok=True)
+        vocals.write_bytes(demo_song.original_wav.read_bytes() if demo_song.original_wav.exists() else b"RIFF")
+        page = build_viewer(demo_song, "finger", "T").read_text(encoding="utf-8")
+        refs = json.loads(page.split("window.REF_AUDIO = ")[1].split(";\n")[0])
+    assert [r["label"] for r in refs] == ["原曲", "人声"]
+    out_dir = demo_song.out("finger", "html").parent
+    targets = [(out_dir / r["url"]).resolve() for r in refs]
+    assert targets == [demo_song.original_wav.resolve(), vocals.resolve()]     # 相对链接指向原曲与人声分轨
+    assert "{{" not in page
