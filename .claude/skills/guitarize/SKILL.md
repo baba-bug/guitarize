@@ -37,7 +37,9 @@ description: 把一首歌（歌名或 B 站 / 网易云链接）做成可弹的�
 ## 5. 生成草稿
 `$PY -m guitarize arrange <slug> --arr strum` 与 `--arr finger`（记下选中的变调夹与指型）。
 - 每份草稿都会用 alphaTab 构建 + 可弹性检查自检，命令输出 `自检：0 处违规`；指弹草稿会自动修复（截短按住的低音 / 填充音、丢填充或低音、旋律移八度），修复与降级写在对应 `// bar N` 注释行里。
-- 草稿是生成结果，`--force` 会覆盖手改；手改之后不要再 `--force`。
+- 草稿是生成结果，`--force` 会覆盖手改：把手改写成 `songs/<slug>/hand_edits.py`（按 `// bar N` 替换行，见 なんもねえ 的例子），生成器改进后 `arrange --force` 再重放手改脚本，再 verify。
+- 指弹旋律默认整曲一个八度（保持人声高低关系；段落间换八度会让旋律在交界处"突然掉下去"）。确需分段换八度时用 `overrides.melody_octave: section` 或 `{小节: 12}`。
+- 指弹谱自动标出该按的和弦指型（指型名 + 和弦图）；伴奏 mf、旋律 f。
 
 ## 6. 校验迭代（每份编配分别进行）
 ```
@@ -47,6 +49,7 @@ $PY -m guitarize verify <slug> --arr <arr>
 - **只改问题小节**：直接编辑 `arrangements/<arr>.atex` 中对应 `// bar N` 的行；需要时看 `plots/bar-NNN.png` 色度对比图。
 - 低置信参考的小节不要为了"追分"去改，留给用户耳听。
 - shuffle 小节里，反拍上发声的音必须写成"拍点八分 + 反拍八分"一对（余下时值用连音线），否则 alphaTab 播放不出 shuffle、校验会报 `straight_offbeat`。
+- 用户优先要求接近原曲：手改以逐小节和声相似度不降为准（为可弹性而降低接近度要先问用户）；伴奏声部太薄的小节补指型里的空弦 / 顶音（如 C 指型补空弦 G、B7 指型补 1 弦 2 品）。
 - 指标达标不等于好听：逐段对照分轨起音（`guitarize.verify.metrics.onset_slots` 看鼓 / 吉他的每拍三连音格）找"停顿 / 齐奏 hits / 段落前的 break / 结尾一击"，这些地方手改成 hits 或 riff；以每小节和声相似度（scores.json 的 `harmonic_sim`）是否提高来判断手改是否更像原曲。riff 小节的逐拍和弦一致率会下降（走动低音对单一和弦标签），属预期。
 - 每轮 `git commit` 一次（只提交 atex 与报告文本），再 verify。
 - 停止条件：全部达标；或连续 3 轮汇总分数没有提升；或已迭代 8 轮。

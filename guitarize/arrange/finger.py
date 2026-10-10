@@ -161,6 +161,14 @@ def _voice_lines(n_bars: int, items: list[tuple[float, float, list, bool]], sect
     return lines
 
 
+def _starts_beat(pieces: list[tuple[float, float, list, bool]], x: float) -> bool:
+    """声部在 x 处能挂拍效果：x 不在某个发声片段的中间，也不是连音线延续片段的起点（休止会在 x 处切开）。"""
+    for pos, dur, notes, tie in pieces:
+        if notes and pos - EPS < x < pos + dur - EPS and (pos < x - EPS or tie):
+            return False
+    return True
+
+
 def shape_marks(leadsheet: dict, capo: int, profile: Profile) -> tuple[dict[float, str], dict[str, tuple]]:
     """指弹谱上该按的和弦指型：每小节第 1、3 拍（低音所在）的和弦换成指法调的指型，指型变了才标（无和弦之后重标）。
     → ({记谱位置: 指型名}, {指型名: 和弦图品位（1 弦 → 6 弦）})。"""
@@ -463,7 +471,7 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
                     check: Callable[[str], list[Violation]] | None = None, octave: OctavePolicy = "song") -> str:
     """check：自检（alphaTex → 违规列表）。给出时渲染后按违规修补、重新渲染，最多 10 轮。
     octave：旋律八度策略（song.yaml 的 overrides.melody_octave，见 capo.octave_plan）。
-    谱上在低音声部标出该按的和弦指型（附和弦图）；旋律 f、伴奏 mp，试听时旋律更突出。"""
+    谱上在低音声部标出该按的和弦指型（附和弦图）；旋律 f、伴奏 mf：试听时旋律稍突出（伴奏再轻会让与原曲器乐分轨的和声相似度下降）。"""
     profile = effective_profile(profile, capo)
     feel = leadsheet.get("feel", "straight")
     n_bars = len(leadsheet["bars"])
@@ -493,12 +501,17 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
     sections = [b.get("section") for b in leadsheet["bars"]]
     marks, diagrams = shape_marks(leadsheet, capo, profile)
     head = atex.header(title, leadsheet["tempo_bpm"], capo, feel, "score tabs", diagrams, key=atex.leadsheet_key(leadsheet))
-    effects1 = {0.0: ["dy f"]}
-    effects2: dict[float, list[str]] = {pos: [f"ch {atex.quote(name)}"] for pos, name in marks.items()}
-    effects2.setdefault(0.0, []).append("dy mp")
 
     def render() -> str:
-        lines1 = _voice_lines(n_bars, [p for it in v1 for p in it.pieces()], sections, feel, effects1)
+        pieces1 = [p for it in v1 for p in it.pieces()]
+        effects1: dict[float, list[str]] = {0.0: ["dy f"]}
+        effects2: dict[float, list[str]] = {0.0: ["dy mf"]}
+        for pos, name in marks.items():   # 指型名尽量挂在旋律声部（黑色、醒目）；那里正被连音线延续占着、
+            # 或是段落第一拍（段落名与旋律声部的和弦名画在同一行会重叠）时挂在低音声部（另起一行）
+            section_start = pos % 4 == 0 and bool(sections[int(pos // 4)])
+            target = effects1 if _starts_beat(pieces1, pos) and not section_start else effects2
+            target.setdefault(pos, []).insert(0, f"ch {atex.quote(name)}")
+        lines1 = _voice_lines(n_bars, pieces1, sections, feel, effects1)
         lines2 = _voice_lines(n_bars, [p for it in v2 for p in it.pieces()], [None] * n_bars, feel, effects2)
         return atex.document(head, [annotate(lines1, remarks), lines2])
 

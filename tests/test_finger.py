@@ -224,9 +224,12 @@ def test_finger_draft_marks_chord_shapes_and_balances_voices(tmp_path):
     text = generate_finger(leadsheet(), 4, MID, "T")
     assert '\\chord "G" 3 0 0 0 2 3' in text and '\\chord "C"' in text and '\\chord "B7/D#"' in text
     v1, v2 = text.split("\\voice")[1:]
-    assert 'ch "G"' in v2 and 'ch "C"' in v2 and 'ch "B7/D#"' in v2
-    assert v2.count('ch "G"') == 1                       # 同一指型连续时只标一次
-    assert "dy f" in v1 and "dy mp" in v2
+    both = v1 + v2
+    assert 'ch "G"' in both and 'ch "C"' in both and 'ch "B7/D#"' in both
+    assert both.count('ch "G"') == 1                     # 同一指型连续时只标一次
+    assert 'ch "C"' in v1                                # 旋律声部在该处有起音时挂在旋律声部（黑色、醒目）
+    assert 'ch "G"' in v2                                # 第 1 小节有段落名「サビ」：挂在低音声部，免得两行文字重叠
+    assert "dy f" in v1 and "dy mf" in v2
     src = tmp_path / "f.atex"
     src.write_text(text, encoding="utf-8")
     built = alphatab.build(src, tmp_path / "b", "f")
