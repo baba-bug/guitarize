@@ -32,6 +32,7 @@ class Event:
     brush: str | None
     rest: bool
     tuplet: int = 1       # 连音组数（1 = 非连音）
+    text: str | None = None   # 拍上的文字（txt），旋律谱用它写段落名
 
 
 @dataclass(frozen=True)
@@ -168,5 +169,5 @@ def load_score(path: Path) -> Score:
             for bt, (rs, rd, _), (ps, pd) in zip(voice, raw, performed_times(raw, feel)):
                 notes = tuple(Note(n["string"], n["fret"], n["midi"], n["tie"], n["dead"]) for n in bt["notes"])
                 events.append(Event(b["index"], vi, bar_start + ps, pd, bar_start + rs, rd, notes,
-                                    bt["chord"], bt["pick"], bt["brush"], bt["rest"], bt["tuplet"]))
+                                    bt["chord"], bt["pick"], bt["brush"], bt["rest"], bt["tuplet"], bt.get("text")))
     return Score(data["title"], float(data["tempo"]), int(data["capo"]), list(data["tuning"]), bars, events)

@@ -110,15 +110,25 @@ def test_held_note_ties_across_the_bar_line_and_keeps_the_chord_label(tmp_path):
     assert [e.chord for e in score.events if e.chord] == ["C", "G"]
 
 
-def test_single_voice_display_and_a_chord_shape_on_every_bar():
+def test_single_voice_display_and_a_chord_shape_on_every_bar(tmp_path):
     mel = [(0, 1, 64), (1, 1, 66), (2, 2, 68)]
-    ls = _sheet([_bar(0, mel, "B", "サビ"), _bar(1, mel, "B"), _bar(2, mel, "E")], feel="straight")
+    ls = _sheet([_bar(0, mel, "B", "サビ"), _bar(1, mel, "B"), _bar(2, mel, "E", "Aメロ")], feel="straight")
     text = generate_melody(ls, 4, MID, "T")
     assert "\\voice" not in text and "\\staff {score tabs}" in text and "\\ks B" in text
-    assert "\\capo 4" in text and "dy f" in text and "// bar 1 [サビ]" in text
+    assert "\\capo 4" in text and "dy f" in text and "// bar 1 [サビ]" in text and "// bar 3 [Aメロ]" in text
     for n, shape in ((1, "G"), (2, "G"), (3, "C")):                  # 实际 B / E 在 capo 4 下是指法调 G / C
         assert f'ch "{shape}"' in _voice_bar(text, n)
     assert '\\chord "G"' in text and '\\chord "C"' in text
+    # 段落名写成第一拍的文字（txt），不用 \\section：alphaTab 把段落标记和同一拍的和弦名画在同一行、叠在一起
+    assert "\\section" not in text
+    assert re.match(r'\d+\.\d\.4 \{ch "G" txt "サビ" dy f\}', _voice_bar(text, 1))
+    assert re.match(r'\d+\.\d\.4 \{ch "C" txt "Aメロ"\}', _voice_bar(text, 3))
+    score = _build(text, tmp_path)
+    first = [next(e for e in score.events if e.bar == i and not e.rest) for i in range(3)]
+    assert [(e.chord, e.text) for e in first] == [("G", "サビ"), ("G", None), ("C", "Aメロ")]
+    from guitarize.render.ascii_tab import render_ascii
+    ascii_text = render_ascii(score)
+    assert "1 [サビ]" in ascii_text and "3 [Aメロ]" in ascii_text   # 文本六线谱照样标段落
 
 
 def test_chord_change_inside_a_held_note_splits_it_with_a_tie():

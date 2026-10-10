@@ -10,7 +10,10 @@
 - 指法：fretting.assign_frets 的 Viterbi（只有旋律；1–4 弦不加罚、低把位优先）。自检报换把（shift）时
   给该音（不行再给前一个按弦音）换一个同音高的位置：只换弦和品，不改音高。
 - 谱面：五线谱 + 六线谱、调号、力度 f；每小节第 1 拍标和弦指型（finger.shape_marks，附和弦图），
-  小节中间换指型再标；变调夹与指弹相同（arrange 按同样的旋律音域选）。"""
+  小节中间换指型再标；变调夹与指弹相同（arrange 按同样的旋律音域选）。段落名写成段落第一拍的文字（txt），
+  不用 \\section：alphaTab 把段落标记和同一拍的和弦名排进同一行、叠在一起（EffectBandSlot.canBeUsed 允许
+  "上一个效果的最后一拍 == 这个效果的第一拍" 共用一行）；指弹把那里的指型挂到低音声部，单声部没有别处可挂，
+  而文字效果总是自己占一行。源码里 `// bar N [段落]` 的注释照旧。"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -212,6 +215,12 @@ def split_at(pieces: list[tuple[float, float, list, bool]], cuts: Iterable[float
     return out
 
 
+def _label_sections(lines: list[str], sections: list[str | None]) -> list[str]:
+    """小节注释 `// bar N` → `// bar N [段落]`（与 atex.bar_line 的注释一致；段落标记本身见模块说明）。"""
+    return [line.replace(f"// bar {i + 1}\n", f"// bar {i + 1} [{' '.join(str(sec).splitlines())}]\n", 1) if sec else line
+            for i, (line, sec) in enumerate(zip(lines, sections))]
+
+
 def generate_melody(leadsheet: dict, capo: int, profile: Profile, title: str,
                     check: Callable[[str], list[Violation]] | None = None, octave: OctavePolicy = "song") -> str:
     """check：自检（alphaTex → 违规列表，与 verify 同一套可弹性检查）。给出时按换把违规换指法、重新渲染，最多 10 轮。
@@ -237,14 +246,15 @@ def generate_melody(leadsheet: dict, capo: int, profile: Profile, title: str,
     marks, diagrams = shape_marks(leadsheet, capo, profile)
     head = atex.header(title, leadsheet["tempo_bpm"], capo, feel, "score tabs", diagrams,
                        key=atex.leadsheet_key(leadsheet))
-    effects: dict[float, list[str]] = {0.0: ["dy f"]}
-    for pos, name in marks.items():
-        effects.setdefault(pos, []).insert(0, f"ch {atex.quote(name)}")
+    starts = {i * 4.0: name for i, name in enumerate(sections) if name}
+    effects = {pos: ([f"ch {atex.quote(marks[pos])}"] if pos in marks else [])
+               + ([f"txt {atex.quote(starts[pos])}"] if pos in starts else []) + (["dy f"] if pos == 0.0 else [])
+               for pos in sorted({0.0} | set(marks) | set(starts))}
 
     def render() -> str:
         pieces = split_at([(n.pos, n.dur, [n.where] if n.where else [], False) for n in line], effects)
-        return atex.document(head, [annotate(_voice_lines(n_bars, pieces, sections, feel, effects, tie_effects=True),
-                                             remarks)])
+        lines = _voice_lines(n_bars, pieces, [None] * n_bars, feel, effects, tie_effects=True)
+        return atex.document(head, [annotate(_label_sections(lines, sections), remarks)])
 
     text = render()
     fixed: set[int] = set()
