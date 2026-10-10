@@ -71,7 +71,7 @@ def _position(combo: tuple, span: int) -> tuple[int, int] | None:
 
 
 HARD = 1000.0  # 违反校验硬规则的转移罚分（不设为无穷：总要有一条路径）
-LEGATO = 3.0   # 连奏的两个旋律音不在同一根弦上（只能重新拨弦）的罚分
+LEGATO = 5.0   # 连奏的两个旋律音不在同一根弦上（只能重新拨弦）的罚分：用户最在意滑音别被切开，比低把位、1–4 弦的偏好重
 
 
 def _transition(pa: tuple[int, int] | None, pb: tuple[int, int] | None, gap: float, profile: Profile,
