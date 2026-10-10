@@ -47,6 +47,15 @@ def test_audit_notes_against_the_lead():
     assert melody_audit.audit_notes(held, fr, _beats())["legato"] == 1
 
 
+def test_missing_notes_lists_stable_singing_the_tab_leaves_out_or_writes_differently():
+    # NOTES：第 4 拍写 D4、唱的是 F#4（2.0–2.5 秒）→ 一个候选；3.0–3.5 秒唱 E4、谱上没有音 → 另一个候选
+    got = melody_audit.missing_notes(NOTES, _frames(), _beats())
+    assert [(m["bar"], m["written"], round(m["sung"])) for m in got] == [(2, 62, 66), (2, None, 64)]
+    assert [m["beat"] for m in got] == [pytest.approx(1.0, abs=0.1), pytest.approx(3.0, abs=0.1)]
+    assert all(m["ms"] >= melody_audit.MISSING_MS for m in got)
+    assert "第 2 小节 拍" in melody_audit.format_missing({"melody": "x", "missing_notes": got})
+
+
 def test_repeat_consistency_compares_sections_with_the_same_name():
     # 两遍サビ：第 2 小节 vs 第 4–6 小节，按短的那段（1 小节）比；±1 格（三连音）、同音高才算对上
     sections = {1: "A", 2: "サビ", 3: "B", 4: "サビ"}

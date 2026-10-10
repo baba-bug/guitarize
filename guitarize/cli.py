@@ -85,9 +85,11 @@ def main(argv: list[str] | None = None) -> int:
 
             print(summary_table(json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))))
     elif args.cmd == "audit-melody":
-        from .analyze.melody_audit import audit_melody, format_table
+        from .analyze.melody_audit import audit_melody, format_missing, format_table
 
-        print(format_table(audit_melody(paths, cfg, args.melody)))
+        rows = audit_melody(paths, cfg, args.melody)
+        print(format_table(rows))
+        print(format_missing(rows[0]))
         print(f"报告：{paths.reports_dir / 'melody_audit.json'}")
     elif args.cmd == "summary":
         import json

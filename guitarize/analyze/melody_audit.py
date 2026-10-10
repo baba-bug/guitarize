@@ -5,7 +5,9 @@
 - backing_or_empty 伴唱音：时值里一半以上是伴唱漏音 / 没人唱的音；
 - chopped_held 切碎的长音：紧接前一个同音、中间没有换字、却又拨一下；
 - onset_recall 节奏：每个换字点 ±1 格内有拨弦音的比例；pluck_ms：拨弦音离最近换字点的中位距离（毫秒，2 格内的才算）；
-- repeat_f1 重复段一致：song.yaml 里同名的段落（如两遍サビ）逐音对上的 F1（±1 格、同音高，按短的那段比）。"""
+- repeat_f1 重复段一致：song.yaml 里同名的段落（如两遍サビ）逐音对上的 F1（±1 格、同音高，按短的那段比）；
+- missing 漏音候选：主唱稳稳唱着（音高不在滑）、谱上这时没有音或写的音差 ≥ 0.75 半音、连续 ≥ 80 毫秒的段，按小节列出，
+  给人耳逐个确认（missing_notes）。"""
 from __future__ import annotations
 
 import itertools
@@ -17,13 +19,15 @@ import numpy as np
 
 from ..config import SongConfig
 from ..paths import SongPaths
-from .beats import beat_to_time
-from .notes import FPS, Frames, frame_features, middle
+from .beats import beat_to_time, time_to_beat
+from .notes import FPS, Frames, _runs, _stable, frame_features, middle
 
 PITCH_OK = 0.5      # 半音
 SLOT_TOL = 1        # 重复段逐音对上：起点差不超过这么多格
 COLUMNS = ("notes", "legato", "coverage", "pitch_ok", "wrong", "backing_or_empty", "chopped_held", "onset_recall",
-           "pluck_ms", "repeat_f1")
+           "pluck_ms", "repeat_f1", "missing")
+MISSING_SEMITONES = 0.75   # 漏音候选：和谱上的音差这么多半音（或谱上没音）……
+MISSING_MS = 80            # ……连续至少这么多毫秒
 
 
 def _div(beats: dict) -> int:
@@ -73,6 +77,30 @@ def audit_notes(notes: list[dict], fr: Frames, beats: dict) -> dict:
             "pitch_ok": round(ok / max(1, ok + wrong), 3), "wrong": wrong, "backing_or_empty": leaky,
             "chopped_held": chopped, "onset_recall": round(recall, 3),
             "pluck_ms": int(np.median(err)) if err else None}
+
+
+def missing_notes(notes: list[dict], fr: Frames, beats: dict) -> list[dict]:
+    """漏音候选：主唱稳稳唱着（notes._stable）、谱上这时没有音或写的音差 ≥ MISSING_SEMITONES 半音、连续 ≥ MISSING_MS
+    毫秒的段 → [{bar, beat, start, end, ms, sung, written}]（sung 是 MIDI 浮点中位数，written 没有音时是 None）。"""
+    n = len(fr.voiced)
+    written = np.full(n, np.nan)
+    for x in notes:
+        a, e = beat_to_time(beats, np.array([x["start_beats"], x["start_beats"] + x["dur_beats"]]))
+        written[max(0, int(round(a * FPS))):min(n, int(round(e * FPS)))] = x["midi"]
+    stable = _stable(fr)
+    off = stable & (np.isnan(written) | (np.abs(fr.midi - written) >= MISSING_SEMITONES))
+    bpb = beats["time_signature"][0]
+    out = []
+    for i, j in _runs(off, max_gap=1):
+        if (j - i) * 1000 / FPS < MISSING_MS:
+            continue
+        w = written[i:j][~np.isnan(written[i:j])]
+        b = float(time_to_beat(beats, i / FPS))
+        out.append({"bar": int(b // bpb) + 1, "beat": round(b % bpb + 1, 2), "start": round(i / FPS, 2),
+                    "end": round(j / FPS, 2), "ms": int((j - i) * 1000 / FPS),
+                    "sung": round(float(np.median(fr.midi[i:j][stable[i:j]])), 2),
+                    "written": int(np.median(w)) if len(w) else None})
+    return out
 
 
 def repeat_pairs(sections: dict[int, str], last_bar: int) -> list[tuple[str, tuple[int, int], tuple[int, int]]]:
@@ -147,8 +175,10 @@ def audit_melody(paths: SongPaths, cfg: SongConfig, melody_files: list[Path] | t
     for f in files:
         melody = json.loads(Path(f).read_text(encoding="utf-8"))
         repeats = repeat_consistency(melody["notes"], cfg.sections, beats)
+        missing = missing_notes(melody["notes"], fr, beats)
         rows.append({"melody": _label(f, paths.root), "method": melody.get("method"),
-                     **audit_notes(melody["notes"], fr, beats), "repeat_f1": repeats["f1"], "repeats": repeats["pairs"]})
+                     **audit_notes(melody["notes"], fr, beats), "repeat_f1": repeats["f1"], "repeats": repeats["pairs"],
+                     "missing": len(missing), "missing_notes": missing})
     paths.reports_dir.mkdir(parents=True, exist_ok=True)
     report = {"reference": {k: _label(p, paths.root) for k, p in ref.items()}, "rows": rows}
     (paths.reports_dir / "melody_audit.json").write_text(json.dumps(report, ensure_ascii=False, indent=1),
@@ -166,3 +196,17 @@ def format_table(rows: list[dict]) -> str:
         return "  ".join(c.ljust(w) if k == 0 else c.rjust(w) for k, (c, w) in enumerate(zip(row, widths)))
 
     return "\n".join(fmt(row) for row in [head, *cells])
+
+
+def format_missing(row: dict) -> str:
+    """一版旋律的漏音候选，一行一个：小节、拍、多长、唱的音、谱上的音。"""
+    from ..theory import midi_name
+
+    lines = [f"漏音候选（{row['melody']}，{len(row['missing_notes'])} 处；主唱稳稳唱着、谱上没有或写的音差 ≥ "
+             f"{MISSING_SEMITONES} 半音、≥ {MISSING_MS} 毫秒）："]
+    for m in row["missing_notes"]:
+        cents = round((m["sung"] - round(m["sung"])) * 100)
+        sung = f"{midi_name(round(m['sung']))}{cents:+d}c"
+        lines.append(f"  第 {m['bar']} 小节 拍 {m['beat']}（{m['ms']} 毫秒）：唱 {sung}，谱上 "
+                     f"{midi_name(m['written']) if m['written'] is not None else '休止'}")
+    return "\n".join(lines)

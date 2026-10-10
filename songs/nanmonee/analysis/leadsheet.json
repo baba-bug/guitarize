@@ -721,10 +721,18 @@
     },
     {
      "start_beats": 60.6667,
-     "dur_beats": 2.6666,
+     "dur_beats": 2.3333,
      "midi": 61,
      "conf": 0.841,
      "out_of_key": false
+    },
+    {
+     "start_beats": 63.0,
+     "dur_beats": 0.3333,
+     "midi": 59,
+     "conf": 0.841,
+     "out_of_key": false,
+     "legato": true
     }
    ]
   },
@@ -877,6 +885,13 @@
    ],
    "melody": [
     {
+     "start_beats": 85.0,
+     "dur_beats": 0.6667,
+     "midi": 54,
+     "conf": 0.855,
+     "out_of_key": false
+    },
+    {
      "start_beats": 86.0,
      "dur_beats": 0.6667,
      "midi": 54,
@@ -893,7 +908,7 @@
     },
     {
      "start_beats": 87.6667,
-     "dur_beats": 1.3333,
+     "dur_beats": 1.0,
      "midi": 56,
      "conf": 0.81,
      "out_of_key": false
@@ -918,6 +933,14 @@
     }
    ],
    "melody": [
+    {
+     "start_beats": 88.6667,
+     "dur_beats": 0.3333,
+     "midi": 54,
+     "conf": 0.81,
+     "out_of_key": false,
+     "legato": true
+    },
     {
      "start_beats": 89.0,
      "dur_beats": 1.0,
@@ -1282,7 +1305,7 @@
     },
     {
      "start_beats": 119.6667,
-     "dur_beats": 1.3333,
+     "dur_beats": 1.0,
      "midi": 61,
      "conf": 0.931,
      "out_of_key": false
@@ -1318,10 +1341,10 @@
    ],
    "melody": [
     {
-     "start_beats": 121.0,
-     "dur_beats": 0.6667,
+     "start_beats": 120.6667,
+     "dur_beats": 1.0,
      "midi": 59,
-     "conf": 0.704,
+     "conf": 0.931,
      "out_of_key": false
     },
     {
@@ -1473,10 +1496,18 @@
     },
     {
      "start_beats": 133.6667,
-     "dur_beats": 1.0,
+     "dur_beats": 0.3333,
+     "midi": 58,
+     "conf": 0.814,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 134.0,
+     "dur_beats": 0.6667,
      "midi": 59,
      "conf": 0.572,
-     "out_of_key": false
+     "out_of_key": false,
+     "legato": true
     },
     {
      "start_beats": 134.6667,
@@ -1487,7 +1518,7 @@
     },
     {
      "start_beats": 135.3333,
-     "dur_beats": 0.6667,
+     "dur_beats": 1.0,
      "midi": 59,
      "conf": 0.572,
      "out_of_key": false
@@ -1513,8 +1544,8 @@
    ],
    "melody": [
     {
-     "start_beats": 136.0,
-     "dur_beats": 1.0,
+     "start_beats": 136.3333,
+     "dur_beats": 0.6667,
      "midi": 61,
      "conf": 0.92,
      "out_of_key": false
@@ -1543,7 +1574,7 @@
     },
     {
      "start_beats": 139.6667,
-     "dur_beats": 1.3333,
+     "dur_beats": 1.0,
      "midi": 56,
      "conf": 0.736,
      "out_of_key": false
@@ -1568,6 +1599,14 @@
     }
    ],
    "melody": [
+    {
+     "start_beats": 140.6667,
+     "dur_beats": 0.3333,
+     "midi": 63,
+     "conf": 0.736,
+     "out_of_key": false,
+     "legato": true
+    },
     {
      "start_beats": 141.0,
      "dur_beats": 1.0,
@@ -1842,9 +1881,9 @@
     },
     {
      "start_beats": 163.6667,
-     "dur_beats": 1.0,
-     "midi": 68,
-     "conf": 0.848,
+     "dur_beats": 0.3333,
+     "midi": 66,
+     "conf": 0.919,
      "out_of_key": false
     }
    ]
@@ -1867,6 +1906,14 @@
     }
    ],
    "melody": [
+    {
+     "start_beats": 164.0,
+     "dur_beats": 0.6667,
+     "midi": 68,
+     "conf": 0.848,
+     "out_of_key": false,
+     "legato": true
+    },
     {
      "start_beats": 165.6667,
      "dur_beats": 0.3333,
@@ -2247,16 +2294,9 @@
     },
     {
      "start_beats": 199.0,
-     "dur_beats": 0.6667,
+     "dur_beats": 1.0,
      "midi": 64,
      "conf": 0.833,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 199.6667,
-     "dur_beats": 1.0,
-     "midi": 66,
-     "conf": 0.884,
      "out_of_key": false
     }
    ]
@@ -2279,6 +2319,13 @@
     }
    ],
    "melody": [
+    {
+     "start_beats": 200.0,
+     "dur_beats": 0.6667,
+     "midi": 66,
+     "conf": 0.884,
+     "out_of_key": false
+    },
     {
      "start_beats": 201.6667,
      "dur_beats": 1.3333,
@@ -2359,6 +2406,13 @@
      "dur_beats": 1.0,
      "midi": 63,
      "conf": 0.788,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 209.6667,
+     "dur_beats": 0.3333,
+     "midi": 71,
+     "conf": 0.758,
      "out_of_key": false
     },
     {

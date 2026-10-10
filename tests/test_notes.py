@@ -131,7 +131,7 @@ def test_bar_chord_labels_follow_chords_json_and_overrides(tmp_path):
 # ---------- 分音：漏音、长音、换字、legato ----------
 
 def test_notes_that_are_mostly_backing_leak_are_dropped():
-    fr = _frames(sung=[(0.5, 2.0, 64)], backing=[(0.5, 1.0)], lr=[(1.0, 1.5)])
+    fr = _frames(sung=[(0.5, 1.0, 64), (1.0, 1.5, 66), (1.5, 2.0, 68)], backing=[(0.5, 1.0)], lr=[(1.0, 1.5)])
     got, _ = _melody([(0.5, 1.0, 64.0), (1.0, 1.5, 66.0), (1.5, 2.0, 68.0)], fr)
     assert got == [(3.0, 1.0, 68, False)]
 
@@ -187,9 +187,39 @@ def test_a_short_step_game_missed_is_filled_in():
     assert got[-1][2] == 59 and got[-1][3] is True and len(got) == 2
 
 
+def test_a_loud_stable_note_after_a_leap_that_game_missed_is_filled_in():
+    # 句尾 A#4 之后响亮地唱了一个稳定的 F#4（0.12 秒）、GAME 没给：跳了 4 个半音但不轻 → 是一个音，补上
+    fr = _frames(sung=[(1.0, 1.5, 70.0), (1.5, 1.62, 66.0)])
+    got, _ = _melody([(1.0, 1.5, 70.0)], fr)
+    assert [m for _, _, m, _ in got] == [70, 66]
+
+
+def test_a_stable_stretch_inside_a_note_at_another_pitch_is_split_out():
+    # GAME 给了一个长 C#4，主唱后半段稳稳地落到 B3（0.3 秒）：切出 B3（不是颤音的一个峰）
+    fr = _frames(sung=[(1.0, 1.7, 61.0), (1.7, 2.0, 59.0)])
+    got, _ = _melody([(1.0, 2.0, 61.0)], fr)
+    assert [m for _, _, m, _ in got] == [61, 59]
+
+
+def test_a_vibrato_peak_is_not_split_out():
+    # 颤音：±0.8 半音、5 Hz（每个峰远短于一格）→ 还是一个音
+    t = np.arange(100) / 100
+    fr = _frames(sung=[(1.0, 2.0, 64.0)])
+    fr.midi[100:200] = 64.0 + 0.8 * np.sin(2 * np.pi * 5 * t)
+    got, _ = _melody([(1.0, 2.0, 64.0)], fr)
+    assert [m for _, _, m, _ in got] == [64]
+
+
+def test_a_sung_note_that_differs_from_the_written_one_for_a_slot_is_repaired():
+    # GAME 给了一整拍的 B3，主唱前 2/3 拍稳稳唱的是 A#3 → A#3 + B3（同一个字）
+    fr = _frames(sung=[(1.0, 1.33, 58.0), (1.33, 1.5, 59.0)])
+    got, _ = _melody([(1.0, 1.5, 59.0)], fr)
+    assert [(s, m) for s, _, m, _ in got] == [(2.0, 58), (pytest.approx(2.6667, abs=1e-3), 59)]
+
+
 def test_a_fall_off_tail_is_not_filled_in():
-    # 长音后面往下甩了一大截（> 2 半音）：是尾巴，不补音
-    fr = _frames(sung=[(1.0, 1.5, 71.0), (1.5, 1.6, 63.0)])
+    # 长音后面往下甩了一大截（> 2 半音）、而且轻下去了：是尾巴，不补音
+    fr = _frames(sung=[(1.0, 1.5, 71.0), (1.5, 1.6, 63.0)], dips=[(1.55, 10.0)])
     got, _ = _melody([(1.0, 1.5, 71.0)], fr)
     assert [m for _, _, m, _ in got] == [71]
 

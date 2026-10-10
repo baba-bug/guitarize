@@ -46,10 +46,16 @@ SHORT_SLIDE = 2             # 半音
 MID_PENALTY = 0.06          # 拍：shuffle 里中间那个三连音位置（+1/3）的罚分
 LEGATO_SLIDE = 3            # 半音：两个长音之间字内换音至少这么大才不重新拨（滑弦）；更小的照常拨弦
 FILL_FRAMES = 5             # 帧：GAME 漏掉的短音至少有这么多主唱帧……
-FILL_SPAN = 15              # 帧：……挤在这么短的一段里（更长的漏掉一般是 GAME 有意不要的滑音 / 气声）
+FILL_SPAN = 25              # 帧：……挤在这么短的一段里（更长的漏掉一般是 GAME 有意不要的滑音 / 气声）
 FILL_STD = 0.5              # 半音：音高要稳
 FILL_DB = -20.0             # 音量不能太小
-FILL_STEP = 2               # 半音：紧接前一个音时只补一两个半音的"一步"；再大是甩下去的尾巴
+FILL_STEP = 2               # 半音：紧接前一个音时只补一两个半音的"一步"；再大的、又轻（比前一个音弱 TAIL_DB）的是甩下去的尾巴
+TAIL_DB = 6.0
+STABLE_SLOPE = 20.0         # 半音 / 秒：音高斜率低于它算"唱稳了"（不在滑）
+DRIFT_SEMITONES = 0.75      # 音里一段稳定地差这么多半音……
+DRIFT_SLOTS = 0.6           # ……且至少这么多格长 → 是另一个音（_split_short_drift）
+REPAIR_SEMITONES = 0.75     # 量化后最后核对：主唱稳定地唱着、和谱上差 ≥ 0.75 半音（或谱上没音）……
+REPAIR_SLOTS = 1.0          # ……至少这么多格长 → 谱上补 / 改成唱的那个音（_repair_mismatches）
 
 
 @dataclass
@@ -323,6 +329,70 @@ def _split_drift(notes: list[_Note], fr: Frames, beats: dict, snap) -> list[_Not
     return out
 
 
+def _stable(fr: Frames) -> np.ndarray:
+    """主唱在唱、而且音高没在滑（5 帧平滑后的斜率 < STABLE_SLOPE 半音 / 秒）的帧。"""
+    sm = np.convolve(np.nan_to_num(fr.midi), np.ones(5) / 5, mode="same")
+    return fr.voiced & (np.abs(np.gradient(sm)) * FPS < STABLE_SLOPE)
+
+
+def _runs(mask: np.ndarray, max_gap: int = 2) -> list[tuple[int, int]]:
+    """mask 里连续为真的段 [起, 止)（中间允许 max_gap 帧以内的假）。"""
+    runs, i, n = [], 0, len(mask)
+    while i < n:
+        if not mask[i]:
+            i += 1
+            continue
+        j = i + 1
+        while j < n and (mask[j] or mask[j + 1:j + 1 + max_gap].any()):
+            j += 1
+        runs.append((i, j))
+        i = j
+    return runs
+
+
+def _split_short_drift(notes: list[_Note], fr: Frames, snap, slot_s: float) -> list[_Note]:
+    """音里有一段唱得稳、却和这个音实际唱的中心（中位数）差 ≥ DRIFT_SEMITONES 半音、至少 DRIFT_SLOTS 格长（不是颤音的一个峰）→ 那一段是另一个音
+    （如长音后面落到低一个全音、句尾往上一挑）：切出来，按当时和弦吸附；前后剩下不到半格的并进它。切出来的段和后面的段
+    没有换字就是 legato（拨不拨弦再由 _legato_policy 定）。"""
+    stable = _stable(fr)
+    min_len = int(round(DRIFT_SLOTS * slot_s * FPS))
+    out: list[_Note] = []
+    for x in notes:
+        i, j = _frame(x.a), _frame(x.e)
+        sung = fr.midi[i:j][fr.voiced[i:j]]
+        if not len(sung):
+            out.append(x)
+            continue
+        centre = float(np.median(sung))        # 跟这个音实际唱的中心比，不跟写的音高比：唱在两个音中间时不来回切
+        off = stable[i:j] & (np.abs(fr.midi[i:j] - centre) >= DRIFT_SEMITONES)
+        cuts = []
+        for a, b in _runs(off):
+            m = fr.midi[i + a:i + b][stable[i + a:i + b]]
+            if b - a >= min_len and len(m) and float(np.std(m)) < FILL_STD:
+                p, o = snap(float(np.median(m)), (i + a) / FPS)
+                if p != x.midi:
+                    cuts.append((i + a, i + b, p, o))
+        if not cuts:
+            out.append(x)
+            continue
+        pieces, t = [], i                       # [起帧, 止帧, 音高, 调外]；不到半格的零头并进后面那段
+        for a, b, p, o in cuts:
+            if a - t >= min_len / 2:
+                pieces.append([t, a, x.midi, x.out])
+                t = a
+            pieces.append([t, b, p, o])
+            t = b
+        if j - t >= min_len / 2:
+            pieces.append([t, j, x.midi, x.out])
+        else:
+            pieces[-1][1] = j
+        for k, (a, b, p, o) in enumerate(pieces):
+            onset = k > 0 and bool(fr.onset[max(0, a - NEAR):a + NEAR + 1].any())
+            out.append(replace(x, a=a / FPS, e=b / FPS, midi=p, out=o, forced=(x.forced if k == 0 else onset),
+                               legato_forced=x.legato_forced if k == 0 else not onset))
+    return out
+
+
 def _has_onset(fr: Frames, t: float) -> bool:
     """t 附近 ±NEAR 帧内有换字点，或前面 ONSET_GAP 帧都没在唱。"""
     i = _frame(t)
@@ -400,13 +470,18 @@ def _fill_gaps(notes: list[_Note], fr: Frames, snap) -> list[_Note]:
     for i, j in runs:
         v = fr.voiced[i:j]
         m = fr.midi[i:j][v]
-        if v.sum() < FILL_FRAMES or j - i > FILL_SPAN or float(np.std(m)) >= FILL_STD or fr.db[i:j].mean() <= FILL_DB:
+        if v.sum() < FILL_FRAMES or j - i > FILL_SPAN or fr.db[i:j].mean() <= FILL_DB:
             continue
+        if float(np.std(m)) >= FILL_STD:           # 滑上去 / 滑下来的一个字：按落点（最后 6 帧）的音高，落点要稳
+            m = m[-6:]
+            if len(m) < 6 or float(np.std(m)) >= FILL_STD:
+                continue
         a, e = i / FPS, j / FPS
         pitch, out_ = snap(float(np.median(m)), a)
         prev = max((x for x in out if x.e <= a + 1e-6), key=lambda x: x.e, default=None)
         contiguous = prev is not None and a - prev.e <= CONTIGUOUS + 1 / FPS
-        if contiguous and abs(pitch - prev.midi) > FILL_STEP:
+        if contiguous and abs(pitch - prev.midi) > FILL_STEP and \
+                fr.db[i:j].mean() < fr.db[_frame(prev.a):_frame(prev.e)].mean() - TAIL_DB:
             continue
         if contiguous and pitch == prev.midi:
             prev.e = e
@@ -482,6 +557,63 @@ def _legato_policy(notes: list[dict], div: int) -> list[dict]:
     return out
 
 
+def _repair_mismatches(notes: list[dict], fr: Frames, beats: dict, snap, div: int, shuffle: bool) -> list[dict]:
+    """量化后逐帧核对谱和主唱（就是 melody_audit / 人耳查漏音时看的东西）：主唱稳稳唱着（音高不在滑、标准差 < FILL_STD、
+    音量 > FILL_DB）、和谱上这时的音差 ≥ REPAIR_SEMITONES 半音（或谱上是休止）、至少 REPAIR_SLOTS 格长 → 漏了一个音：
+    在那几格写上唱的音（按当时和弦吸附），原来的音前后剩下的部分保留（不到一格的并掉）。补进来的音有换字点就拨弦，
+    否则 legato；原来的音的后半段一定是 legato（同一个字）。"""
+    stable = _stable(fr)
+    n = len(fr.voiced)
+    slot = 1 / div
+    spans = [beat_to_time(beats, np.array([x["start_beats"], x["start_beats"] + x["dur_beats"]])) for x in notes]
+    written = np.full(n, np.nan)
+    for x, (a, e) in zip(notes, spans):
+        written[max(0, _frame(a)):min(n, _frame(e))] = x["midi"]
+    off = stable & (np.isnan(written) | (np.abs(fr.midi - written) >= REPAIR_SEMITONES))
+    min_len = int(round(REPAIR_SLOTS * 60 / beats["tempo_bpm"] / div * FPS))
+    work = [dict(x) for x in notes]
+    for i, j in _runs(off):
+        m = fr.midi[i:j][stable[i:j]]
+        if j - i < min_len or not len(m) or float(np.std(m)) >= FILL_STD or fr.db[i:j].mean() <= FILL_DB:
+            continue
+        p, o = snap(float(np.median(m)), i / FPS)
+        if o:                                   # 既不在调里、也不在和弦里（多半是唱偏了）：不改谱
+            continue
+        qs = round(quantize_start(float(time_to_beat(beats, i / FPS)), div, shuffle), 4)
+        qe = round(max(qs + slot, round(float(time_to_beat(beats, j / FPS)) * div) / div), 4)
+        onset = bool(fr.onset[max(0, i - NEAR):i + NEAR + 1].any())
+        host = next((x for x in work if x["start_beats"] - 1e-3 <= qs < x["start_beats"] + x["dur_beats"] - 1e-3), None)
+        if host is not None and host["midi"] == p:
+            continue
+        new = {"start_beats": round(qs, 4), "dur_beats": _span(qs, qe), "midi": p, "out_of_key": o,
+               "conf": round(float(np.mean(fr.per[i:j])), 3), **({} if onset else {"legato": True})}
+        if host is None:
+            nxt = min((x["start_beats"] for x in work if x["start_beats"] > qs + 1e-3), default=None)
+            if nxt is not None and qe > nxt:
+                new["dur_beats"] = _span(qs, nxt)
+            prev = max((x for x in work if x["start_beats"] < qs - 1e-3), key=lambda x: x["start_beats"], default=None)
+            if prev is not None and abs(prev["start_beats"] + prev["dur_beats"] - qs) > 1e-3 and "legato" in new:
+                del new["legato"]                                   # 前面空着：不能连，拨弦
+            work.append(new)
+        else:
+            h_end = host["start_beats"] + host["dur_beats"]
+            if qs - host["start_beats"] < slot - 1e-3:                # 前面剩下不到一格：整段从原来的音的起点开始
+                new.update(start_beats=host["start_beats"], dur_beats=_span(host["start_beats"], qe))
+                if host.get("legato"):
+                    new["legato"] = True                            # 原来就不拨的地方照旧不拨
+                work.remove(host)
+            else:
+                host["dur_beats"] = _span(host["start_beats"], qs)
+            if h_end - qe >= slot - 1e-3:
+                work.append({**{k: v for k, v in host.items() if k != "legato"}, "start_beats": round(qe, 4),
+                             "dur_beats": _span(qe, h_end), "legato": True})
+            else:
+                new["dur_beats"] = _span(new["start_beats"], h_end)
+            work.append(new)
+        work.sort(key=lambda x: x["start_beats"])
+    return work
+
+
 def game_melody(rows, fr: Frames, beats: dict, key_pcs: set[int], bar_labels: dict) -> list[dict]:
     """GAME 的音 [(起秒, 止秒, 浮点音高)] + 主唱逐帧特征 → 旋律音（start_beats / dur_beats / midi / out_of_key / conf，
     legato 的音另有 "legato": True）。去掉第 1 小节之前的音。"""
@@ -490,9 +622,10 @@ def game_melody(rows, fr: Frames, beats: dict, key_pcs: set[int], bar_labels: di
     snap = _snapper(beats, key_pcs, bar_labels)
     notes = _from_game(rows, fr, snap)
     notes = _split_at_onsets(notes, fr, 60 / beats["tempo_bpm"] / div)
-    notes = _split_drift(notes, fr, beats, snap)
+    notes = _split_short_drift(_split_drift(notes, fr, beats, snap), fr, snap, 60 / beats["tempo_bpm"] / div)
     notes = _fill_gaps(_absorb_short(_scoop(_merge_held(notes, fr), fr)), fr, snap)
-    notes = _legato_policy(_scoop_grace(_merge_legato(_quantize(notes, beats, div, shuffle)), div), div)
+    notes = _scoop_grace(_merge_legato(_quantize(notes, beats, div, shuffle)), div)
+    notes = _legato_policy(_merge_legato(_repair_mismatches(notes, fr, beats, snap, div, shuffle)), div)
     return [x for x in notes if x["start_beats"] >= 0]
 
 

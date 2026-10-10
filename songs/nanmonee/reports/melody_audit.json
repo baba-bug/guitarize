@@ -7,16 +7,16 @@
   {
    "melody": "analysis/melody.json",
    "method": "v7:game+signal",
-   "notes": 179,
-   "legato": 18,
-   "coverage": 0.941,
-   "pitch_ok": 0.806,
-   "wrong": 34,
+   "notes": 186,
+   "legato": 23,
+   "coverage": 0.945,
+   "pitch_ok": 0.802,
+   "wrong": 36,
    "backing_or_empty": 4,
    "chopped_held": 0,
-   "onset_recall": 0.88,
+   "onset_recall": 0.891,
    "pluck_ms": 20,
-   "repeat_f1": 0.816,
+   "repeat_f1": 0.792,
    "repeats": [
     {
      "section": "サビ",
@@ -30,67 +30,100 @@
        53
       ]
      ],
-     "f1": 0.816
+     "f1": 0.792
     }
-   ]
-  },
-  {
-   "melody": "/private/tmp/claude-502/-Users-s4146265-Desktop-Guitar/a8abd083-ae5e-4c29-b56a-229bca88d838/scratchpad/v4/melody_old_crepe.json",
-   "method": null,
-   "notes": 300,
-   "legato": 0,
-   "coverage": 0.961,
-   "pitch_ok": 0.761,
-   "wrong": 62,
-   "backing_or_empty": 41,
-   "chopped_held": 34,
-   "onset_recall": 0.923,
-   "pluck_ms": 40,
-   "repeat_f1": 0.662,
-   "repeats": [
+   ],
+   "missing": 10,
+   "missing_notes": [
     {
-     "section": "サビ",
-     "bars": [
-      [
-       2,
-       17
-      ],
-      [
-       38,
-       53
-      ]
-     ],
-     "f1": 0.662
-    }
-   ]
-  },
-  {
-   "melody": "/private/tmp/claude-502/-Users-s4146265-Desktop-Guitar/a8abd083-ae5e-4c29-b56a-229bca88d838/scratchpad/v4/v7.json",
-   "method": null,
-   "notes": 179,
-   "legato": 58,
-   "coverage": 0.939,
-   "pitch_ok": 0.807,
-   "wrong": 34,
-   "backing_or_empty": 3,
-   "chopped_held": 0,
-   "onset_recall": 0.852,
-   "pluck_ms": 20,
-   "repeat_f1": 0.827,
-   "repeats": [
+     "bar": 26,
+     "beat": 2.11,
+     "start": 36.29,
+     "end": 36.43,
+     "ms": 140,
+     "sung": 57.87,
+     "written": 59
+    },
     {
-     "section": "サビ",
-     "bars": [
-      [
-       2,
-       17
-      ],
-      [
-       38,
-       53
-      ]
-     ],
-     "f1": 0.827
+     "bar": 35,
+     "beat": 3.75,
+     "start": 49.89,
+     "end": 49.98,
+     "ms": 90,
+     "sung": 55.48,
+     "written": 59
+    },
+    {
+     "bar": 36,
+     "beat": 1.36,
+     "start": 50.49,
+     "end": 50.6,
+     "ms": 110,
+     "sung": 62.09,
+     "written": 56
+    },
+    {
+     "bar": 37,
+     "beat": 4.03,
+     "start": 52.89,
+     "end": 53.01,
+     "ms": 120,
+     "sung": 67.15,
+     "written": 66
+    },
+    {
+     "bar": 38,
+     "beat": 1.14,
+     "start": 53.29,
+     "end": 53.37,
+     "ms": 80,
+     "sung": 67.15,
+     "written": 66
+    },
+    {
+     "bar": 42,
+     "beat": 4.81,
+     "start": 60.41,
+     "end": 60.49,
+     "ms": 80,
+     "sung": 64.93,
+     "written": 64
+    },
+    {
+     "bar": 48,
+     "beat": 2.03,
+     "start": 68.07,
+     "end": 68.15,
+     "ms": 80,
+     "sung": 68.29,
+     "written": 67
+    },
+    {
+     "bar": 48,
+     "beat": 2.39,
+     "start": 68.2,
+     "end": 68.31,
+     "ms": 110,
+     "sung": 68.13,
+     "written": 67
+    },
+    {
+     "bar": 53,
+     "beat": 4.44,
+     "start": 76.16,
+     "end": 76.24,
+     "ms": 80,
+     "sung": 66.09,
+     "written": null
+    },
+    {
+     "bar": 55,
+     "beat": 4.03,
+     "start": 78.93,
+     "end": 79.01,
+     "ms": 80,
+     "sung": 63.33,
+     "written": 66
     }
    ]
   }
