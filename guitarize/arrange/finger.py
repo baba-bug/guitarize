@@ -16,9 +16,9 @@ from ..config import Profile
 from ..skeleton import skeleton_mask
 from ..verify.playability import Violation
 from . import atex
-from .capo import effective_profile, octave_plan
+from .capo import OctavePolicy, effective_profile, octave_plan
 from .fretting import FretEvent, assign_frets
-from .shapes import OPEN_STRINGS
+from .shapes import OPEN_STRINGS, voicings
 from .strum import beat_chords
 
 BASS_LOW = 40        # E2：低音区间 E2–D#3（指法调）
@@ -64,11 +64,11 @@ def skeleton_notes(leadsheet: dict, profile: Profile) -> list[tuple[float, int]]
     return out
 
 
-def melody_line(leadsheet: dict, capo: int, profile: Profile) -> list[tuple[float, int]]:
-    """骨架旋律 → (记谱位置, 指法调音高)；按段落（无标记时按乐句）分组各自选八度（见 capo.octave_plan）。"""
+def melody_line(leadsheet: dict, capo: int, profile: Profile, octave: OctavePolicy = "song") -> list[tuple[float, int]]:
+    """骨架旋律 → (记谱位置, 指法调音高)；八度移位见 capo.octave_plan（默认整曲一个移位，保持人声的高低关系）。"""
     mel = [(pos, p - capo) for pos, p in skeleton_notes(leadsheet, profile)]
     out = list(mel)
-    for idx, shift, _ in octave_plan(mel, section_bars(leadsheet)):
+    for idx, shift, _ in octave_plan(mel, section_bars(leadsheet), octave):
         for i in idx:
             out[i] = (mel[i][0], mel[i][1] + shift)
     return out
@@ -132,25 +132,59 @@ def bass_events(leadsheet: dict, capo: int, profile: Profile) -> list[tuple[floa
 
 
 def _voice_lines(n_bars: int, items: list[tuple[float, float, list, bool]], sections: list[str | None],
-                 feel: str) -> list[str]:
+                 feel: str, effects: dict[float, list[str]] | None = None) -> list[str]:
     """items：(记谱位置, 时值, [(弦, 品)], 是否连音线延续)（见 Placed.pieces）；按小节铺满（空隙补休止），
-    Shuffle 下按八分对切分。"""
+    Shuffle 下按八分对切分。effects：{记谱位置: 拍效果}（和弦指型、力度），挂在该位置起音的音 / 休止上
+    （休止在这些位置切开，保证有一拍从这里开始）。"""
+    marks = {round(k, 6): v for k, v in (effects or {}).items()}
     by_bar: dict[int, list] = {}
     for item in sorted(items, key=lambda x: x[0]):
         by_bar.setdefault(int(item[0] // 4), []).append(item)
     lines = []
     for i in range(n_bars):
         t, end, bar_items = i * 4.0, i * 4.0 + 4.0, []
+
+        def rests(a: float, b: float) -> None:
+            edges = [a, *sorted(k for k in marks if a + 1e-6 < k < b - 1e-6), b]
+            for x, y in zip(edges, edges[1:]):
+                bar_items.append(atex.Item(x - i * 4.0, y - x, [], marks.get(round(x, 6), ())))
+
         for pos, dur, notes, tie in by_bar.get(i, []):
             if pos > t + 1e-6:
-                bar_items.append(atex.Item(t - i * 4.0, pos - t, []))
+                rests(t, pos)
             dur = min(dur, end - pos)
-            bar_items.append(atex.Item(pos - i * 4.0, dur, notes, tie=tie))
+            bar_items.append(atex.Item(pos - i * 4.0, dur, notes, () if tie else marks.get(round(pos, 6), ()), tie=tie))
             t = pos + dur
         if t < end - 1e-6:
-            bar_items.append(atex.Item(t - i * 4.0, end - t, []))
+            rests(t, end)
         lines.append(atex.bar_line(atex.voice_bar_tokens(bar_items, feel), i + 1, sections[i]))
     return lines
+
+
+def shape_marks(leadsheet: dict, capo: int, profile: Profile) -> tuple[dict[float, str], dict[str, tuple]]:
+    """指弹谱上该按的和弦指型：每小节第 1、3 拍（低音所在）的和弦换成指法调的指型，指型变了才标（无和弦之后重标）。
+    → ({记谱位置: 指型名}, {指型名: 和弦图品位（1 弦 → 6 弦）})。"""
+    marks: dict[float, str] = {}
+    diagrams: dict[str, tuple] = {}
+    last = None
+    for i, b in enumerate(leadsheet["bars"]):
+        chords = beat_chords(b)
+        for k in (0, 2):
+            if chords[k] == "N":
+                last = None
+                continue
+            try:
+                options = voicings(theory.transpose_label(chords[k], -capo), profile)
+            except ValueError:
+                continue
+            if not options:
+                continue
+            v = options[0]
+            if v.name != last:
+                marks[i * 4.0 + k] = v.name
+                diagrams.setdefault(v.name, v.frets)
+                last = v.name
+    return marks, diagrams
 
 
 @dataclass
@@ -426,12 +460,14 @@ def annotate(lines: list[str], remarks: dict[int, list[str]]) -> list[str]:
 
 
 def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
-                    check: Callable[[str], list[Violation]] | None = None) -> str:
-    """check：自检（alphaTex → 违规列表）。给出时渲染后按违规修补、重新渲染，最多 10 轮。"""
+                    check: Callable[[str], list[Violation]] | None = None, octave: OctavePolicy = "song") -> str:
+    """check：自检（alphaTex → 违规列表）。给出时渲染后按违规修补、重新渲染，最多 10 轮。
+    octave：旋律八度策略（song.yaml 的 overrides.melody_octave，见 capo.octave_plan）。
+    谱上在低音声部标出该按的和弦指型（附和弦图）；旋律 f、伴奏 mp，试听时旋律更突出。"""
     profile = effective_profile(profile, capo)
     feel = leadsheet.get("feel", "straight")
     n_bars = len(leadsheet["bars"])
-    mel = melody_line(leadsheet, capo, profile)
+    mel = melody_line(leadsheet, capo, profile, octave)
     items = []
     for j, (pos, p) in enumerate(mel):
         nxt = mel[j + 1][0] if j + 1 < len(mel) else pos + MAX_MELODY_NOTE
@@ -455,11 +491,15 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
     remark(cut_same_string(v1, v2))
     remark(cut_crossings(v1, v2))
     sections = [b.get("section") for b in leadsheet["bars"]]
-    head = atex.header(title, leadsheet["tempo_bpm"], capo, feel, "score tabs", key=atex.leadsheet_key(leadsheet))
+    marks, diagrams = shape_marks(leadsheet, capo, profile)
+    head = atex.header(title, leadsheet["tempo_bpm"], capo, feel, "score tabs", diagrams, key=atex.leadsheet_key(leadsheet))
+    effects1 = {0.0: ["dy f"]}
+    effects2: dict[float, list[str]] = {pos: [f"ch {atex.quote(name)}"] for pos, name in marks.items()}
+    effects2.setdefault(0.0, []).append("dy mp")
 
     def render() -> str:
-        lines1 = _voice_lines(n_bars, [p for it in v1 for p in it.pieces()], sections, feel)
-        lines2 = _voice_lines(n_bars, [p for it in v2 for p in it.pieces()], [None] * n_bars, feel)
+        lines1 = _voice_lines(n_bars, [p for it in v1 for p in it.pieces()], sections, feel, effects1)
+        lines2 = _voice_lines(n_bars, [p for it in v2 for p in it.pieces()], [None] * n_bars, feel, effects2)
         return atex.document(head, [annotate(lines1, remarks), lines2])
 
     text = render()

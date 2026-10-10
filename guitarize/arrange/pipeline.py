@@ -81,7 +81,8 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
     profile = load_profile(cfg.level)
     notes = [(m["start_beats"], m["midi"]) for b in leadsheet["bars"] for m in b["melody"]]
     melody = sorted(notes) if arr == "finger" else []
-    options = choose_capo(chord_beats(leadsheet), profile, melody, section_bars=section_bars(leadsheet))
+    octave = cfg.overrides.get("melody_octave", "song")
+    options = choose_capo(chord_beats(leadsheet), profile, melody, section_bars=section_bars(leadsheet), octave=octave)
     wanted = capo if capo is not None else cfg.overrides.get("capo")
     if wanted is None:
         chosen = options[0]
@@ -108,7 +109,7 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
         text = generate_strum(leadsheet, chosen.capo, profile, section_patterns(paths, leadsheet), cfg.title,
                               check=check)
     else:
-        text = generate_finger(leadsheet, chosen.capo, profile, cfg.title, check=check)
+        text = generate_finger(leadsheet, chosen.capo, profile, cfg.title, check=check, octave=octave)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
     return target, chosen, result(text)

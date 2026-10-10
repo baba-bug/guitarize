@@ -1,3 +1,4 @@
+import re
 """编配编排：自检（真实 alphaTab 构建）、修补回归、4/4 限制、命令行输出。"""
 import json
 
@@ -109,7 +110,8 @@ def test_fill_cut_then_shift_is_repaired_and_keeps_the_beat3_bass():
     assert [(v.bar, v.rule) for v in calls[0]] == [(1, "shift")]
     assert calls[-1] == [] and len(calls) == 2
     assert "// bar 1 [サビ] · fill cut @2 (same string) · bass cut @2.5 (shift)" in text
-    assert text.split("\\voice")[2].split("// bar 1\n")[1].startswith("(0.2 1.4).4 -.4.8 r.8 (0.2 6.5).2 |")
+    bar = text.split("\\voice")[2].split("// bar 1\n")[1].splitlines()[0]
+    assert re.sub(r' \{(?:ch "[^"]*"\s*)?(?:dy \w+)?\}', "", bar) == "(0.2 1.4).4 -.4.8 r.8 (0.2 6.5).2 |"
 
 
 @pytest.mark.parametrize("error", [

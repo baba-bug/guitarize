@@ -1,3 +1,4 @@
+import re
 from dataclasses import replace
 
 import pytest
@@ -13,6 +14,12 @@ from guitarize.verify.model import load_score
 from guitarize.verify.playability import Violation, check_playability
 
 MID = load_profile("intermediate")
+
+
+def _plain(line: str) -> str:
+    """去掉和弦指型 / 力度标记（{ch "X"}、{dy f}，或二者合在一起），只看音和节奏。"""
+    line = re.sub(r' \{(?:ch "[^"]*"\s*)?(?:dy \w+)?\}', "", line)
+    return line
 
 
 def leadsheet(feel="shuffle"):
@@ -101,7 +108,7 @@ def test_melody_octave_is_chosen_per_section():
     mid = [(0, 1, 60), (1, 1, 62), (2, 1, 64), (3, 1, 65)]
     lo = [(0, 1, 50), (1, 1, 52), (2, 1, 53), (3, 1, 55)]
     ls = _sheet([_bar(0, "A", "C", mid), _bar(1, None, "C", mid), _bar(2, "B", "C", lo), _bar(3, None, "C", lo)])
-    line = melody_line(ls, 0, MID)
+    line = melody_line(ls, 0, MID, octave="section")
     assert {p for pos, p in line if pos < 8} <= {60, 62, 64, 65}       # A 段已在音域中部：不移
     assert {p for pos, p in line if pos >= 8} <= {62, 64, 65, 67}      # B 段整段升八度（整曲统一移位做不到）
 
@@ -132,7 +139,7 @@ def test_repair_loop_with_scripted_check():
     assert _bar_comment(calls[0], 2) == "// bar 2"
     v2 = text.split("\\voice")[2]
     line = v2.split("// bar 2\n")[1].splitlines()[0]
-    assert line.startswith("(2.4 3.5).8 r.")      # 低音 + 填充只留半拍，余下是休止
+    assert _plain(line).startswith("(2.4 3.5).8 r.")      # 低音 + 填充只留半拍，余下是休止
 
 
 def test_repair_loop_stops_when_nothing_applies():
@@ -165,7 +172,7 @@ def _voice2_bar(text, n):
 def test_fill_cut_keeps_the_bass_ringing_as_a_tie():
     text = generate_finger(capo4_bar12_leadsheet(), 4, MID, "T")
     assert _bar_comment(text, 1) == "// bar 1 [サビ] · fill cut @2 (same string)"
-    assert _voice2_bar(text, 1) == "(0.2 1.4).4 -.4.4 (0.2 6.5).2 |"   # 填充截在第 2 拍，低音接着响到第 3 拍
+    assert _plain(_voice2_bar(text, 1)) == "(0.2 1.4).4 -.4.4 (0.2 6.5).2 |"   # 填充截在第 2 拍，低音接着响到第 3 拍
 
 
 def test_shift_with_nothing_at_t_is_repaired_at_the_previous_attack():
@@ -180,7 +187,7 @@ def test_shift_with_nothing_at_t_is_repaired_at_the_previous_attack():
     text = generate_finger(capo4_bar12_leadsheet(), 4, MID, "T", check=check)
     assert len(calls) == 2
     assert _bar_comment(text, 1) == "// bar 1 [サビ] · fill cut @2 (same string) · bass cut @2.5 (shift)"
-    assert _voice2_bar(text, 1) == "(0.2 1.4).4 -.4.8 r.8 (0.2 6.5).2 |"
+    assert _plain(_voice2_bar(text, 1)) == "(0.2 1.4).4 -.4.8 r.8 (0.2 6.5).2 |"
 
 
 def test_shift_between_two_melody_notes_moves_one_an_octave():
@@ -200,4 +207,34 @@ def test_shift_between_two_melody_notes_moves_one_an_octave():
     assert [(v.rule, v.detail) for v in calls[0]] == [("shift", "0.50 拍内换把 10→8 品")]
     assert calls[-1] == []
     assert _bar_comment(text, 1) == "// bar 1 · melody-12 @1.5 (shift)"
-    assert text.split("// bar 1 · melody-12 @1.5 (shift)\n")[1].splitlines()[0] == "10.1.8 0.3.4 {d} 6.2.2 |"
+    assert _plain(text.split("// bar 1 · melody-12 @1.5 (shift)\n")[1].splitlines()[0]) == "10.1.8 0.3.4 {d} 6.2.2 |"
+
+
+def test_melody_line_default_keeps_contour_across_sections():
+    mid = [(0, 1, 60), (1, 1, 62), (2, 1, 64), (3, 1, 65)]
+    lo = [(0, 1, 50), (1, 1, 52), (2, 1, 53), (3, 1, 55)]
+    ls = _sheet([_bar(0, "A", "C", mid), _bar(1, "B", "C", lo)])
+    line = melody_line(ls, 0, MID)
+    shifts = {p - q for (_, p), q in zip(line, [60, 62, 64, 65, 50, 52, 53, 55])}
+    assert len(shifts) == 1 and shifts.pop() % 12 == 0                  # 整曲同一个移位：段落之间不换八度
+
+
+def test_finger_draft_marks_chord_shapes_and_balances_voices(tmp_path):
+    # 指弹谱也标出该按的和弦指型（指法调名称 + 和弦图），伴奏声部比旋律轻
+    text = generate_finger(leadsheet(), 4, MID, "T")
+    assert '\\chord "G" 3 0 0 0 2 3' in text and '\\chord "C"' in text and '\\chord "B7/D#"' in text
+    v1, v2 = text.split("\\voice")[1:]
+    assert 'ch "G"' in v2 and 'ch "C"' in v2 and 'ch "B7/D#"' in v2
+    assert v2.count('ch "G"') == 1                       # 同一指型连续时只标一次
+    assert "dy f" in v1 and "dy mp" in v2
+    src = tmp_path / "f.atex"
+    src.write_text(text, encoding="utf-8")
+    built = alphatab.build(src, tmp_path / "b", "f")
+    import pretty_midi
+    score = load_score(built["json"])
+    velocity = {(round(n.start, 2), n.pitch): n.velocity
+                for inst in pretty_midi.PrettyMIDI(str(built["mid"])).instruments for n in inst.notes}
+    voice = {v: [velocity[(round(score.seconds(s.start), 2), s.midi)] for s in score.sounding()
+                 if s.voice == v and (round(score.seconds(s.start), 2), s.midi) in velocity] for v in (0, 1)}
+    assert voice[0] and voice[1] and max(voice[1]) < min(voice[0])     # 伴奏（声部 2）比旋律轻
+    assert check_playability(score, MID, "finger") == []

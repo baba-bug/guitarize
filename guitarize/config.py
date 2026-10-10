@@ -55,6 +55,9 @@ class SongConfig:
       标签须能被 theory.parse_chord 解析（含转位 C/E 和强力和弦 E5），或写 N / N.C. / NC；相邻同名标签合并成一段。
       写错的小节号（< 1 或超过总小节数）、标签、个数都会 ValueError，并指出小节号。覆盖后的和弦段
       confidence 记为 "manual"：评分时按 high 计（manual 的 N 照例跳过），summary 里标 "!" 并写 [manual]。
+    - melody_octave：指弹旋律的八度（arrange/capo.py 的 octave_plan）。默认 "song"：整曲一个移位，
+      保持人声原有的高低关系；"section"：按段落各自选；整数（12 的倍数）：整曲固定移；{小节: 移位}：从该小节起移。
+    - capo：指定变调夹（arrange）
     """
     slug: str
     title: str
