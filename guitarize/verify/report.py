@@ -47,7 +47,7 @@ def _load_json(path: Path) -> dict | None:
 def melody_reference(paths: SongPaths, overrides: dict) -> Path:
     """旋律谱对照的人声：识别旋律用的那条分轨。melody.json 记着它（melody 步骤写的 source），以它为准；
     没有记（旧的 melody.json、还没跑 melody 步骤）时按 overrides.melody_source（默认 lead）。
-    lead 是居中的主唱 stems/lead.wav（去掉了左右的伴唱）；vocals、或 lead.wav 不在时用整条人声 stems/vocals.wav。"""
+    lead 是去掉伴唱的主唱 stems/lead.wav（analyze 的 lead 步骤）；vocals、或 lead.wav 不在时用整条人声 stems/vocals.wav。"""
     recorded = (_load_json(paths.melody_json) or {}).get("source")
     source = (melody_source(recorded, "melody.json source") if recorded is not None
               else melody_source(overrides.get("melody_source")))

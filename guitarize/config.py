@@ -10,7 +10,7 @@ from .paths import SongPaths
 
 PROFILES_PATH = Path(__file__).with_name("profiles.yaml")
 ARR_NAMES = {"strum": "弹唱", "finger": "指弹", "melody": "旋律"}
-MELODY_SOURCES = ("lead", "vocals")   # 旋律从哪条分轨识别：居中的主唱 stems/lead.wav、整条人声 stems/vocals.wav
+MELODY_SOURCES = ("lead", "vocals")   # 旋律从哪条分轨识别：主唱 stems/lead.wav（去掉伴唱）、整条人声 stems/vocals.wav
 
 
 @dataclass(frozen=True)
@@ -74,8 +74,9 @@ class SongConfig:
     - melody_octave：指弹 / 旋律谱的旋律八度（arrange/capo.py 的 octave_plan）。默认 "song"：整曲一个移位，
       保持人声原有的高低关系；"section"：按段落各自选；整数（12 的倍数）：整曲固定移；{小节: 移位}：从该小节起移。
     - capo：指定变调夹（arrange）
-    - melody_source：旋律从哪条音频识别。默认 "lead"：人声分轨里居中的主唱（去掉摆在左右的伴唱）；"vocals"：整条人声。
-      melody 步骤把用的分轨记进 melody.json 的 source，旋律谱校验对照同一条（改了这一项要重跑 --steps melody）
+    - melody_source：旋律从哪条音频识别。默认 "lead"：analyze 的 lead 步骤从人声分轨分出的主唱（伴唱分离模型
+      + 居中掩码；模型不可用时只用居中掩码，见 stems.separate_lead）；"vocals"：整条人声。melody 步骤把用的分轨
+      记进 melody.json 的 source（lead 时还有 lead_method），旋律谱校验对照同一条（改了这一项要重跑 --steps melody）
     """
     slug: str
     title: str

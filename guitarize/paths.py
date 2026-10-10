@@ -47,6 +47,11 @@ class SongPaths:
         return self.stems_dir / f"{name}.wav"
 
     @property
+    def lead_json(self) -> Path:
+        """主唱 lead.wav 是怎么分出来的（analyze 的 lead 步骤写；melody.json 的 lead_method 取自这里）。"""
+        return self.stems_dir / "lead.json"
+
+    @property
     def beats_json(self) -> Path:
         return self.analysis_dir / "beats.json"
 

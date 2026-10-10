@@ -61,3 +61,20 @@ def test_viewer_lists_every_available_stem(demo_song):
     refs = json.loads(page.split("window.REF_AUDIO = ")[1].split(";\n")[0])
     assert [r["label"] for r in refs] == ["原曲", "人声", "吉他", "鼓"]
     assert 'id="ref"' in page and 'id="refplay"' in page
+
+
+def test_viewer_lists_the_lead_and_backing_vocals_from_the_karaoke_split(demo_song):
+    # 伴唱分离模型分出的主唱 / 伴唱都能选来对照；只用 L/R 掩码时没有 backing.wav，就不列伴唱
+    from guitarize.render.viewer import build_viewer
+    for name in ("vocals", "lead", "backing"):
+        p = demo_song.stem(name)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b"RIFF")
+
+    def labels():
+        page = build_viewer(demo_song, "finger", "T").read_text(encoding="utf-8")
+        return [r["label"] for r in json.loads(page.split("window.REF_AUDIO = ")[1].split(";\n")[0])]
+
+    assert labels() == ["原曲", "人声", "主唱（模型去掉伴唱）", "伴唱"]
+    demo_song.stem("backing").unlink()
+    assert labels() == ["原曲", "人声", "主唱（模型去掉伴唱）"]

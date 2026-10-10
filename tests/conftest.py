@@ -48,6 +48,13 @@ def demo_leadsheet(sec_per_beat: float = 0.6) -> dict:
     return {"key": "C", "mode": "major", "tempo_bpm": 100.0, "feel": "straight", "beats_per_bar": 4, "bars": bars}
 
 
+@pytest.fixture(autouse=True)
+def _no_karaoke_model(monkeypatch):
+    """测试里不跑真的伴唱分离模型（1.7 GB、几分钟）：模型目录指向不存在的地方，主唱走 L/R 掩码；
+    要测模型那条路的用例自己设 GUITARIZE_KARAOKE_DIR 并注入假的 Separator。"""
+    monkeypatch.setenv("GUITARIZE_KARAOKE_DIR", str(FIXTURES / "no-karaoke-model"))
+
+
 @pytest.fixture
 def demo_song(tmp_path: Path) -> SongPaths:
     songs = tmp_path / "songs"

@@ -1,4 +1,4 @@
-"""分析编排：stems → beats → chords → melody → leadsheet，每步结果写入 analysis/。"""
+"""分析编排：stems → lead → beats → chords → melody → leadsheet，每步结果写入 analysis/。"""
 from __future__ import annotations
 
 import json
@@ -13,10 +13,11 @@ from .chords import reference_chords
 from .key import chosen_key, cross_check_key, estimate_key, key_report, parse_key, scale_pcs
 from .leadsheet import build_leadsheet
 from .melody import extract_melody
-from .stems import extract_lead, separate
+from .stems import KARAOKE_METHOD, KARAOKE_MODEL, separate, separate_lead
 from .webchart import parse_webchart
 
-STEPS = ("stems", "beats", "chords", "melody", "leadsheet")
+# lead 紧跟 stems 单独一步：换模型 / 重做主唱时不必重跑 Demucs
+STEPS = ("stems", "lead", "beats", "chords", "melody", "leadsheet")
 
 
 def _write(path: Path, data: dict) -> None:
@@ -34,12 +35,19 @@ def _need(path: Path, slug: str, step: str) -> dict:
     return _read(path)
 
 
+def _separate_lead(paths: SongPaths) -> str:
+    """人声分轨 → 主唱 lead.wav + 伴唱 backing.wav（stems.separate_lead）；用的方法记进 stems/lead.json。"""
+    method = separate_lead(paths.stem("vocals"), paths.stem("lead"), paths.stem("backing"))
+    _write(paths.lead_json, {"method": method, "model": KARAOKE_MODEL if method == KARAOKE_METHOD else None})
+    return method
+
+
 def _melody_source(paths: SongPaths, overrides: dict) -> tuple[str, Path]:
-    """旋律识别用的音频 (分轨名, 路径)：默认居中的主唱 lead.wav（没有就从人声分轨抽出来）；
+    """旋律识别用的音频 (分轨名, 路径)：默认主唱 lead.wav（没有就从人声分轨分出来）；
     overrides.melody_source: vocals 用整条人声。分轨名记进 melody.json 的 source（verify 据此选对照的分轨）。"""
     source = melody_source(overrides.get("melody_source"))
     if source == "lead" and not paths.stem("lead").exists() and paths.stem("vocals").exists():
-        extract_lead(paths.stem("vocals"), paths.stem("lead"))
+        _separate_lead(paths)
     return source, paths.stem(source)
 
 
@@ -51,7 +59,12 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
     slug = paths.slug
     if "stems" in steps:
         separate(paths.original_wav, paths.stems_dir)
-        extract_lead(paths.stem("vocals"), paths.stem("lead"))
+        for stale in (paths.stem("lead"), paths.stem("backing"), paths.lead_json):   # 从旧人声分出来的：作废
+            stale.unlink(missing_ok=True)
+    if "lead" in steps:
+        if not paths.stem("vocals").exists():
+            raise ValueError(f"missing vocals.wav; run `guitarize analyze {slug} --steps stems` first")
+        _separate_lead(paths)
     if "beats" in steps:
         _write(paths.beats_json, track_beats(paths.original_wav, paths.stems_dir, overrides))
     beats = chords = None
@@ -82,6 +95,8 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
         source, wav = _melody_source(paths, overrides)
         melody = extract_melody(wav, beats, scale_pcs(*key), f0_cache=paths.vocal_f0)
         melody["source"] = source   # 从哪条分轨识别：旋律谱校验对照同一条
+        if source == "lead" and paths.lead_json.exists():
+            melody["lead_method"] = _read(paths.lead_json)["method"]   # 主唱是怎么分出来的（模型 / 只用 L/R 掩码）
         melody["beats_signature"] = beats_signature(beats)
         melody["key"] = {"tonic": key[0], "mode": key[1]}  # 量化时用的调；leadsheet 用另一个调时据此报错
         _write(paths.melody_json, melody)
