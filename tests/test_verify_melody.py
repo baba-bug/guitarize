@@ -239,13 +239,16 @@ def test_verify_melody_writes_vocal_snippets_pitch_plots_and_report(demo_song, m
     ls["bars"][1]["melody"][0]["midi"] = 71                     # 参考第 2 小节第 1 个音改成 B4：这一小节被标出
     ls["bars"][2]["melody"][0]["out_of_key"] = True             # 第 3 小节有调外音：需人耳确认
     demo_song.leadsheet_json.write_text(json.dumps(ls), encoding="utf-8")
+    from guitarize.verify import report as vreport
+    monkeypatch.setattr(vreport, "MAX_SNIPPETS", 1)             # 旋律谱列出的小节全部出试听和音高图，不受这个上限截断
     assert main(["--songs-dir", songs, "verify", "demo", "--arr", "melody"]) == 0
     it = demo_song.report_root("melody") / "iter-01"
     scores = json.loads((it / "scores.json").read_text(encoding="utf-8"))
     s = scores["summary"]
     assert 2 in scores["problems"] and s["violations"] == 0 and s["vocal_similarity"] is not None
     assert s["ear_check_bars"] == 1 and "chord" not in s["checks"]
-    for name in ("plots/bar-002.png", "plots/bar-003.png", "snippets/bar-002_vocal.wav", "snippets/bar-002_synth.wav"):
+    for name in ("plots/bar-002.png", "plots/bar-003.png", "snippets/bar-002_vocal.wav", "snippets/bar-002_synth.wav",
+                 "snippets/bar-003_vocal.wav", "snippets/bar-003_synth.wav"):
         assert (it / name).exists(), name
     assert not (it / "snippets" / "bar-002_orig.wav").exists()
     report = (it / "report.md").read_text(encoding="utf-8")

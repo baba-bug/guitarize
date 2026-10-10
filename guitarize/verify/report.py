@@ -1,6 +1,8 @@
 """一次校验：构建 → 合成 → 可弹性 → 评分 → reports/<arr>/iter-NN（报告、片段、色度图）+ history.csv。
-旋律谱（melody）对照人声分轨：试听片段是人声 ↔ 合成，图是人声基频 vs 谱上的音（音高图），问题小节和
-需人耳确认的小节都出图。"""
+弹唱 / 指弹：前 MAX_SNIPPETS 个问题小节出试听片段（原曲 ↔ 合成）和色度图。
+旋律谱（melody）对照人声分轨：试听片段是人声 ↔ 合成，图是人声基频 vs 谱上的音（音高图）；列出的小节（问题小节、
+需人耳确认的小节）全部出试听片段和音高图，不受 MAX_SNIPPETS 截断——音高图是找错音的主要工具，需人耳确认的
+小节也都要能听、能看（片段与图在 .gitignore 里，只占本地空间）。"""
 from __future__ import annotations
 
 import csv
@@ -76,14 +78,15 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
 
     root = paths.report_root(arr)
     out = next_iter_dir(root)
-    if arr == "melody":   # 问题小节在前，再是需人耳确认的小节
+    if arr == "melody":   # 问题小节在前，再是需人耳确认的小节；全部出片段和音高图（见模块说明）
         listen = problems + [b.bar for b in bars if b.ear_notes and b.bar not in problems]
         snippets = _write_snippets(out, listen, score, leadsheet, synth, vocals, "vocal")
         contour = _vocal_contour(paths, leadsheet, vocals) if leadsheet and listen else None
         plots = _write_pitch_plots(out, listen, score, leadsheet, contour)
-    else:
-        snippets = _write_snippets(out, problems, score, leadsheet, synth, paths.original_wav)
-        plots = _write_plots(out, problems, score, leadsheet, synth, paths.stem("harmonic"))
+    else:                 # 片段和色度图同一个上限
+        shown = problems[:MAX_SNIPPETS]
+        snippets = _write_snippets(out, shown, score, leadsheet, synth, paths.original_wav)
+        plots = _write_plots(out, shown, score, leadsheet, synth, paths.stem("harmonic"))
     (out / "scores.json").write_text(json.dumps({
         "summary": summary,
         "problems": problems,
@@ -114,10 +117,11 @@ def _cut(wav: Path, a: float, b: float, dst: Path) -> None:
 
 def _write_snippets(out: Path, problems: list[int], score: Score, leadsheet: dict | None,
                     synth: Path, original: Path, ref_name: str = "orig") -> dict[int, list[str]]:
-    """前 MAX_SNIPPETS 个小节的 A/B 试听：bar-NNN_<ref_name>.wav（参考：原曲，旋律谱是人声分轨）↔ bar-NNN_synth.wav。"""
+    """problems 里每个小节的 A/B 试听（上限由调用方截取）：bar-NNN_<ref_name>.wav（参考：原曲，旋律谱是人声分轨）
+    ↔ bar-NNN_synth.wav。"""
     res: dict[int, list[str]] = {}
     folder = out / "snippets"
-    for bar in problems[:MAX_SNIPPETS]:
+    for bar in problems:
         i = bar - 1
         files = []
         folder.mkdir(exist_ok=True)
@@ -156,7 +160,7 @@ def _write_plots(out: Path, problems: list[int], score: Score, leadsheet: dict |
     folder.mkdir(exist_ok=True)
     res: dict[int, str] = {}
     n = min(len(score.bars), len(leadsheet["bars"]))
-    for bar in problems[:MAX_SNIPPETS]:
+    for bar in problems:
         i = bar - 1
         if i >= n:
             continue
