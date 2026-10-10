@@ -9,6 +9,11 @@
   直拍：十六分格；某拍有 +1/3 / +2/3 起音（overrides.melody 里写的三连音）时整拍写成三连音。
 - 指法：fretting.assign_frets 的 Viterbi（只有旋律；1–4 弦不加罚、低把位优先）。自检报换把（shift）时
   给该音（不行再给前一个按弦音）换一个同音高的位置：只换弦和品，不改音高。
+- 连奏（leadsheet 的 legato：同一音节里从前一个音滑过来，不重新拨弦）：前一个音一直唱到它（rhythm），
+  指法尽量放在同一根弦上（Viterbi 换弦加罚，只是偏好）。同弦时前一个音写音符效果：差 1–2 品击弦 / 勾弦 h，
+  3 品以上连奏滑音 sl（有一头是空弦时滑不过去，写 h）；不在同一根弦上就照常拨弦。前一个音丢了、或两个音
+  移了不同的八度时照常拨弦。尾滑（slide_out）写成 sod / sou（连到下一个音时不写：音高的变化已经写了）。
+  效果都挂在前一个音的最后一段（连音线延续）上，紧挨着下一个音（见 atex 模块说明）。
 - 谱面：五线谱 + 六线谱、调号、力度 f；每小节第 1 拍标和弦指型（finger.shape_marks，附和弦图），
   小节中间换指型再标；变调夹与指弹相同（arrange 按同样的旋律音域选）。段落名写成段落第一拍的文字（txt），
   不用 \\section：alphaTab 把段落标记和同一拍的和弦名排进同一行、叠在一起（EffectBandSlot.canBeUsed 允许
@@ -39,12 +44,15 @@ EPS = 1e-6
 @dataclass
 class Sung:
     """谱上的一个旋律音。perf：演奏位置（alphaTab 播放的时刻）；pos / dur：记谱位置与时值；单位都是拍。
-    pitch：指法调音高（八度移位之后）；where：(弦, 品)，None = 弹不了（已丢）。"""
+    pitch：指法调音高（八度移位之后）；where：(弦, 品)，None = 弹不了（已丢）。
+    legato：从 line 里的上一个音连奏过来（不重新拨弦，上一个音一直响到这里）；slide_out：音尾滑出 "down" / "up"。"""
     perf: float
     pos: float
     dur: float
     pitch: int
     where: tuple[int, int] | None = None
+    legato: bool = False
+    slide_out: str | None = None
 
 
 def _q(x: float) -> int:
@@ -83,53 +91,99 @@ def _written(k: int, feel: str, triplets: set[int]) -> int:
     return k
 
 
-def rhythm(notes: Iterable[tuple[float, float, int]], feel: str,
-           n_bars: int) -> tuple[list[tuple[int, int, int, int]], list[tuple[int, str]]]:
-    """[(起音, 时值, 音高)]（演奏时间，拍）→ 单声部 [(演奏位置, 记谱位置, 记谱时值, 音高)]（1/12 拍），以及丢掉的音
-    [(记谱位置, 说明)]：起音落到同一格上的后一个音（只有手写的 overrides.melody 才会这样）。
+def rhythm(notes: Iterable[tuple[float, float, int, bool, str | None]], feel: str,
+           n_bars: int) -> tuple[list[tuple[int, int, int, int, bool, str | None]], list[tuple[int, str]]]:
+    """[(起音, 时值, 音高, 连奏, 尾滑)]（演奏时间，拍）→ 单声部 [(演奏位置, 记谱位置, 记谱时值, 音高, 连奏, 尾滑)]
+    （1/12 拍），以及丢掉的音 [(记谱位置, 说明)]：起音落到同一格上的后一个音（只有手写的 overrides.melody 才会这样）。
     起音落格见 triplet_beats；音尾 = 原唱音尾落格，截到下一个音的起音（单声部，不重叠）和末小节线；
-    落格后不足一格的补足一格。"""
+    落格后不足一格的补足一格。连奏：前一个音（按起音排序紧挨着的那个）也留下时才保留，前一个音的音尾一直延到
+    它的起音（连着唱，中间不留休止）；前一个音丢了（或在谱外）时照常拨弦。尾滑原样带着。"""
     end_all = n_bars * 4 * Q
-    raw = sorted((_q(s), _q(s + d), p) for s, d, p in notes if 0 <= _q(s) < end_all)
+    raw = sorted(((_q(s), _q(s + d), p, legato, slide) for s, d, p, legato, slide in notes if 0 <= _q(s) < end_all),
+                 key=lambda x: x[:3])
     if feel == "shuffle":   # 先把起音落到三连音格，再看哪些拍有 +1/3 起音
-        raw = [(_snap(a, 4), b, p) for a, b, p in raw]
-    triplets = triplet_beats([a for a, _, _ in raw], feel)
-    kept: list[tuple[int, int, int]] = []
+        raw = [(_snap(a, 4), *rest) for a, *rest in raw]
+    triplets = triplet_beats([x[0] for x in raw], feel)
+    kept: list[tuple[int, int, int, bool, str | None]] = []
     dropped: list[tuple[int, str]] = []
-    for a, b, p in raw:
+    last = None   # kept[-1] 在 raw 里的下标
+    for j, (a, b, p, legato, slide) in enumerate(raw):
         a = _snap_point(a, feel, triplets)
         if a >= end_all:
             continue
         if kept and kept[-1][0] == a:
             dropped.append((_written(a, feel, triplets), f"drop {theory.midi_name(p)}"))
             continue
-        kept.append((a, b, p))
+        kept.append((a, b, p, legato and last == j - 1, slide))
+        last = j
     out = []
-    for i, (a, b, p) in enumerate(kept):
+    for i, (a, b, p, legato, slide) in enumerate(kept):
         nxt = kept[i + 1][0] if i + 1 < len(kept) else end_all
-        end = min(_snap_point(b, feel, triplets), nxt)
-        if end <= a:
-            end = min(a + _step(a, feel, triplets), nxt)
+        if i + 1 < len(kept) and kept[i + 1][3]:
+            end = nxt   # 下一个音连奏过来：一直唱到它
+        else:
+            end = min(_snap_point(b, feel, triplets), nxt)
+            if end <= a:
+                end = min(a + _step(a, feel, triplets), nxt)
         pos = _written(a, feel, triplets)
-        out.append((a, pos, _written(end, feel, triplets) - pos, p))
+        out.append((a, pos, _written(end, feel, triplets) - pos, p, legato, slide))
     return out, dropped
 
 
 def melody_line(leadsheet: dict, capo: int,
                 octave: OctavePolicy = "song") -> tuple[list[Sung], list[tuple[float, str]]]:
     """leadsheet 的全部旋律音 → (谱上的旋律音 [Sung]（未分配指法）, 丢掉的音 [(记谱位置, 说明)])。
-    八度移位见 capo.octave_plan（默认整曲一个移位，与指弹 finger.melody_line 同一策略）。"""
-    notes = [(m["start_beats"], m["dur_beats"], m["midi"]) for b in leadsheet["bars"] for m in b["melody"]]
+    八度移位见 capo.octave_plan（默认整曲一个移位，与指弹 finger.melody_line 同一策略）。
+    leadsheet 音的 legato / slide_out 带到 Sung 上（见 rhythm）；连奏的两个音移了不同的八度时照常拨弦。"""
+    notes = [(m["start_beats"], m["dur_beats"], m["midi"], bool(m.get("legato")), m.get("slide_out"))
+             for b in leadsheet["bars"] for m in b["melody"]]
     timed, dropped = rhythm(notes, leadsheet.get("feel", "straight"), len(leadsheet["bars"]))
-    line = [Sung(a / Q, pos / Q, dur / Q, p - capo) for a, pos, dur, p in timed]
+    line = [Sung(a / Q, pos / Q, dur / Q, p - capo, legato=legato, slide_out=slide)
+            for a, pos, dur, p, legato, slide in timed]
+    moved = [0] * len(line)
     for idx, shift, _ in octave_plan([(n.pos, n.pitch) for n in line], section_bars(leadsheet), octave):
         for i in idx:
             line[i].pitch += shift
+            moved[i] = shift
+    for i in range(1, len(line)):
+        if moved[i] != moved[i - 1]:
+            line[i].legato = False
     return line, [(pos / Q, text) for pos, text in dropped]
 
 
 def _pitch(w: tuple[int, int]) -> int:
     return OPEN_STRINGS[w[0] - 1] + w[1]
+
+
+SLIDE_OUT = {"down": "sod", "up": "sou"}
+
+
+def glide(a: Sung, b: Sung) -> str | None:
+    """b 从 a 连奏过来时 a 上写的音符效果：同一根弦上差 1–2 品击弦 / 勾弦 h，3 品以上连奏滑音 sl；
+    有一头是空弦时滑不过去，写 h（击弦 / 勾弦到空弦可以）。不是连奏、不在同一根弦上、同一品 → None：照常拨弦。"""
+    if not (b.legato and a.where and b.where) or a.where[0] != b.where[0] or a.where[1] == b.where[1]:
+        return None
+    return "h" if abs(b.where[1] - a.where[1]) <= 2 or 0 in (a.where[1], b.where[1]) else "sl"
+
+
+def note_effects(line: list[Sung]) -> dict[float, dict[int, list[str]]]:
+    """→ {记谱音尾: {弦: [音符效果]}}（finger._voice_lines 的 note_effects）：连到下一个音的 h / sl（见 glide）；
+    没有连到下一个音时，尾滑写成 sod / sou。"""
+    out: dict[float, dict[int, list[str]]] = {}
+    for n, nxt in zip(line, line[1:] + [None]):
+        if n.where is None:
+            continue
+        fx = glide(n, nxt) if nxt is not None else None
+        if fx is None and n.slide_out in SLIDE_OUT:
+            fx = SLIDE_OUT[n.slide_out]
+        if fx:
+            out[n.pos + n.dur] = {n.where[0]: [fx]}
+    return out
+
+
+def legato_breaks(line: list[Sung]) -> int:
+    """连奏的两个音不在同一根弦上（只能重新拨弦）的对数。"""
+    return sum(1 for a, b in zip(line, line[1:]) if b.legato and a.where and b.where and a.where[0] != b.where[0])
 
 
 def positions(pitch: int, max_fret: int) -> list[tuple[int, int]]:
@@ -165,7 +219,8 @@ def _reach(line: list[Sung], j: int) -> int:
 def refret(line: list[Sung], i: int, profile: Profile,
            fixed: set[int] = frozenset()) -> tuple[int, tuple[int, int], tuple[int, int]] | None:
     """换把违规的音 i：给它（不行再给前一个按弦音）换一个同音高的位置（就地修改）。依次比较：全曲换把违规数、
-    先换 i、离前后按弦音的品数、1–4 弦、品位低。模型里 i 也违规、却没有哪个位置能减少违规时不换（免得白换）。
+    拆到两根弦上的连奏对数（legato_breaks）、先换 i、离前后按弦音的品数、1–4 弦、品位低。
+    模型里 i 也违规、却没有哪个位置能减少违规时不换（免得白换）。
     fixed：已经换过的音（每个音最多换一次）。返回 (换了的音, 旧位置, 新位置)；没换时 None。"""
     before = shift_breaks(line, profile.max_shift)
     prev = next((j for j in range(i - 1, -1, -1) if _fretted(line[j])), None)
@@ -176,7 +231,8 @@ def refret(line: list[Sung], i: int, profile: Profile,
             if w == old:
                 continue
             line[j].where = w
-            key = (len(shift_breaks(line, profile.max_shift)), rank, _reach(line, j), max(0, w[0] - TOP_STRINGS), w[1])
+            key = (len(shift_breaks(line, profile.max_shift)), legato_breaks(line), rank, _reach(line, j),
+                   max(0, w[0] - TOP_STRINGS), w[1])
             line[j].where = old
             if best is None or key < best[0]:
                 best = (key, j, w)
@@ -229,7 +285,8 @@ def generate_melody(leadsheet: dict, capo: int, profile: Profile, title: str,
     feel = leadsheet.get("feel", "straight")
     n_bars = len(leadsheet["bars"])
     line, dropped = melody_line(leadsheet, capo, octave)
-    events = assign_frets([FretEvent(n.perf, n.pitch, None) for n in line], profile, top_strings=TOP_STRINGS)
+    events = assign_frets([FretEvent(n.perf, n.pitch, None, legato=n.legato) for n in line], profile,
+                          top_strings=TOP_STRINGS)
     remarks: dict[int, list[str]] = {}
 
     def remark(found: Iterable[tuple[float, str]]) -> None:
@@ -253,7 +310,8 @@ def generate_melody(leadsheet: dict, capo: int, profile: Profile, title: str,
 
     def render() -> str:
         pieces = split_at([(n.pos, n.dur, [n.where] if n.where else [], False) for n in line], effects)
-        lines = _voice_lines(n_bars, pieces, [None] * n_bars, feel, effects, tie_effects=True)
+        lines = _voice_lines(n_bars, pieces, [None] * n_bars, feel, effects, tie_effects=True,
+                             note_effects=note_effects(line))
         return atex.document(head, [annotate(_label_sections(lines, sections), remarks)])
 
     text = render()
