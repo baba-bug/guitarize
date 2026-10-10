@@ -2,7 +2,8 @@
 - 伴唱漏音（主唱轨比伴唱轨弱 3 dB 以上，或左右不相关 = 摆在两边的伴唱）/ 没声音占一半以上的音丢掉；
 - 音高：GAME 与 crepe 一致时取平均，再吸附到调内音或当时和弦里的音（D#/G 上的 G 不算调外）；
 - 换字（音量下陷 / 辅音的无声）处切开、重新拨弦；长音里音高真的变了（≥ 1 拍）也切开，后半段不重新拨（legato）；
-- 同音、中间没有换字 → 一个长音，只拨一下等它延音；换音没有换字 → legato（吉他上滑 / 击勾）；
+- 同音、中间没有换字 → 一个长音，只拨一下等它延音；换音没有换字时，只有快的装饰音（击 / 勾）和 ≥ 3 半音的滑音不重新拨，
+  其余照常拨弦；字头往上滑的一格短音并进后面的音；GAME 漏掉的短音（一两个半音的一步）补上；
 - 量化到格（shuffle 三连音，中间那个位置 +1/3 要多一点证据才用）。
 在 なんもねえ 上和干净主唱逐帧对过（melody_audit）：伴唱音、切碎的长音、滑音切碎都比逐格量化少。"""
 from __future__ import annotations
@@ -43,6 +44,12 @@ SCOOP = 0.2                 # 秒：拨弦音的起点最多往前拉到这么�
 SHORT = 0.15                # 秒：字头短于它、后面紧跟 legato 音 → 是滑进来的
 SHORT_SLIDE = 2             # 半音
 MID_PENALTY = 0.06          # 拍：shuffle 里中间那个三连音位置（+1/3）的罚分
+LEGATO_SLIDE = 3            # 半音：两个长音之间字内换音至少这么大才不重新拨（滑弦）；更小的照常拨弦
+FILL_FRAMES = 5             # 帧：GAME 漏掉的短音至少有这么多主唱帧……
+FILL_SPAN = 15              # 帧：……挤在这么短的一段里（更长的漏掉一般是 GAME 有意不要的滑音 / 气声）
+FILL_STD = 0.5              # 半音：音高要稳
+FILL_DB = -20.0             # 音量不能太小
+FILL_STEP = 2               # 半音：紧接前一个音时只补一两个半音的"一步"；再大是甩下去的尾巴
 
 
 @dataclass
@@ -369,6 +376,46 @@ def _absorb_short(notes: list[_Note]) -> list[_Note]:
     return out
 
 
+def _fill_gaps(notes: list[_Note], fr: Frames, snap) -> list[_Note]:
+    """GAME 漏掉的短音（如 なんもねえ 第 8 小节 C#4 后面轻轻落到 B3）：没被任何音盖住的主唱帧（中间允许 2 帧以内的无声）
+    ≥ FILL_FRAMES 帧、整段不超过 FILL_SPAN 帧、音高稳（标准差 < FILL_STD）、平均音量 > FILL_DB → 补一个音。
+    紧接前一个音（≤ CONTIGUOUS 秒）时：音高差超过 FILL_STEP 半音是甩下去的尾巴，不补；同音并进前一个音；
+    否则没有换字就是 legato。"""
+    n = len(fr.voiced)
+    covered = np.zeros(n, bool)
+    for x in notes:
+        covered[max(0, _frame(x.a)):min(n, _frame(x.e))] = True
+    free = fr.voiced & ~covered
+    runs, i = [], 0
+    while i < n:
+        if not free[i]:
+            i += 1
+            continue
+        j = i + 1
+        while j < n and (free[j] or (not covered[j] and j + 1 < n and free[j + 1:j + 3].any() and not fr.voiced[j])):
+            j += 1
+        runs.append((i, j))
+        i = j
+    out = [replace(x) for x in notes]
+    for i, j in runs:
+        v = fr.voiced[i:j]
+        m = fr.midi[i:j][v]
+        if v.sum() < FILL_FRAMES or j - i > FILL_SPAN or float(np.std(m)) >= FILL_STD or fr.db[i:j].mean() <= FILL_DB:
+            continue
+        a, e = i / FPS, j / FPS
+        pitch, out_ = snap(float(np.median(m)), a)
+        prev = max((x for x in out if x.e <= a + 1e-6), key=lambda x: x.e, default=None)
+        contiguous = prev is not None and a - prev.e <= CONTIGUOUS + 1 / FPS
+        if contiguous and abs(pitch - prev.midi) > FILL_STEP:
+            continue
+        if contiguous and pitch == prev.midi:
+            prev.e = e
+            continue
+        onset = not contiguous or bool(fr.onset[max(0, i - NEAR):i + NEAR + 1].any())
+        out.append(_Note(a, e, pitch, out_, float(np.mean(fr.per[i:j])), onset=onset))
+    return sorted(out, key=lambda x: x.a)
+
+
 def _quantize(notes: list[_Note], beats: dict, div: int, shuffle: bool) -> list[dict]:
     """起点 quantize_start，终点四舍五入到格、至少一格；撞格（起点不晚于前一个音）的往后挪一格，前一个音截到它的起点。
     legato 的音带 "legato": True，其余不带这个键。"""
@@ -401,6 +448,40 @@ def _merge_legato(notes: list[dict]) -> list[dict]:
     return out
 
 
+def _scoop_grace(notes: list[dict], div: int) -> list[dict]:
+    """拨弦的一格短音、紧接着高 1–SHORT_SLIDE 半音的 legato 音：是字头往上滑（しゃくり），合成一个音，用后面那个音高、
+    由它拨（起点是短音的起点）。"""
+    out: list[dict] = []
+    i = 0
+    while i < len(notes):
+        x, nxt = notes[i], notes[i + 1] if i + 1 < len(notes) else None
+        if (nxt is not None and not x.get("legato") and nxt.get("legato") and x["dur_beats"] <= 1 / div + 1e-6
+                and 1 <= nxt["midi"] - x["midi"] <= SHORT_SLIDE
+                and abs(x["start_beats"] + x["dur_beats"] - nxt["start_beats"]) < 1e-3):
+            merged = {k: v for k, v in nxt.items() if k != "legato"}
+            merged.update(start_beats=x["start_beats"], dur_beats=_span(x["start_beats"], nxt["start_beats"] + nxt["dur_beats"]))
+            out.append(merged)
+            i += 2
+            continue
+        out.append(x)
+        i += 1
+    return out
+
+
+def _legato_policy(notes: list[dict], div: int) -> list[dict]:
+    """字内换音只在两种情况下不重新拨：快的装饰音（两个音里有一个 ≤ 1 格，用击 / 勾）和 ≥ LEGATO_SLIDE 半音的滑音（滑弦）。
+    两个长音之间一两个半音的换音照常拨弦——用户听过：处处击勾 / 滑弦反而不像唱的。"""
+    out: list[dict] = []
+    for x in notes:
+        if x.get("legato") and out:
+            prev = out[-1]
+            short = min(prev["dur_beats"], x["dur_beats"]) <= 1 / div + 1e-6
+            if not (short or abs(x["midi"] - prev["midi"]) >= LEGATO_SLIDE):
+                x = {k: v for k, v in x.items() if k != "legato"}
+        out.append(x)
+    return out
+
+
 def game_melody(rows, fr: Frames, beats: dict, key_pcs: set[int], bar_labels: dict) -> list[dict]:
     """GAME 的音 [(起秒, 止秒, 浮点音高)] + 主唱逐帧特征 → 旋律音（start_beats / dur_beats / midi / out_of_key / conf，
     legato 的音另有 "legato": True）。去掉第 1 小节之前的音。"""
@@ -410,8 +491,9 @@ def game_melody(rows, fr: Frames, beats: dict, key_pcs: set[int], bar_labels: di
     notes = _from_game(rows, fr, snap)
     notes = _split_at_onsets(notes, fr, 60 / beats["tempo_bpm"] / div)
     notes = _split_drift(notes, fr, beats, snap)
-    notes = _absorb_short(_scoop(_merge_held(notes, fr), fr))
-    return [x for x in _merge_legato(_quantize(notes, beats, div, shuffle)) if x["start_beats"] >= 0]
+    notes = _fill_gaps(_absorb_short(_scoop(_merge_held(notes, fr), fr)), fr, snap)
+    notes = _legato_policy(_scoop_grace(_merge_legato(_quantize(notes, beats, div, shuffle)), div), div)
+    return [x for x in notes if x["start_beats"] >= 0]
 
 
 def extract_melody_v7(lead_raw: Path, backing: Path, game_rows, beats_json: dict, key_pcs: set[int],

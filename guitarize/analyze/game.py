@@ -14,6 +14,9 @@ from pathlib import Path
 from ..paths import REPO_ROOT
 
 GAME_MODEL = Path("models") / "large" / "GAME-1.0-large" / "model.pt"   # 相对 GAME 目录
+# GAME 的分音带随机采样（D3PM），同一个文件跑两次边界会变：固定随机种子再跑 infer.py（argv 原样传给它的 click 命令）
+SEEDED_RUN = ("import random, runpy, sys, numpy, torch; random.seed(0); numpy.random.seed(0); torch.manual_seed(0); "
+              "sys.argv = ['infer.py', *sys.argv[1:]]; runpy.run_path('infer.py', run_name='__main__')")
 CACHE_MARK = "# "   # 缓存第一行：# {签名 JSON}，后面是 GAME 原样的 CSV（onset,offset,pitch）
 
 
@@ -44,7 +47,7 @@ def run_game(wav: Path, language: str | None = None, root: Path | None = None) -
         _warn(f"没有模型 {model}")
         return None
     with tempfile.TemporaryDirectory(prefix="guitarize-game-") as tmp:
-        cmd = [sys.executable, "infer.py", "extract", str(Path(wav).resolve()), "-m", str(model.resolve()),
+        cmd = [sys.executable, "-c", SEEDED_RUN, "extract", str(Path(wav).resolve()), "-m", str(model.resolve()),
                *(["-l", language] if language else []),
                "--output-formats", "csv", "--pitch-format", "number", "--output-dir", tmp]
         proc = subprocess.run(cmd, cwd=root / "src", capture_output=True)

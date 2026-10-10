@@ -28,7 +28,7 @@ def _fake_run(monkeypatch, calls, csv_text=CSV, returncode=0, stderr=b""):
         assert capture_output                                  # GAME 的输出很吵：收起来，失败时只报最后一行
         if csv_text is not None:
             out = cmd[cmd.index("--output-dir") + 1]
-            with open(os.path.join(out, os.path.basename(cmd[3]).rsplit(".", 1)[0] + ".csv"), "w") as f:
+            with open(os.path.join(out, os.path.basename(cmd[cmd.index("extract") + 1]).rsplit(".", 1)[0] + ".csv"), "w") as f:
                 f.write(csv_text)
         return subprocess.CompletedProcess(cmd, returncode, b"", stderr)
 
@@ -60,10 +60,15 @@ def test_game_notes_runs_infer_extract_and_reads_the_csv(tmp_path, monkeypatch):
     assert game.game_notes(wav, tmp_path / "analysis" / "game_notes.csv", "ja") == ROWS
     (cmd, cwd), = calls
     out = cmd[cmd.index("--output-dir") + 1]
-    assert cmd == [sys.executable, "infer.py", "extract", str(wav), "-m", str(root / game.GAME_MODEL), "-l", "ja",
+    assert cmd == [sys.executable, "-c", game.SEEDED_RUN, "extract", str(wav), "-m", str(root / game.GAME_MODEL), "-l", "ja",
                    "--output-formats", "csv", "--pitch-format", "number", "--output-dir", out]
     assert cwd == root / "src"
     assert not os.path.exists(out)                         # 临时输出目录清掉了
+
+
+def test_game_runs_infer_py_with_fixed_seeds():
+    # GAME 分音带随机采样：固定种子，同一个文件重跑结果不变（用户确认过的小节不会自己变掉）
+    assert "torch.manual_seed(0)" in game.SEEDED_RUN and "run_path('infer.py', run_name='__main__')" in game.SEEDED_RUN
 
 
 def test_game_notes_without_a_language_omits_the_flag(tmp_path, monkeypatch):

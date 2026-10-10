@@ -152,18 +152,53 @@ def test_the_same_pitch_after_a_real_dip_is_plucked_again():
     assert got == [(2.0, 1.0, 64, False), (3.0, 1.0, 64, False)]
 
 
-def test_a_pitch_change_without_an_onset_is_legato():
-    fr = _frames(sung=[(1.0, 1.5, 64.0), (1.5, 2.0, 66.0)])
-    got, notes = _melody([(1.0, 1.5, 64.0), (1.5, 2.0, 66.0)], fr)
-    assert got == [(2.0, 1.0, 64, False), (3.0, 1.0, 66, True)]
+def test_a_big_pitch_change_without_an_onset_is_a_legato_slide():
+    fr = _frames(sung=[(1.0, 1.5, 64.0), (1.5, 2.0, 68.0)])
+    got, notes = _melody([(1.0, 1.5, 64.0), (1.5, 2.0, 68.0)], fr)
+    assert got == [(2.0, 1.0, 64, False), (3.0, 1.0, 68, True)]
     assert notes[1]["legato"] is True and "legato" not in notes[0]
+
+
+def test_a_small_step_between_two_long_notes_is_plucked_even_without_an_onset():
+    # 用户听过：两个长音之间一两个半音的换音处处击勾，反而不像唱的 → 照常拨弦
+    fr = _frames(sung=[(1.0, 1.5, 64.0), (1.5, 2.0, 66.0)])
+    got, _ = _melody([(1.0, 1.5, 64.0), (1.5, 2.0, 66.0)], fr)
+    assert got == [(2.0, 1.0, 64, False), (3.0, 1.0, 66, False)]
+
+
+def test_a_quick_ornament_without_an_onset_stays_legato():
+    # 一格（1/3 拍）的快音落到下一个音：击 / 勾
+    fr = _frames(sung=[(1.0, 1.5, 66.0), (1.5, 1.67, 64.0), (1.67, 2.5, 63.0)])
+    got, _ = _melody([(1.0, 1.5, 66.0), (1.5, 1.67, 64.0), (1.67, 2.5, 63.0)], fr)
+    assert got == [(2.0, 1.0, 66, False), (3.0, 0.3333, 64, True), (3.3333, 1.6667, 63, True)]
+
+
+def test_a_short_scoop_into_a_higher_note_becomes_that_note():
+    # 字头低一个全音唱了一格、马上滑上去：合成一个音，用上面的音高、从字头拨
+    fr = _frames(sung=[(1.0, 1.17, 64.0), (1.17, 2.0, 66.0)])
+    got, _ = _melody([(1.0, 1.17, 64.0), (1.17, 2.0, 66.0)], fr)
+    assert got == [(2.0, 2.0, 66, False)]
+
+
+def test_a_short_step_game_missed_is_filled_in():
+    # GAME 只给了 C#4，后面主唱轻轻落到 B3 唱了 0.1 秒：补一个 B3（紧接、没有换字 → legato）
+    fr = _frames(sung=[(1.0, 1.5, 61.0), (1.5, 1.6, 59.0)])
+    got, _ = _melody([(1.0, 1.5, 61.0)], fr)
+    assert got[-1][2] == 59 and got[-1][3] is True and len(got) == 2
+
+
+def test_a_fall_off_tail_is_not_filled_in():
+    # 长音后面往下甩了一大截（> 2 半音）：是尾巴，不补音
+    fr = _frames(sung=[(1.0, 1.5, 71.0), (1.5, 1.6, 63.0)])
+    got, _ = _melody([(1.0, 1.5, 71.0)], fr)
+    assert [m for _, _, m, _ in got] == [71]
 
 
 def test_a_long_note_whose_sung_pitch_really_changes_is_split():
     # D#/G 上一个长音前半唱 G#4、后半落到 G4（各 ≥ 1 拍）：在那儿切开，后半段 legato
     fr = _frames(sung=[(1.0, 2.0, 68.0), (2.0, 3.0, 67.0)])
     got, _ = _melody([(1.0, 3.0, 67.6)], fr, label="D#/G")
-    assert got == [(2.0, 2.0, 68, False), (4.0, 2.0, 67, True)]
+    assert got == [(2.0, 2.0, 68, False), (4.0, 2.0, 67, False)]   # 两个长音之间一个半音：照常拨弦
 
 
 def test_a_plucked_note_starts_at_the_syllable_onset_just_before_it():
@@ -189,9 +224,9 @@ def test_shuffle_start_prefers_the_last_triplet_over_the_middle_one():
 
 
 def test_straight_feel_uses_the_sixteenth_grid():
-    fr = _frames(sung=[(1.0, 1.5, 64.0), (1.5, 2.0, 66.0)])
-    got, _ = _melody([(1.0, 1.5, 64.0), (1.5, 2.0, 66.0)], fr, feel="straight")
-    assert got == [(2.0, 1.0, 64, False), (3.0, 1.0, 66, True)]
+    fr = _frames(sung=[(1.0, 1.5, 64.0), (1.5, 2.0, 68.0)])
+    got, _ = _melody([(1.0, 1.5, 64.0), (1.5, 2.0, 68.0)], fr, feel="straight")
+    assert got == [(2.0, 1.0, 64, False), (3.0, 1.0, 68, True)]
 
 
 # ---------- 整条：读音频、crepe 走 vocal_f0 缓存 ----------
