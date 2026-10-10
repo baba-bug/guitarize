@@ -75,3 +75,25 @@ def test_silently_dropped_fill_is_recorded():
     ev = assign_frets([FretEvent(0, 60, 50, fill=48)], MID)[0]
     assert ev.fill_pos is None
     assert ev.fallback is not None and "fill" in ev.fallback
+
+
+def test_legato_pair_prefers_one_string():
+    # D4 → E4：平时 E4 弹 1 弦空弦（换弦重新拨）；连奏（同一音节里滑上去）时留在 2 弦 3 → 5 品，能击弦
+    plain = assign_frets([FretEvent(0, 62, None), FretEvent(1, 64, None)], MID)
+    assert [e.melody_pos for e in plain] == [(2, 3), (1, 0)]
+    legato = assign_frets([FretEvent(0, 62, None), FretEvent(1, 64, None, legato=True)], MID)
+    assert [e.melody_pos for e in legato] == [(2, 3), (2, 5)]
+
+
+def test_legato_slide_moves_the_hand_for_free_but_keeps_the_shift_rule():
+    # A3 按 2 拍后滑到 D4（3 弦 2 → 7 品）：滑音本身就是换把，不计手型移动的距离代价
+    legato = assign_frets([FretEvent(0, 57, None), FretEvent(2, 62, None, legato=True)], MID)
+    assert [e.melody_pos for e in legato] == [(3, 2), (3, 7)]
+    # 半拍内 2 → 7 品超过 max_shift（校验硬规则）：只是偏好，不是硬约束——换弦、照常拨弦
+    quick = assign_frets([FretEvent(0, 57, None), FretEvent(0.5, 62, None, legato=True)], MID)
+    assert [e.melody_pos for e in quick] == [(3, 2), (2, 3)]
+
+
+def test_legato_without_a_melody_before_it_is_ignored():
+    evs = assign_frets([FretEvent(0, None, 43), FretEvent(1, 64, None, legato=True)], MID)
+    assert evs[1].melody_pos == (1, 0) and evs[1].fallback is None
