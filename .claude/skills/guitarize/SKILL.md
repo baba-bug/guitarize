@@ -26,7 +26,9 @@ description: 把一首歌（歌名或 B 站 / 网易云链接）做成可弹的�
 
 ## 4. 分析
 `$PY -m guitarize analyze <slug>`（步骤 stems → lead → beats → chords → melody → leadsheet），再 `$PY -m guitarize summary <slug> --capo <预期变调夹>` 逐小节阅读：
-- lead 步骤把人声分轨拆成主唱 `stems/lead.wav` + 伴唱 `stems/backing.wav`（becruily 的 Mel-Band Roformer 伴唱分离模型，再过一遍居中掩码；整首几分钟），旋律只从主唱识别；用的方法记在 `stems/lead.json` 与 melody.json 的 `lead_method`。模型放在 `tools/karaoke/models/`（或环境变量 `GUITARIZE_KARAOKE_DIR`）；不在或没装 audio-separator 时会警告并退回只用居中掩码（`lr-mask`，没有伴唱分轨）。只重做主唱：`--steps lead,melody,leadsheet`，不必重跑 Demucs。
+- lead 步骤把人声分轨拆成主唱 `stems/lead.wav` + 伴唱 `stems/backing.wav`（becruily 的 Mel-Band Roformer 伴唱分离模型，再过一遍居中掩码；整首几分钟），模型的主唱原样（立体声、没过掩码）留作 `stems/lead_raw.wav`，旋律只从主唱识别；用的方法记在 `stems/lead.json` 与 melody.json 的 `lead_method`。模型放在 `tools/karaoke/models/`（或环境变量 `GUITARIZE_KARAOKE_DIR`）；不在或没装 audio-separator 时会警告并退回只用居中掩码（`lr-mask`，没有伴唱分轨）。只重做主唱：`--steps lead,melody,leadsheet`，不必重跑 Demucs。
+- melody 步骤默认用旋律 v7（melody.json 的 `method: v7:game+signal`）：GAME（唱歌 → 音符模型，`tools/game/`，或环境变量 `GUITARIZE_GAME_DIR`）在 `lead_raw.wav` 上分音，再用主唱信号去掉伴唱漏音、把没换字的同音并成一个长音（只拨一下）、换音不换字记 legato、按当时和弦吸附音高、量化到三连音格。`song.yaml` 写 `language: ja`（en / ja / yue / zh）给 GAME 分音用。GAME 分音缓存在 `analysis/game_notes.csv`，crepe 基频照旧在 `analysis/vocal_f0.npz`。没有 `lead_raw.wav` / `backing.wav`（模型不可用）或 GAME 不可用时会警告并退回 crepe 逐格量化（`method: crepe-quantize`）。
+- **每版旋律都要和原唱比**：改了旋律（重跑 melody、调参数、换算法）之后跑 `$PY -m guitarize audit-melody <slug> [--melody 旧版.json ...]`，对照这首歌自己的模型主唱 + 伴唱 + crepe，一版一行：`coverage` 覆盖、`pitch_ok` / `wrong` 音准、`backing_or_empty` 伴唱音、`chopped_held` 切碎的长音、`onset_recall` / `pluck_ms` 节奏、`repeat_f1` 同名段落（如两遍サビ）是否一致；写进 `reports/melody_audit.json`。新版要在伴唱音、切碎的长音、重复段一致上不比旧版差，再往下做。
 - 小节数、速度、Shuffle 是否合理；`short_bars` 应为空（否则用 `overrides.downbeat_shift` 调整）。
 - 低置信（`??`）小节记下来，稍后列入"需人耳确认"。
 - 低置信（`??`）多集中在 TV 版剪辑处、尾奏；不要为追分修改这些小节。

@@ -55,6 +55,13 @@ def _no_karaoke_model(monkeypatch):
     monkeypatch.setenv("GUITARIZE_KARAOKE_DIR", str(FIXTURES / "no-karaoke-model"))
 
 
+@pytest.fixture(autouse=True)
+def _no_game(monkeypatch):
+    """测试里不跑真的 GAME（唱歌 → 音符模型）：GAME 目录指向不存在的地方，melody 步骤退回 crepe 逐格量化；
+    要测 GAME 那条路的用例自己设 GUITARIZE_GAME_DIR / 传 root，并替换 subprocess.run 或 game_notes。"""
+    monkeypatch.setenv("GUITARIZE_GAME_DIR", str(FIXTURES / "no-game"))
+
+
 @pytest.fixture
 def demo_song(tmp_path: Path) -> SongPaths:
     songs = tmp_path / "songs"

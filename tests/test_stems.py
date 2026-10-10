@@ -99,17 +99,21 @@ def test_separate_lead_runs_the_karaoke_model_then_the_centre_mask(tmp_path, mon
     stems.mkdir()
     vocals = stems / "vocals.wav"
     sf.write(vocals, _tone(220) + _tone(330), SR)
-    method = separate_lead(vocals, stems / "lead.wav", stems / "backing.wav")
+    method = separate_lead(vocals, stems / "lead.wav", stems / "backing.wav", stems / "lead_raw.wav")
     assert method == KARAOKE_METHOD == "karaoke+lr-mask:mel_band_roformer_karaoke_becruily"
     at = _spectrum(stems / "lead.wav")
     assert at(220) > 5 * at(330)                      # 模型的主唱里漏进来的单边伴唱被居中掩码去掉
     backing, _ = sf.read(stems / "backing.wav")
     assert np.allclose(backing, _tone(330), atol=1e-4)   # 伴唱是模型的 Instrumental，原样
+    # 模型的主唱原样（立体声、没过掩码）另存一份：旋律 v7 的 GAME / crepe 在它上面更准，漏音检查要用左右相关
+    raw, _ = sf.read(stems / "lead_raw.wav")
+    assert raw.shape == (SR, 2) and np.allclose(raw, _leaky_lead(), atol=1e-4)
     (_, init), load, sep = calls
     assert init["model_file_dir"] == str(models) and init["output_format"] == "WAV"
     assert load == ("load_model", KARAOKE_MODEL)
     assert sep == ("separate", str(vocals), {"Vocals": "lead", "Instrumental": "backing"})   # 传 str：Path 会被当成列表
-    assert sorted(p.name for p in stems.iterdir()) == ["backing.wav", "lead.wav", "vocals.wav"]   # 临时目录清掉了
+    assert sorted(p.name for p in stems.iterdir()) == [   # 临时目录清掉了
+        "backing.wav", "lead.wav", "lead_raw.wav", "vocals.wav"]
     assert capsys.readouterr().err == ""
 
 
@@ -122,10 +126,12 @@ def test_separate_lead_leaves_the_old_files_alone_when_the_model_fails(tmp_path,
     stems.mkdir()
     sf.write(stems / "vocals.wav", _tone(220), SR)
     (stems / "lead.wav").write_bytes(b"old")
+    (stems / "lead_raw.wav").write_bytes(b"old raw")
     with pytest.raises(RuntimeError, match="MPS out of memory"):
-        separate_lead(stems / "vocals.wav", stems / "lead.wav", stems / "backing.wav", model_dir=_model_dir(tmp_path))
-    assert (stems / "lead.wav").read_bytes() == b"old"
-    assert sorted(p.name for p in stems.iterdir()) == ["lead.wav", "vocals.wav"]
+        separate_lead(stems / "vocals.wav", stems / "lead.wav", stems / "backing.wav", stems / "lead_raw.wav",
+                      model_dir=_model_dir(tmp_path))
+    assert (stems / "lead.wav").read_bytes() == b"old" and (stems / "lead_raw.wav").read_bytes() == b"old raw"
+    assert sorted(p.name for p in stems.iterdir()) == ["lead.wav", "lead_raw.wav", "vocals.wav"]
 
 
 def _panned_vocals(path):
@@ -138,11 +144,14 @@ def test_separate_lead_falls_back_to_the_lr_mask_when_the_model_is_missing(tmp_p
     from guitarize.analyze.stems import LR_MASK_METHOD, separate_lead
 
     _panned_vocals(tmp_path / "vocals.wav")
+    for stale in ("backing.wav", "lead_raw.wav"):                    # 上次用模型分的
+        (tmp_path / stale).write_bytes(b"old")
     method = separate_lead(tmp_path / "vocals.wav", tmp_path / "lead.wav", tmp_path / "backing.wav",
-                           model_dir=tmp_path / "nowhere")
+                           tmp_path / "lead_raw.wav", model_dir=tmp_path / "nowhere")
     assert method == LR_MASK_METHOD == "lr-mask"
     assert round(_peak_hz(tmp_path / "lead.wav")) == 220            # 居中的主唱，L/R 掩码抽出来的
-    assert not (tmp_path / "backing.wav").exists()                   # 掩码分不出伴唱
+    # 掩码分不出伴唱、也没有模型的主唱；上次模型分的那两个文件删掉，主唱 / 伴唱总是同一次分离的结果
+    assert not (tmp_path / "backing.wav").exists() and not (tmp_path / "lead_raw.wav").exists()
     err = capsys.readouterr().err
     assert err.count("\n") == 1 and "lr-mask" in err and "mel_band_roformer_karaoke_becruily.ckpt" in err
 
@@ -153,9 +162,10 @@ def test_separate_lead_falls_back_when_audio_separator_cannot_be_imported(tmp_pa
     monkeypatch.setitem(sys.modules, "audio_separator.separator", None)   # import 失败
     _panned_vocals(tmp_path / "vocals.wav")
     method = separate_lead(tmp_path / "vocals.wav", tmp_path / "lead.wav", tmp_path / "backing.wav",
-                           model_dir=_model_dir(tmp_path))
+                           tmp_path / "lead_raw.wav", model_dir=_model_dir(tmp_path))
     assert method == "lr-mask"
     assert (tmp_path / "lead.wav").exists() and not (tmp_path / "backing.wav").exists()
+    assert not (tmp_path / "lead_raw.wav").exists()
     err = capsys.readouterr().err
     assert err.count("\n") == 1 and "audio-separator" in err and "lr-mask" in err
 

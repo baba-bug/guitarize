@@ -30,6 +30,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("slug")
     p.add_argument("--steps", default="stems,lead,beats,chords,melody,leadsheet",
                    help="逗号分隔，可选 stems,lead,beats,chords,melody,leadsheet（lead：只重做主唱 / 伴唱分离）")
+    p = sub.add_parser("audit-melody", help="旋律对照原唱（模型主唱 + 伴唱 + crepe）：覆盖 / 音准 / 伴唱音 / "
+                                            "切碎的长音 / 节奏 / 重复段一致，写 reports/melody_audit.json")
+    p.add_argument("slug")
+    p.add_argument("--melody", type=Path, nargs="+", action="extend", default=[],
+                   help="另外要比的旋律 json（analysis/melody.json 在的话总是第一行）")
     p = sub.add_parser("summary", help="打印 leadsheet 的逐小节摘要")
     p.add_argument("slug")
     p.add_argument("--capo", type=int, default=0)
@@ -79,6 +84,11 @@ def main(argv: list[str] | None = None) -> int:
             import json
 
             print(summary_table(json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))))
+    elif args.cmd == "audit-melody":
+        from .analyze.melody_audit import audit_melody, format_table
+
+        print(format_table(audit_melody(paths, cfg, args.melody)))
+        print(f"报告：{paths.reports_dir / 'melody_audit.json'}")
     elif args.cmd == "summary":
         import json
 

@@ -69,6 +69,11 @@ class SongPaths:
         return self.analysis_dir / "vocal_f0.npz"
 
     @property
+    def game_notes(self) -> Path:
+        """GAME 分音的缓存（analyze/game.py 的 game_notes）：melody 步骤（旋律 v7）写和读。"""
+        return self.analysis_dir / "game_notes.csv"
+
+    @property
     def leadsheet_json(self) -> Path:
         return self.analysis_dir / "leadsheet.json"
 

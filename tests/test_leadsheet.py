@@ -591,10 +591,11 @@ def test_song_yaml_chord_overrides_round_trip(tmp_path):
 
 
 def _fake_separate_lead(calls, method="karaoke+lr-mask:mel_band_roformer_karaoke_becruily"):
-    def fake(vocals, lead, backing):
-        calls.append((vocals, lead, backing))
+    def fake(vocals, lead, backing, raw):
+        calls.append((vocals, lead, backing, raw))
         lead.write_bytes(vocals.read_bytes())
         backing.write_bytes(b"RIFF")
+        raw.write_bytes(b"RIFF")
         return method
     return fake
 
@@ -618,7 +619,7 @@ def test_melody_step_reads_the_lead_vocal(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "extract_melody", lambda wav, bj, pcs, **kw: used.append(wav) or {"grid": "sixteenth", "notes": []})
     monkeypatch.setattr(pipeline, "separate_lead", _fake_separate_lead(split))
     pipeline.run_analysis(paths, cfg, ["melody"])
-    assert split == [(paths.stem("vocals"), paths.stem("lead"), paths.stem("backing"))]
+    assert split == [(paths.stem("vocals"), paths.stem("lead"), paths.stem("backing"), paths.stem("lead_raw"))]
     assert used[-1] == paths.stem("lead") and paths.stem("lead").exists()
     melody = json.loads(paths.melody_json.read_text(encoding="utf-8"))
     assert melody["source"] == "lead"   # 校验据此选对照的分轨
@@ -634,6 +635,107 @@ def test_melody_step_reads_the_lead_vocal(tmp_path, monkeypatch):
     cfg3 = dataclasses.replace(cfg, overrides={**cfg.overrides, "melody_source": "mix"})
     with pytest.raises(ValueError, match=r'overrides\.melody_source must be "lead" or "vocals", got \'mix\''):
         pipeline.run_analysis(paths, cfg3, ["melody"])
+
+
+# ---------- melody 步骤：旋律 v7（GAME + 主唱信号），不可用时退回 crepe 逐格量化 ----------
+
+KARAOKE = "karaoke+lr-mask:mel_band_roformer_karaoke_becruily"
+
+
+def _v7_song(tmp_path, **cfg_changes):
+    """lead 步骤用模型分过的歌：lead / lead_raw / backing 都在（内容无所谓，识别函数都换成假的）。"""
+    import dataclasses
+
+    paths, cfg = _paths_cfg(tmp_path)
+    _write_analysis(paths, beats=_padded_beats(), chords={**CHORDS, "key": {"tonic": "C", "mode": "major", "r": 0.9}})
+    paths.stems_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("vocals", "lead", "lead_raw", "backing"):
+        paths.stem(name).write_bytes(b"RIFF")
+    paths.lead_json.write_text(json.dumps({"method": KARAOKE, "model": "mel_band_roformer_karaoke_becruily.ckpt"}))
+    return paths, dataclasses.replace(cfg, **cfg_changes)
+
+
+def _crepe_stub(used):
+    return lambda wav, bj, pcs, **kw: used.append((wav, kw)) or {"grid": "sixteenth", "notes": []}
+
+
+def test_melody_step_uses_v7_on_the_raw_lead_when_game_is_available(tmp_path, monkeypatch, capsys):
+    # 伴唱漏进来、长音被切碎、滑音被切碎：v7 用 GAME 分音 + 主唱信号检查；GAME / crepe 在模型主唱原样 lead_raw.wav 上更准
+    from guitarize.analyze import pipeline
+    from guitarize.analyze.key import scale_pcs
+
+    paths, cfg = _v7_song(tmp_path, language="ja", overrides={"chords": {3: "F"}})
+    rows, calls = [(1.0, 1.5, 64.2)], {}
+
+    def fake_game(wav, cache, language):
+        calls["game"] = (wav, cache, language)
+        return rows
+
+    def fake_v7(lead_raw, backing, game_rows, beats, pcs, labels, f0_cache=None):
+        calls["v7"] = (lead_raw, backing, game_rows, pcs, labels, f0_cache)
+        return {"grid": "sixteenth", "notes": [
+            {"start_beats": 4.0, "dur_beats": 1.0, "midi": 64, "out_of_key": False, "conf": 0.9},
+            {"start_beats": 5.0, "dur_beats": 1.0, "midi": 65, "out_of_key": False, "conf": 0.9, "legato": True}]}
+
+    monkeypatch.setattr(pipeline, "game_notes", fake_game)
+    monkeypatch.setattr(pipeline, "extract_melody_v7", fake_v7)
+    monkeypatch.setattr(pipeline, "extract_melody", lambda *a, **kw: pytest.fail("crepe path used"))
+    pipeline.run_analysis(paths, cfg, ["melody"])
+    assert calls["game"] == (paths.stem("lead_raw"), paths.game_notes, "ja")
+    lead_raw, backing, game_rows, pcs, labels, f0_cache = calls["v7"]
+    assert (lead_raw, backing, game_rows, f0_cache) == (paths.stem("lead_raw"), paths.stem("backing"), rows, paths.vocal_f0)
+    assert pcs == scale_pcs("C", "major")
+    assert labels == {1: [(1, "C")], 2: [(1, "G"), (3, "N")], 3: [(1, "F")]}   # chords.json + overrides.chords
+    melody = json.loads(paths.melody_json.read_text(encoding="utf-8"))
+    assert melody["method"] == "v7:game+signal"
+    assert melody["source"] == "lead" and melody["lead_method"] == KARAOKE   # 校验对照的分轨、主唱怎么分的：照旧
+    assert melody["notes"][1]["legato"] is True and "legato" not in melody["notes"][0]
+    assert capsys.readouterr().err == ""
+
+
+def test_melody_step_falls_back_to_crepe_when_game_is_unavailable(tmp_path, monkeypatch, capsys):
+    from guitarize.analyze import pipeline
+
+    paths, cfg = _v7_song(tmp_path)
+    used = []
+    monkeypatch.setattr(pipeline, "extract_melody", _crepe_stub(used))
+    pipeline.run_analysis(paths, cfg, ["melody"])               # conftest：GAME 目录不存在
+    assert used == [(paths.stem("lead"), {"f0_cache": paths.vocal_f0})]
+    melody = json.loads(paths.melody_json.read_text(encoding="utf-8"))
+    assert melody["method"] == "crepe-quantize" and melody["source"] == "lead" and melody["lead_method"] == KARAOKE
+    err = capsys.readouterr().err
+    assert err.count("\n") == 2 and "GAME" in err and "crepe-quantize" in err   # GAME 一行 + 退回一行
+    assert not paths.game_notes.exists()
+
+
+def test_melody_step_falls_back_without_the_raw_lead(tmp_path, monkeypatch, capsys):
+    # 主唱只用 L/R 掩码分（模型不可用）、或是 lead_raw 出现之前分的：没有模型主唱原样，v7 用不了
+    from guitarize.analyze import pipeline
+
+    paths, cfg = _v7_song(tmp_path)
+    paths.stem("lead_raw").unlink()
+    used = []
+    monkeypatch.setattr(pipeline, "extract_melody", _crepe_stub(used))
+    monkeypatch.setattr(pipeline, "game_notes", lambda *a: pytest.fail("GAME should not run"))
+    pipeline.run_analysis(paths, cfg, ["melody"])
+    assert used[-1][0] == paths.stem("lead")
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1 and "lead_raw.wav" in err and "--steps lead" in err
+    assert json.loads(paths.melody_json.read_text(encoding="utf-8"))["method"] == "crepe-quantize"
+
+
+def test_melody_source_vocals_keeps_the_crepe_path(tmp_path, monkeypatch, capsys):
+    from guitarize.analyze import pipeline
+
+    paths, cfg = _v7_song(tmp_path, overrides={"melody_source": "vocals"})
+    used = []
+    monkeypatch.setattr(pipeline, "extract_melody", _crepe_stub(used))
+    monkeypatch.setattr(pipeline, "game_notes", lambda *a: pytest.fail("GAME should not run"))
+    pipeline.run_analysis(paths, cfg, ["melody"])
+    assert used[-1][0] == paths.stem("vocals")
+    melody = json.loads(paths.melody_json.read_text(encoding="utf-8"))
+    assert melody["method"] == "crepe-quantize" and melody["source"] == "vocals" and "lead_method" not in melody
+    assert capsys.readouterr().err == ""                         # 自己选的整条人声：不警告
 
 
 # ---------- lead 步骤：主唱 / 伴唱分离，紧跟 stems，可以单独重做（不重跑 Demucs） ----------
@@ -654,19 +756,21 @@ def test_lead_step_runs_right_after_stems_and_records_the_method(tmp_path, monke
     split = []
     monkeypatch.setattr(pipeline, "separate_lead", _fake_separate_lead(split))
     paths.stems_dir.mkdir(parents=True)
-    for stale in (paths.stem("lead"), paths.stem("backing"), paths.lead_json):   # 从旧人声分出来的
-        stale.write_bytes(b"old")
+    stale = (paths.stem("lead"), paths.stem("backing"), paths.stem("lead_raw"), paths.lead_json)   # 从旧人声分出来的
+    for p in stale:
+        p.write_bytes(b"old")
     pipeline.run_analysis(paths, cfg, ["stems"])
     assert calls == ["stems"] and split == []                 # stems 步骤不再自己分主唱
-    assert not any(p.exists() for p in (paths.stem("lead"), paths.stem("backing"), paths.lead_json))
+    assert not any(p.exists() for p in stale)
     pipeline.run_analysis(paths, cfg, ["lead"])               # 只重做主唱：不重跑 Demucs
     assert calls == ["stems"] and len(split) == 1
     assert paths.stem("lead").read_bytes() == b"new vocals" and paths.stem("backing").exists()
+    assert paths.stem("lead_raw").exists()
     assert json.loads(paths.lead_json.read_text(encoding="utf-8")) == {
         "method": "karaoke+lr-mask:mel_band_roformer_karaoke_becruily", "model": "mel_band_roformer_karaoke_becruily.ckpt"}
     order = []
     monkeypatch.setattr(pipeline, "separate", lambda mix, d: order.append("stems"))
-    monkeypatch.setattr(pipeline, "separate_lead", lambda v, l, b: order.append("lead") or "lr-mask")
+    monkeypatch.setattr(pipeline, "separate_lead", lambda v, l, b, r: order.append("lead") or "lr-mask")
     pipeline.run_analysis(paths, cfg, ["lead", "stems"])     # 按 STEPS 的顺序跑，与传入顺序无关
     assert order == ["stems", "lead"]
     assert json.loads(paths.lead_json.read_text(encoding="utf-8")) == {"method": "lr-mask", "model": None}
