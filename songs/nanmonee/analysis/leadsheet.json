@@ -27,28 +27,21 @@
      "start_beats": 1.6667,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.727,
+     "conf": 0.721,
      "out_of_key": false
     },
     {
      "start_beats": 2.0,
      "dur_beats": 1.0,
      "midi": 66,
-     "conf": 0.628,
+     "conf": 0.881,
      "out_of_key": false
     },
     {
      "start_beats": 3.0,
-     "dur_beats": 0.3333,
-     "midi": 59,
-     "conf": 0.76,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 3.3333,
-     "dur_beats": 1.3334,
+     "dur_beats": 1.6667,
      "midi": 66,
-     "conf": 0.736,
+     "conf": 0.855,
      "out_of_key": false
     }
    ]
@@ -75,28 +68,28 @@
      "start_beats": 6.0,
      "dur_beats": 0.3333,
      "midi": 64,
-     "conf": 0.822,
+     "conf": 0.845,
      "out_of_key": false
     },
     {
      "start_beats": 6.3333,
      "dur_beats": 0.6667,
      "midi": 63,
-     "conf": 0.62,
+     "conf": 0.77,
      "out_of_key": false
     },
     {
      "start_beats": 7.0,
      "dur_beats": 0.6667,
      "midi": 66,
-     "conf": 0.7,
+     "conf": 0.726,
      "out_of_key": false
     },
     {
      "start_beats": 7.6667,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.838,
+     "conf": 0.887,
      "out_of_key": false
     }
    ]
@@ -123,21 +116,21 @@
      "start_beats": 8.0,
      "dur_beats": 1.0,
      "midi": 68,
-     "conf": 0.767,
+     "conf": 0.782,
      "out_of_key": false
     },
     {
      "start_beats": 10.0,
      "dur_beats": 0.6667,
      "midi": 68,
-     "conf": 0.836,
+     "conf": 0.869,
      "out_of_key": false
     },
     {
      "start_beats": 10.6667,
      "dur_beats": 1.3333,
      "midi": 68,
-     "conf": 0.866,
+     "conf": 0.887,
      "out_of_key": false
     }
    ]
@@ -164,14 +157,14 @@
      "start_beats": 12.0,
      "dur_beats": 0.3333,
      "midi": 68,
-     "conf": 0.889,
+     "conf": 0.897,
      "out_of_key": false
     },
     {
      "start_beats": 12.3333,
      "dur_beats": 0.6667,
      "midi": 67,
-     "conf": 0.917,
+     "conf": 0.921,
      "out_of_key": true
     },
     {
@@ -185,21 +178,21 @@
      "start_beats": 13.3333,
      "dur_beats": 0.6667,
      "midi": 66,
-     "conf": 0.883,
+     "conf": 0.876,
      "out_of_key": false
     },
     {
      "start_beats": 14.0,
      "dur_beats": 0.6667,
      "midi": 68,
-     "conf": 0.577,
+     "conf": 0.576,
      "out_of_key": false
     },
     {
      "start_beats": 15.0,
      "dur_beats": 1.0,
      "midi": 70,
-     "conf": 0.784,
+     "conf": 0.774,
      "out_of_key": false
     }
    ]
@@ -226,42 +219,35 @@
      "start_beats": 16.0,
      "dur_beats": 0.6667,
      "midi": 71,
-     "conf": 0.765,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 16.6667,
-     "dur_beats": 0.3333,
-     "midi": 63,
-     "conf": 0.482,
+     "conf": 0.88,
      "out_of_key": false
     },
     {
      "start_beats": 17.6667,
      "dur_beats": 0.3333,
      "midi": 71,
-     "conf": 0.65,
+     "conf": 0.674,
      "out_of_key": false
     },
     {
      "start_beats": 18.0,
      "dur_beats": 0.3333,
      "midi": 70,
-     "conf": 0.938,
+     "conf": 0.942,
      "out_of_key": false
     },
     {
      "start_beats": 18.6667,
      "dur_beats": 0.3333,
      "midi": 70,
-     "conf": 0.42,
+     "conf": 0.424,
      "out_of_key": false
     },
     {
      "start_beats": 19.0,
      "dur_beats": 1.0,
      "midi": 66,
-     "conf": 0.819,
+     "conf": 0.813,
      "out_of_key": false
     }
    ]
@@ -288,42 +274,42 @@
      "start_beats": 20.0,
      "dur_beats": 0.6667,
      "midi": 68,
-     "conf": 0.758,
+     "conf": 0.814,
      "out_of_key": false
     },
     {
      "start_beats": 20.6667,
-     "dur_beats": 1.0,
+     "dur_beats": 0.6666,
      "midi": 71,
-     "conf": 0.66,
+     "conf": 0.658,
      "out_of_key": false
     },
     {
      "start_beats": 21.6667,
      "dur_beats": 0.3333,
      "midi": 68,
-     "conf": 0.846,
+     "conf": 0.859,
      "out_of_key": false
     },
     {
      "start_beats": 22.0,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.793,
+     "conf": 0.911,
      "out_of_key": false
     },
     {
-     "start_beats": 22.3333,
-     "dur_beats": 0.6667,
+     "start_beats": 22.6667,
+     "dur_beats": 0.3333,
      "midi": 71,
-     "conf": 0.624,
+     "conf": 0.667,
      "out_of_key": false
     },
     {
      "start_beats": 23.0,
      "dur_beats": 1.0,
      "midi": 64,
-     "conf": 0.887,
+     "conf": 0.823,
      "out_of_key": false
     }
    ]
@@ -350,49 +336,56 @@
      "start_beats": 24.0,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.722,
+     "conf": 0.774,
      "out_of_key": false
     },
     {
      "start_beats": 24.3333,
      "dur_beats": 0.3334,
      "midi": 66,
-     "conf": 0.869,
+     "conf": 0.909,
      "out_of_key": false
     },
     {
-     "start_beats": 24.6667,
-     "dur_beats": 1.0,
-     "midi": 71,
-     "conf": 0.692,
+     "start_beats": 25.3333,
+     "dur_beats": 0.3334,
+     "midi": 68,
+     "conf": 0.709,
      "out_of_key": false
     },
     {
      "start_beats": 25.6667,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.896,
+     "conf": 0.921,
      "out_of_key": false
     },
     {
      "start_beats": 26.0,
      "dur_beats": 0.3333,
      "midi": 64,
-     "conf": 0.903,
+     "conf": 0.89,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 26.3333,
+     "dur_beats": 0.6667,
+     "midi": 59,
+     "conf": 0.422,
      "out_of_key": false
     },
     {
      "start_beats": 27.0,
      "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.886,
+     "conf": 0.872,
      "out_of_key": false
     },
     {
      "start_beats": 27.6667,
      "dur_beats": 0.3333,
      "midi": 58,
-     "conf": 0.88,
+     "conf": 0.879,
      "out_of_key": false
     }
    ]
@@ -419,42 +412,42 @@
      "start_beats": 28.0,
      "dur_beats": 0.6667,
      "midi": 61,
-     "conf": 0.869,
+     "conf": 0.89,
      "out_of_key": false
     },
     {
      "start_beats": 28.6667,
      "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.628,
+     "conf": 0.707,
      "out_of_key": false
     },
     {
      "start_beats": 29.0,
      "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.835,
+     "conf": 0.749,
      "out_of_key": false
     },
     {
      "start_beats": 29.6667,
      "dur_beats": 0.3333,
      "midi": 62,
-     "conf": 0.55,
+     "conf": 0.591,
      "out_of_key": true
     },
     {
      "start_beats": 30.0,
      "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.895,
+     "conf": 0.936,
      "out_of_key": false
     },
     {
      "start_beats": 31.3333,
      "dur_beats": 0.6667,
      "midi": 56,
-     "conf": 0.566,
+     "conf": 0.601,
      "out_of_key": false
     }
    ]
@@ -491,42 +484,42 @@
      "start_beats": 32.0,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.839,
+     "conf": 0.84,
      "out_of_key": false
     },
     {
      "start_beats": 32.3333,
      "dur_beats": 0.3334,
      "midi": 64,
-     "conf": 0.864,
+     "conf": 0.866,
      "out_of_key": false
     },
     {
      "start_beats": 32.6667,
      "dur_beats": 0.3333,
      "midi": 63,
-     "conf": 0.86,
+     "conf": 0.854,
      "out_of_key": false
     },
     {
      "start_beats": 33.0,
      "dur_beats": 0.3333,
-     "midi": 64,
-     "conf": 0.584,
+     "midi": 63,
+     "conf": 0.528,
      "out_of_key": false
     },
     {
      "start_beats": 34.0,
      "dur_beats": 0.6667,
      "midi": 66,
-     "conf": 0.727,
+     "conf": 0.75,
      "out_of_key": false
     },
     {
      "start_beats": 34.6667,
      "dur_beats": 2.0,
      "midi": 66,
-     "conf": 0.908,
+     "conf": 0.916,
      "out_of_key": false
     }
    ]
@@ -553,21 +546,21 @@
      "start_beats": 38.0,
      "dur_beats": 0.3333,
      "midi": 64,
-     "conf": 0.859,
+     "conf": 0.858,
      "out_of_key": false
     },
     {
      "start_beats": 38.3333,
      "dur_beats": 0.6667,
      "midi": 63,
-     "conf": 0.91,
+     "conf": 0.917,
      "out_of_key": false
     },
     {
      "start_beats": 39.0,
      "dur_beats": 1.0,
      "midi": 66,
-     "conf": 0.805,
+     "conf": 0.813,
      "out_of_key": false
     }
    ]
@@ -594,28 +587,21 @@
      "start_beats": 40.0,
      "dur_beats": 0.6667,
      "midi": 68,
-     "conf": 0.873,
+     "conf": 0.881,
      "out_of_key": false
     },
     {
      "start_beats": 42.0,
      "dur_beats": 0.6667,
      "midi": 68,
-     "conf": 0.848,
+     "conf": 0.842,
      "out_of_key": false
     },
     {
      "start_beats": 42.6667,
-     "dur_beats": 1.0,
+     "dur_beats": 1.3333,
      "midi": 68,
-     "conf": 0.869,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 43.6667,
-     "dur_beats": 1.0,
-     "midi": 68,
-     "conf": 0.841,
+     "conf": 0.885,
      "out_of_key": false
     }
    ]
@@ -639,24 +625,38 @@
    ],
    "melody": [
     {
+     "start_beats": 44.0,
+     "dur_beats": 0.6667,
+     "midi": 68,
+     "conf": 0.854,
+     "out_of_key": false
+    },
+    {
      "start_beats": 45.0,
      "dur_beats": 0.6667,
      "midi": 67,
-     "conf": 0.659,
+     "conf": 0.672,
      "out_of_key": true
     },
     {
      "start_beats": 45.6667,
-     "dur_beats": 1.3333,
+     "dur_beats": 0.3333,
      "midi": 68,
-     "conf": 0.744,
+     "conf": 0.837,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 46.0,
+     "dur_beats": 1.0,
+     "midi": 68,
+     "conf": 0.708,
      "out_of_key": false
     },
     {
      "start_beats": 47.0,
      "dur_beats": 1.3333,
      "midi": 73,
-     "conf": 0.805,
+     "conf": 0.851,
      "out_of_key": false
     }
    ]
@@ -693,28 +693,28 @@
      "start_beats": 48.3333,
      "dur_beats": 0.3334,
      "midi": 71,
-     "conf": 0.773,
+     "conf": 0.849,
      "out_of_key": false
     },
     {
      "start_beats": 49.3333,
      "dur_beats": 0.6667,
      "midi": 70,
-     "conf": 0.879,
+     "conf": 0.91,
      "out_of_key": false
     },
     {
      "start_beats": 50.0,
-     "dur_beats": 0.6667,
+     "dur_beats": 0.3333,
      "midi": 70,
-     "conf": 0.703,
+     "conf": 0.911,
      "out_of_key": false
     },
     {
      "start_beats": 51.0,
      "dur_beats": 1.0,
      "midi": 66,
-     "conf": 0.913,
+     "conf": 0.911,
      "out_of_key": false
     }
    ]
@@ -741,35 +741,35 @@
      "start_beats": 52.0,
      "dur_beats": 0.6667,
      "midi": 68,
-     "conf": 0.77,
+     "conf": 0.749,
      "out_of_key": false
     },
     {
-     "start_beats": 52.6667,
-     "dur_beats": 1.0,
+     "start_beats": 53.3333,
+     "dur_beats": 0.3334,
      "midi": 71,
-     "conf": 0.711,
+     "conf": 0.66,
      "out_of_key": false
     },
     {
      "start_beats": 53.6667,
      "dur_beats": 0.6666,
      "midi": 66,
-     "conf": 0.905,
+     "conf": 0.925,
      "out_of_key": false
     },
     {
      "start_beats": 54.3333,
-     "dur_beats": 0.6667,
+     "dur_beats": 0.3334,
      "midi": 71,
-     "conf": 0.745,
+     "conf": 0.556,
      "out_of_key": false
     },
     {
      "start_beats": 55.0,
      "dur_beats": 1.0,
      "midi": 64,
-     "conf": 0.857,
+     "conf": 0.811,
      "out_of_key": false
     }
    ]
@@ -796,42 +796,35 @@
      "start_beats": 56.0,
      "dur_beats": 0.6667,
      "midi": 66,
-     "conf": 0.896,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 57.0,
-     "dur_beats": 0.3333,
-     "midi": 71,
-     "conf": 0.708,
+     "conf": 0.905,
      "out_of_key": false
     },
     {
      "start_beats": 57.3333,
      "dur_beats": 0.3334,
      "midi": 64,
-     "conf": 0.653,
+     "conf": 0.736,
      "out_of_key": false
     },
     {
      "start_beats": 57.6667,
      "dur_beats": 0.3333,
      "midi": 63,
-     "conf": 0.548,
+     "conf": 0.552,
      "out_of_key": false
     },
     {
      "start_beats": 58.0,
      "dur_beats": 1.0,
      "midi": 63,
-     "conf": 0.82,
+     "conf": 0.848,
      "out_of_key": false
     },
     {
      "start_beats": 59.0,
      "dur_beats": 0.6667,
      "midi": 64,
-     "conf": 0.835,
+     "conf": 0.858,
      "out_of_key": false
     }
    ]
@@ -868,42 +861,42 @@
      "start_beats": 60.0,
      "dur_beats": 0.6667,
      "midi": 63,
-     "conf": 0.88,
+     "conf": 0.882,
      "out_of_key": false
     },
     {
      "start_beats": 60.6667,
      "dur_beats": 0.3333,
      "midi": 61,
-     "conf": 0.797,
+     "conf": 0.801,
      "out_of_key": false
     },
     {
      "start_beats": 61.0,
      "dur_beats": 0.3333,
      "midi": 61,
-     "conf": 0.795,
+     "conf": 0.782,
      "out_of_key": false
     },
     {
      "start_beats": 61.3333,
      "dur_beats": 1.6667,
      "midi": 61,
-     "conf": 0.856,
+     "conf": 0.862,
      "out_of_key": false
     },
     {
      "start_beats": 63.0,
      "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.709,
+     "conf": 0.716,
      "out_of_key": false
     },
     {
      "start_beats": 63.6667,
      "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.639,
+     "conf": 0.665,
      "out_of_key": false
     }
    ]
@@ -930,28 +923,28 @@
      "start_beats": 65.6667,
      "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.895,
+     "conf": 0.899,
      "out_of_key": false
     },
     {
      "start_beats": 66.0,
      "dur_beats": 0.3333,
      "midi": 58,
-     "conf": 0.934,
+     "conf": 0.936,
      "out_of_key": false
     },
     {
      "start_beats": 66.6667,
      "dur_beats": 0.3333,
      "midi": 58,
-     "conf": 0.54,
+     "conf": 0.593,
      "out_of_key": false
     },
     {
      "start_beats": 67.0,
      "dur_beats": 1.0,
      "midi": 61,
-     "conf": 0.848,
+     "conf": 0.86,
      "out_of_key": false
     }
    ]
@@ -977,21 +970,14 @@
      "start_beats": 68.6667,
      "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.577,
+     "conf": 0.641,
      "out_of_key": false
     },
     {
      "start_beats": 69.6667,
-     "dur_beats": 0.3333,
-     "midi": 61,
-     "conf": 0.726,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 70.0,
-     "dur_beats": 0.3333,
+     "dur_beats": 0.6666,
      "midi": 59,
-     "conf": 0.456,
+     "conf": 0.62,
      "out_of_key": false
     }
    ]
@@ -1017,14 +1003,14 @@
      "start_beats": 72.3333,
      "dur_beats": 0.3334,
      "midi": 69,
-     "conf": 0.432,
+     "conf": 0.498,
      "out_of_key": true
     },
     {
      "start_beats": 73.0,
      "dur_beats": 0.3333,
      "midi": 68,
-     "conf": 0.412,
+     "conf": 0.401,
      "out_of_key": false
     }
    ]
@@ -1048,9 +1034,23 @@
    "melody": [
     {
      "start_beats": 76.0,
-     "dur_beats": 0.6667,
-     "midi": 59,
-     "conf": 0.506,
+     "dur_beats": 0.3333,
+     "midi": 71,
+     "conf": 0.641,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 76.3333,
+     "dur_beats": 0.3334,
+     "midi": 70,
+     "conf": 0.353,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 78.3333,
+     "dur_beats": 0.3334,
+     "midi": 71,
+     "conf": 0.415,
      "out_of_key": false
     }
    ]
@@ -1082,10 +1082,17 @@
    ],
    "melody": [
     {
+     "start_beats": 80.3333,
+     "dur_beats": 0.3334,
+     "midi": 71,
+     "conf": 0.493,
+     "out_of_key": false
+    },
+    {
      "start_beats": 82.3333,
      "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.631,
+     "conf": 0.671,
      "out_of_key": false
     }
    ]
@@ -1112,35 +1119,35 @@
      "start_beats": 85.0,
      "dur_beats": 0.6667,
      "midi": 54,
-     "conf": 0.598,
+     "conf": 0.619,
      "out_of_key": false
     },
     {
      "start_beats": 86.0,
      "dur_beats": 0.3333,
      "midi": 54,
-     "conf": 0.838,
+     "conf": 0.841,
      "out_of_key": false
     },
     {
      "start_beats": 86.3333,
      "dur_beats": 0.6667,
      "midi": 51,
-     "conf": 0.832,
+     "conf": 0.841,
      "out_of_key": false
     },
     {
      "start_beats": 87.0,
      "dur_beats": 0.3333,
      "midi": 51,
-     "conf": 0.62,
+     "conf": 0.59,
      "out_of_key": false
     },
     {
      "start_beats": 87.6667,
      "dur_beats": 1.0,
      "midi": 56,
-     "conf": 0.903,
+     "conf": 0.919,
      "out_of_key": false
     }
    ]
@@ -1167,21 +1174,21 @@
      "start_beats": 88.6667,
      "dur_beats": 0.3333,
      "midi": 54,
-     "conf": 0.669,
+     "conf": 0.714,
      "out_of_key": false
     },
     {
      "start_beats": 89.0,
      "dur_beats": 0.6667,
      "midi": 54,
-     "conf": 0.657,
+     "conf": 0.773,
      "out_of_key": false
     },
     {
      "start_beats": 90.0,
      "dur_beats": 0.3333,
      "midi": 54,
-     "conf": 0.894,
+     "conf": 0.901,
      "out_of_key": false
     },
     {
@@ -1195,14 +1202,14 @@
      "start_beats": 91.0,
      "dur_beats": 0.3333,
      "midi": 52,
-     "conf": 0.921,
+     "conf": 0.92,
      "out_of_key": false
     },
     {
      "start_beats": 91.3333,
      "dur_beats": 0.3334,
      "midi": 51,
-     "conf": 0.756,
+     "conf": 0.737,
      "out_of_key": false
     },
     {
@@ -1236,21 +1243,35 @@
      "start_beats": 93.6667,
      "dur_beats": 0.3333,
      "midi": 56,
-     "conf": 0.747,
+     "conf": 0.756,
      "out_of_key": false
     },
     {
      "start_beats": 94.0,
-     "dur_beats": 1.0,
+     "dur_beats": 0.3333,
      "midi": 54,
-     "conf": 0.752,
+     "conf": 0.902,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 94.3333,
+     "dur_beats": 0.6667,
+     "midi": 54,
+     "conf": 0.626,
      "out_of_key": false
     },
     {
      "start_beats": 95.0,
      "dur_beats": 0.3333,
      "midi": 54,
-     "conf": 0.839,
+     "conf": 0.828,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 95.6667,
+     "dur_beats": 0.3333,
+     "midi": 52,
+     "conf": 0.443,
      "out_of_key": false
     }
    ]
@@ -1287,21 +1308,21 @@
      "start_beats": 96.0,
      "dur_beats": 1.0,
      "midi": 56,
-     "conf": 0.91,
+     "conf": 0.913,
      "out_of_key": false
     },
     {
      "start_beats": 97.0,
      "dur_beats": 0.6667,
      "midi": 58,
-     "conf": 0.691,
+     "conf": 0.69,
      "out_of_key": false
     },
     {
      "start_beats": 98.0,
      "dur_beats": 1.3333,
      "midi": 54,
-     "conf": 0.847,
+     "conf": 0.851,
      "out_of_key": false
     }
    ]
@@ -1326,37 +1347,37 @@
    "melody": [
     {
      "start_beats": 101.0,
-     "dur_beats": 0.3333,
+     "dur_beats": 0.6667,
      "midi": 58,
-     "conf": 0.82,
+     "conf": 0.836,
      "out_of_key": false
     },
     {
-     "start_beats": 101.3333,
-     "dur_beats": 0.6667,
+     "start_beats": 101.6667,
+     "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.869,
+     "conf": 0.944,
      "out_of_key": false
     },
     {
      "start_beats": 102.0,
      "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.616,
+     "conf": 0.647,
      "out_of_key": false
     },
     {
      "start_beats": 102.6667,
      "dur_beats": 0.6666,
      "midi": 56,
-     "conf": 0.642,
+     "conf": 0.636,
      "out_of_key": false
     },
     {
      "start_beats": 103.6667,
      "dur_beats": 1.0,
      "midi": 59,
-     "conf": 0.784,
+     "conf": 0.836,
      "out_of_key": false
     }
    ]
@@ -1380,52 +1401,45 @@
    ],
    "melody": [
     {
-     "start_beats": 104.6667,
-     "dur_beats": 0.3333,
-     "midi": 59,
-     "conf": 0.663,
-     "out_of_key": false
-    },
-    {
      "start_beats": 105.0,
      "dur_beats": 1.0,
      "midi": 56,
-     "conf": 0.848,
+     "conf": 0.852,
      "out_of_key": false
     },
     {
      "start_beats": 106.0,
      "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.793,
+     "conf": 0.798,
      "out_of_key": false
     },
     {
      "start_beats": 106.6667,
      "dur_beats": 0.3333,
      "midi": 61,
-     "conf": 0.662,
+     "conf": 0.691,
      "out_of_key": false
     },
     {
      "start_beats": 107.0,
      "dur_beats": 0.3333,
      "midi": 61,
-     "conf": 0.488,
+     "conf": 0.491,
      "out_of_key": false
     },
     {
      "start_beats": 107.3333,
      "dur_beats": 0.3334,
-     "midi": 58,
-     "conf": 0.613,
-     "out_of_key": false
+     "midi": 57,
+     "conf": 0.659,
+     "out_of_key": true
     },
     {
      "start_beats": 107.6667,
      "dur_beats": 0.3333,
      "midi": 61,
-     "conf": 0.83,
+     "conf": 0.838,
      "out_of_key": false
     }
    ]
@@ -1452,35 +1466,42 @@
      "start_beats": 108.0,
      "dur_beats": 0.3333,
      "midi": 64,
-     "conf": 0.91,
+     "conf": 0.913,
      "out_of_key": false
     },
     {
      "start_beats": 108.3333,
      "dur_beats": 0.3334,
      "midi": 63,
-     "conf": 0.592,
+     "conf": 0.63,
      "out_of_key": false
     },
     {
      "start_beats": 109.0,
      "dur_beats": 0.6667,
      "midi": 64,
-     "conf": 0.857,
+     "conf": 0.871,
      "out_of_key": false
     },
     {
      "start_beats": 110.0,
-     "dur_beats": 1.0,
+     "dur_beats": 0.3333,
      "midi": 63,
-     "conf": 0.809,
+     "conf": 0.58,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 110.3333,
+     "dur_beats": 0.6667,
+     "midi": 63,
+     "conf": 0.925,
      "out_of_key": false
     },
     {
      "start_beats": 111.0,
      "dur_beats": 1.3333,
      "midi": 64,
-     "conf": 0.84,
+     "conf": 0.816,
      "out_of_key": false
     }
    ]
@@ -1527,42 +1548,42 @@
      "start_beats": 112.3333,
      "dur_beats": 0.3334,
      "midi": 63,
-     "conf": 0.766,
+     "conf": 0.713,
      "out_of_key": false
     },
     {
      "start_beats": 113.6667,
      "dur_beats": 0.3333,
      "midi": 63,
-     "conf": 0.639,
+     "conf": 0.645,
      "out_of_key": false
     },
     {
      "start_beats": 114.0,
      "dur_beats": 0.6667,
      "midi": 61,
-     "conf": 0.641,
+     "conf": 0.709,
      "out_of_key": false
     },
     {
      "start_beats": 114.6667,
      "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.641,
+     "conf": 0.687,
      "out_of_key": false
     },
     {
      "start_beats": 115.0,
      "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.872,
+     "conf": 0.891,
      "out_of_key": false
     },
     {
      "start_beats": 115.6667,
      "dur_beats": 0.6666,
      "midi": 59,
-     "conf": 0.679,
+     "conf": 0.716,
      "out_of_key": false
     }
    ]
@@ -1589,28 +1610,28 @@
      "start_beats": 117.0,
      "dur_beats": 0.3333,
      "midi": 56,
-     "conf": 0.778,
+     "conf": 0.781,
      "out_of_key": false
     },
     {
-     "start_beats": 117.3333,
-     "dur_beats": 0.6667,
+     "start_beats": 117.6667,
+     "dur_beats": 0.3333,
      "midi": 56,
-     "conf": 0.671,
+     "conf": 0.656,
      "out_of_key": false
     },
     {
      "start_beats": 118.0,
      "dur_beats": 0.6667,
      "midi": 56,
-     "conf": 0.91,
+     "conf": 0.909,
      "out_of_key": false
     },
     {
      "start_beats": 118.6667,
      "dur_beats": 0.6666,
      "midi": 59,
-     "conf": 0.829,
+     "conf": 0.839,
      "out_of_key": false
     },
     {
@@ -1654,49 +1675,49 @@
      "start_beats": 120.0,
      "dur_beats": 0.6667,
      "midi": 61,
-     "conf": 0.928,
+     "conf": 0.92,
      "out_of_key": false
     },
     {
      "start_beats": 120.6667,
      "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.922,
+     "conf": 0.921,
      "out_of_key": false
     },
     {
      "start_beats": 121.0,
      "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.821,
+     "conf": 0.824,
      "out_of_key": false
     },
     {
      "start_beats": 121.6667,
      "dur_beats": 0.3333,
      "midi": 61,
-     "conf": 0.511,
+     "conf": 0.518,
      "out_of_key": false
     },
     {
      "start_beats": 122.0,
      "dur_beats": 0.6667,
      "midi": 61,
-     "conf": 0.87,
+     "conf": 0.871,
      "out_of_key": false
     },
     {
      "start_beats": 122.6667,
      "dur_beats": 0.3333,
      "midi": 54,
-     "conf": 0.558,
+     "conf": 0.561,
      "out_of_key": false
     },
     {
      "start_beats": 123.0,
      "dur_beats": 0.6667,
      "midi": 54,
-     "conf": 0.725,
+     "conf": 0.656,
      "out_of_key": false
     }
    ]
@@ -1733,35 +1754,35 @@
      "start_beats": 124.0,
      "dur_beats": 0.6667,
      "midi": 66,
-     "conf": 0.86,
+     "conf": 0.885,
      "out_of_key": false
     },
     {
      "start_beats": 125.0,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.788,
+     "conf": 0.816,
      "out_of_key": false
     },
     {
      "start_beats": 125.3333,
      "dur_beats": 0.3334,
      "midi": 64,
-     "conf": 0.85,
+     "conf": 0.867,
      "out_of_key": false
     },
     {
      "start_beats": 126.3333,
      "dur_beats": 0.3334,
      "midi": 63,
-     "conf": 0.861,
+     "conf": 0.867,
      "out_of_key": false
     },
     {
      "start_beats": 127.0,
      "dur_beats": 0.6667,
      "midi": 61,
-     "conf": 0.632,
+     "conf": 0.642,
      "out_of_key": false
     }
    ]
@@ -1786,44 +1807,51 @@
    "melody": [
     {
      "start_beats": 128.0,
-     "dur_beats": 0.6667,
+     "dur_beats": 0.3333,
      "midi": 61,
-     "conf": 0.855,
+     "conf": 0.841,
      "out_of_key": false
     },
     {
-     "start_beats": 128.6667,
-     "dur_beats": 0.6666,
+     "start_beats": 128.3333,
+     "dur_beats": 0.6667,
+     "midi": 60,
+     "conf": 0.912,
+     "out_of_key": true
+    },
+    {
+     "start_beats": 129.0,
+     "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.875,
+     "conf": 0.897,
      "out_of_key": false
     },
     {
      "start_beats": 129.3333,
      "dur_beats": 0.3334,
      "midi": 61,
-     "conf": 0.504,
+     "conf": 0.495,
      "out_of_key": false
     },
     {
      "start_beats": 129.6667,
      "dur_beats": 0.3333,
      "midi": 58,
-     "conf": 0.385,
+     "conf": 0.373,
      "out_of_key": false
     },
     {
      "start_beats": 130.6667,
      "dur_beats": 1.0,
      "midi": 56,
-     "conf": 0.799,
+     "conf": 0.797,
      "out_of_key": false
     },
     {
      "start_beats": 131.6667,
      "dur_beats": 0.3333,
      "midi": 58,
-     "conf": 0.641,
+     "conf": 0.624,
      "out_of_key": false
     }
    ]
@@ -1850,63 +1878,56 @@
      "start_beats": 132.0,
      "dur_beats": 0.3333,
      "midi": 61,
-     "conf": 0.744,
+     "conf": 0.751,
      "out_of_key": false
     },
     {
      "start_beats": 132.3333,
      "dur_beats": 0.3334,
      "midi": 59,
-     "conf": 0.91,
+     "conf": 0.913,
      "out_of_key": false
     },
     {
      "start_beats": 132.6667,
      "dur_beats": 0.3333,
      "midi": 58,
-     "conf": 0.88,
+     "conf": 0.879,
      "out_of_key": false
     },
     {
      "start_beats": 133.0,
      "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.908,
+     "conf": 0.911,
      "out_of_key": false
     },
     {
      "start_beats": 133.3333,
      "dur_beats": 0.3334,
      "midi": 58,
-     "conf": 0.655,
+     "conf": 0.552,
      "out_of_key": false
     },
     {
      "start_beats": 133.6667,
      "dur_beats": 0.3333,
      "midi": 58,
-     "conf": 0.816,
+     "conf": 0.769,
      "out_of_key": false
     },
     {
      "start_beats": 134.0,
      "dur_beats": 0.6667,
      "midi": 60,
-     "conf": 0.629,
+     "conf": 0.667,
      "out_of_key": true
     },
     {
      "start_beats": 135.3333,
-     "dur_beats": 0.3334,
-     "midi": 59,
-     "conf": 0.761,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 135.6667,
-     "dur_beats": 0.3333,
+     "dur_beats": 0.6667,
      "midi": 58,
-     "conf": 0.81,
+     "conf": 0.829,
      "out_of_key": false
     }
    ]
@@ -1933,56 +1954,56 @@
      "start_beats": 136.0,
      "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.902,
+     "conf": 0.901,
      "out_of_key": false
     },
     {
      "start_beats": 136.3333,
      "dur_beats": 0.6667,
      "midi": 61,
-     "conf": 0.924,
+     "conf": 0.921,
      "out_of_key": false
     },
     {
      "start_beats": 137.0,
      "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.721,
+     "conf": 0.731,
      "out_of_key": false
     },
     {
      "start_beats": 137.6667,
      "dur_beats": 0.3333,
      "midi": 58,
-     "conf": 0.604,
+     "conf": 0.629,
      "out_of_key": false
     },
     {
      "start_beats": 138.0,
      "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.707,
+     "conf": 0.738,
      "out_of_key": false
     },
     {
      "start_beats": 138.3333,
      "dur_beats": 0.3334,
      "midi": 61,
-     "conf": 0.556,
+     "conf": 0.476,
      "out_of_key": false
     },
     {
      "start_beats": 138.6667,
      "dur_beats": 0.6666,
      "midi": 56,
-     "conf": 0.783,
+     "conf": 0.802,
      "out_of_key": false
     },
     {
      "start_beats": 139.6667,
      "dur_beats": 0.3333,
      "midi": 56,
-     "conf": 0.699,
+     "conf": 0.694,
      "out_of_key": false
     }
    ]
@@ -2009,7 +2030,7 @@
      "start_beats": 140.0,
      "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.861,
+     "conf": 0.862,
      "out_of_key": false
     },
     {
@@ -2023,7 +2044,7 @@
      "start_beats": 141.0,
      "dur_beats": 0.6667,
      "midi": 61,
-     "conf": 0.762,
+     "conf": 0.756,
      "out_of_key": false
     },
     {
@@ -2037,22 +2058,29 @@
      "start_beats": 142.3333,
      "dur_beats": 0.3334,
      "midi": 61,
-     "conf": 0.806,
+     "conf": 0.803,
      "out_of_key": false
     },
     {
      "start_beats": 142.6667,
      "dur_beats": 0.3333,
      "midi": 64,
-     "conf": 0.504,
+     "conf": 0.53,
      "out_of_key": false
     },
     {
      "start_beats": 143.0,
      "dur_beats": 0.6667,
      "midi": 63,
-     "conf": 0.798,
+     "conf": 0.807,
      "out_of_key": false
+    },
+    {
+     "start_beats": 143.6667,
+     "dur_beats": 0.3333,
+     "midi": 60,
+     "conf": 0.532,
+     "out_of_key": true
     }
    ]
   },
@@ -2098,35 +2126,28 @@
      "start_beats": 144.0,
      "dur_beats": 0.6667,
      "midi": 64,
-     "conf": 0.922,
+     "conf": 0.921,
      "out_of_key": false
     },
     {
      "start_beats": 145.6667,
      "dur_beats": 0.3333,
      "midi": 68,
-     "conf": 0.439,
+     "conf": 0.452,
      "out_of_key": false
     },
     {
      "start_beats": 146.0,
      "dur_beats": 1.0,
      "midi": 66,
-     "conf": 0.788,
+     "conf": 0.784,
      "out_of_key": false
     },
     {
      "start_beats": 147.0,
-     "dur_beats": 0.6667,
+     "dur_beats": 1.0,
      "midi": 66,
-     "conf": 0.55,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 147.6667,
-     "dur_beats": 0.3333,
-     "midi": 66,
-     "conf": 0.887,
+     "conf": 0.885,
      "out_of_key": false
     }
    ]
@@ -2153,15 +2174,15 @@
      "start_beats": 148.0,
      "dur_beats": 1.0,
      "midi": 66,
-     "conf": 0.642,
+     "conf": 0.66,
      "out_of_key": false
     },
     {
      "start_beats": 149.6667,
      "dur_beats": 0.3333,
-     "midi": 60,
-     "conf": 0.646,
-     "out_of_key": true
+     "midi": 59,
+     "conf": 0.658,
+     "out_of_key": false
     },
     {
      "start_beats": 150.0,
@@ -2174,14 +2195,14 @@
      "start_beats": 150.6667,
      "dur_beats": 0.3333,
      "midi": 63,
-     "conf": 0.831,
+     "conf": 0.832,
      "out_of_key": false
     },
     {
      "start_beats": 151.0,
      "dur_beats": 1.0,
      "midi": 66,
-     "conf": 0.899,
+     "conf": 0.902,
      "out_of_key": false
     }
    ]
@@ -2208,14 +2229,14 @@
      "start_beats": 152.0,
      "dur_beats": 1.0,
      "midi": 68,
-     "conf": 0.812,
+     "conf": 0.798,
      "out_of_key": false
     },
     {
-     "start_beats": 154.0,
-     "dur_beats": 1.0,
+     "start_beats": 153.6667,
+     "dur_beats": 1.3333,
      "midi": 68,
-     "conf": 0.795,
+     "conf": 0.77,
      "out_of_key": false
     },
     {
@@ -2247,37 +2268,37 @@
    "melody": [
     {
      "start_beats": 156.3333,
-     "dur_beats": 1.0,
+     "dur_beats": 0.6667,
      "midi": 68,
-     "conf": 0.865,
+     "conf": 0.916,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 157.0,
+     "dur_beats": 0.3333,
+     "midi": 68,
+     "conf": 0.811,
      "out_of_key": false
     },
     {
      "start_beats": 157.3333,
      "dur_beats": 0.6667,
      "midi": 67,
-     "conf": 0.914,
+     "conf": 0.917,
      "out_of_key": true
     },
     {
      "start_beats": 158.0,
      "dur_beats": 1.0,
      "midi": 68,
-     "conf": 0.783,
+     "conf": 0.836,
      "out_of_key": false
     },
     {
      "start_beats": 159.0,
-     "dur_beats": 0.3333,
-     "midi": 71,
-     "conf": 0.586,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 159.3333,
-     "dur_beats": 0.6667,
+     "dur_beats": 1.0,
      "midi": 70,
-     "conf": 0.496,
+     "conf": 0.57,
      "out_of_key": false
     }
    ]
@@ -2314,35 +2335,35 @@
      "start_beats": 160.0,
      "dur_beats": 0.6667,
      "midi": 71,
-     "conf": 0.818,
+     "conf": 0.853,
      "out_of_key": false
     },
     {
      "start_beats": 161.6667,
      "dur_beats": 0.3333,
      "midi": 71,
-     "conf": 0.863,
+     "conf": 0.873,
      "out_of_key": false
     },
     {
      "start_beats": 162.0,
      "dur_beats": 0.3333,
      "midi": 70,
-     "conf": 0.925,
+     "conf": 0.916,
      "out_of_key": false
     },
     {
      "start_beats": 162.3333,
-     "dur_beats": 0.6667,
+     "dur_beats": 0.3334,
      "midi": 70,
-     "conf": 0.59,
+     "conf": 0.551,
      "out_of_key": false
     },
     {
      "start_beats": 163.0,
      "dur_beats": 1.0,
      "midi": 66,
-     "conf": 0.734,
+     "conf": 0.723,
      "out_of_key": false
     }
    ]
@@ -2369,28 +2390,21 @@
      "start_beats": 164.0,
      "dur_beats": 0.6667,
      "midi": 68,
-     "conf": 0.817,
+     "conf": 0.841,
      "out_of_key": false
     },
     {
      "start_beats": 164.6667,
-     "dur_beats": 0.3333,
-     "midi": 70,
-     "conf": 0.505,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 165.0,
-     "dur_beats": 0.6667,
+     "dur_beats": 0.6666,
      "midi": 71,
-     "conf": 0.671,
+     "conf": 0.667,
      "out_of_key": false
     },
     {
      "start_beats": 165.6667,
      "dur_beats": 0.3333,
      "midi": 68,
-     "conf": 0.86,
+     "conf": 0.868,
      "out_of_key": false
     },
     {
@@ -2401,24 +2415,17 @@
      "out_of_key": false
     },
     {
-     "start_beats": 166.3333,
-     "dur_beats": 0.6667,
+     "start_beats": 166.6667,
+     "dur_beats": 0.3333,
      "midi": 71,
-     "conf": 0.572,
+     "conf": 0.485,
      "out_of_key": false
     },
     {
      "start_beats": 167.0,
-     "dur_beats": 0.6667,
+     "dur_beats": 1.0,
      "midi": 64,
-     "conf": 0.753,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 167.6667,
-     "dur_beats": 0.6666,
-     "midi": 66,
-     "conf": 0.893,
+     "conf": 0.757,
      "out_of_key": false
     }
    ]
@@ -2442,52 +2449,52 @@
    ],
    "melody": [
     {
-     "start_beats": 168.3333,
-     "dur_beats": 0.3334,
+     "start_beats": 168.0,
+     "dur_beats": 0.6667,
      "midi": 66,
-     "conf": 0.924,
+     "conf": 0.938,
      "out_of_key": false
     },
     {
      "start_beats": 169.3333,
      "dur_beats": 0.3334,
      "midi": 71,
-     "conf": 0.679,
+     "conf": 0.727,
      "out_of_key": false
     },
     {
      "start_beats": 169.6667,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.901,
+     "conf": 0.92,
      "out_of_key": false
     },
     {
      "start_beats": 170.0,
      "dur_beats": 0.3333,
      "midi": 64,
-     "conf": 0.912,
+     "conf": 0.902,
      "out_of_key": false
     },
     {
      "start_beats": 170.3333,
-     "dur_beats": 0.6667,
-     "midi": 59,
-     "conf": 0.525,
-     "out_of_key": false
+     "dur_beats": 0.3334,
+     "midi": 60,
+     "conf": 0.455,
+     "out_of_key": true
     },
     {
      "start_beats": 171.0,
      "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.84,
+     "conf": 0.859,
      "out_of_key": false
     },
     {
      "start_beats": 171.6667,
      "dur_beats": 0.3333,
      "midi": 58,
-     "conf": 0.872,
+     "conf": 0.875,
      "out_of_key": false
     }
    ]
@@ -2514,35 +2521,42 @@
      "start_beats": 172.0,
      "dur_beats": 0.6667,
      "midi": 61,
-     "conf": 0.872,
+     "conf": 0.876,
      "out_of_key": false
     },
     {
-     "start_beats": 173.0,
-     "dur_beats": 0.6667,
+     "start_beats": 172.6667,
+     "dur_beats": 0.6666,
      "midi": 59,
-     "conf": 0.735,
+     "conf": 0.487,
      "out_of_key": false
     },
     {
      "start_beats": 173.6667,
      "dur_beats": 0.3333,
      "midi": 61,
-     "conf": 0.645,
+     "conf": 0.559,
      "out_of_key": false
     },
     {
      "start_beats": 174.0,
      "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.923,
+     "conf": 0.932,
      "out_of_key": false
     },
     {
      "start_beats": 175.0,
-     "dur_beats": 1.0,
+     "dur_beats": 0.3333,
      "midi": 56,
-     "conf": 0.692,
+     "conf": 0.459,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 175.3333,
+     "dur_beats": 0.6667,
+     "midi": 56,
+     "conf": 0.711,
      "out_of_key": false
     }
    ]
@@ -2569,35 +2583,42 @@
      "start_beats": 176.0,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.85,
+     "conf": 0.853,
      "out_of_key": false
     },
     {
      "start_beats": 176.3333,
-     "dur_beats": 1.0,
+     "dur_beats": 0.6667,
      "midi": 63,
-     "conf": 0.876,
+     "conf": 0.872,
      "out_of_key": false
+    },
+    {
+     "start_beats": 177.0,
+     "dur_beats": 0.6667,
+     "midi": 62,
+     "conf": 0.576,
+     "out_of_key": true
     },
     {
      "start_beats": 178.0,
      "dur_beats": 1.0,
      "midi": 66,
-     "conf": 0.83,
+     "conf": 0.827,
      "out_of_key": false
     },
     {
      "start_beats": 179.0,
      "dur_beats": 0.6667,
      "midi": 67,
-     "conf": 0.719,
+     "conf": 0.751,
      "out_of_key": true
     },
     {
      "start_beats": 179.6667,
      "dur_beats": 1.0,
      "midi": 66,
-     "conf": 0.936,
+     "conf": 0.933,
      "out_of_key": false
     }
    ]
@@ -2624,21 +2645,21 @@
      "start_beats": 182.0,
      "dur_beats": 0.3333,
      "midi": 64,
-     "conf": 0.869,
+     "conf": 0.876,
      "out_of_key": false
     },
     {
      "start_beats": 182.3333,
      "dur_beats": 0.6667,
      "midi": 63,
-     "conf": 0.796,
+     "conf": 0.778,
      "out_of_key": false
     },
     {
      "start_beats": 183.0,
      "dur_beats": 1.0,
      "midi": 66,
-     "conf": 0.79,
+     "conf": 0.859,
      "out_of_key": false
     }
    ]
@@ -2665,35 +2686,35 @@
      "start_beats": 184.0,
      "dur_beats": 0.6667,
      "midi": 68,
-     "conf": 0.913,
+     "conf": 0.924,
      "out_of_key": false
     },
     {
      "start_beats": 186.0,
      "dur_beats": 0.3333,
      "midi": 68,
-     "conf": 0.821,
+     "conf": 0.837,
      "out_of_key": false
     },
     {
      "start_beats": 186.3333,
      "dur_beats": 0.3334,
      "midi": 68,
-     "conf": 0.891,
+     "conf": 0.906,
      "out_of_key": false
     },
     {
      "start_beats": 186.6667,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.693,
+     "conf": 0.736,
      "out_of_key": false
     },
     {
      "start_beats": 187.0,
      "dur_beats": 2.6667,
      "midi": 68,
-     "conf": 0.858,
+     "conf": 0.851,
      "out_of_key": false
     }
    ]
@@ -2720,14 +2741,14 @@
      "start_beats": 189.6667,
      "dur_beats": 1.3333,
      "midi": 68,
-     "conf": 0.831,
+     "conf": 0.835,
      "out_of_key": false
     },
     {
      "start_beats": 191.0,
      "dur_beats": 1.0,
      "midi": 73,
-     "conf": 0.792,
+     "conf": 0.906,
      "out_of_key": false
     }
    ]
@@ -2764,28 +2785,28 @@
      "start_beats": 192.0,
      "dur_beats": 0.6667,
      "midi": 71,
-     "conf": 0.803,
+     "conf": 0.854,
      "out_of_key": false
     },
     {
      "start_beats": 194.0,
      "dur_beats": 0.3333,
      "midi": 70,
-     "conf": 0.929,
+     "conf": 0.93,
      "out_of_key": false
     },
     {
      "start_beats": 195.0,
      "dur_beats": 0.6667,
      "midi": 66,
-     "conf": 0.852,
+     "conf": 0.821,
      "out_of_key": false
     },
     {
      "start_beats": 195.6667,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.912,
+     "conf": 0.857,
      "out_of_key": false
     }
    ]
@@ -2812,35 +2833,42 @@
      "start_beats": 196.0,
      "dur_beats": 0.6667,
      "midi": 68,
-     "conf": 0.879,
+     "conf": 0.883,
      "out_of_key": false
     },
     {
      "start_beats": 196.6667,
-     "dur_beats": 1.0,
+     "dur_beats": 0.3333,
+     "midi": 70,
+     "conf": 0.45,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 197.0,
+     "dur_beats": 0.3333,
      "midi": 71,
-     "conf": 0.687,
+     "conf": 0.889,
      "out_of_key": false
     },
     {
      "start_beats": 197.6667,
      "dur_beats": 0.6666,
      "midi": 68,
-     "conf": 0.847,
+     "conf": 0.845,
      "out_of_key": false
     },
     {
      "start_beats": 198.3333,
      "dur_beats": 0.6667,
      "midi": 71,
-     "conf": 0.811,
+     "conf": 0.628,
      "out_of_key": false
     },
     {
      "start_beats": 199.0,
      "dur_beats": 1.0,
      "midi": 64,
-     "conf": 0.8,
+     "conf": 0.833,
      "out_of_key": false
     }
    ]
@@ -2867,42 +2895,42 @@
      "start_beats": 200.0,
      "dur_beats": 0.6667,
      "midi": 66,
-     "conf": 0.843,
+     "conf": 0.864,
      "out_of_key": false
     },
     {
-     "start_beats": 201.0,
-     "dur_beats": 0.6667,
+     "start_beats": 201.3333,
+     "dur_beats": 0.3334,
      "midi": 71,
-     "conf": 0.662,
+     "conf": 0.561,
      "out_of_key": false
     },
     {
      "start_beats": 201.6667,
      "dur_beats": 1.0,
      "midi": 63,
-     "conf": 0.863,
+     "conf": 0.902,
      "out_of_key": false
     },
     {
      "start_beats": 202.6667,
      "dur_beats": 0.3333,
      "midi": 64,
-     "conf": 0.804,
+     "conf": 0.769,
      "out_of_key": false
     },
     {
      "start_beats": 203.0,
      "dur_beats": 0.6667,
      "midi": 66,
-     "conf": 0.786,
+     "conf": 0.882,
      "out_of_key": false
     },
     {
      "start_beats": 203.6667,
      "dur_beats": 0.3333,
      "midi": 64,
-     "conf": 0.84,
+     "conf": 0.856,
      "out_of_key": false
     }
    ]
@@ -2929,35 +2957,28 @@
      "start_beats": 204.0,
      "dur_beats": 0.6667,
      "midi": 63,
-     "conf": 0.92,
+     "conf": 0.909,
      "out_of_key": false
     },
     {
      "start_beats": 204.6667,
      "dur_beats": 0.3333,
      "midi": 61,
-     "conf": 0.743,
+     "conf": 0.781,
      "out_of_key": false
     },
     {
      "start_beats": 205.0,
      "dur_beats": 2.3333,
      "midi": 61,
-     "conf": 0.818,
+     "conf": 0.804,
      "out_of_key": false
     },
     {
      "start_beats": 207.3333,
-     "dur_beats": 0.3334,
+     "dur_beats": 0.6667,
      "midi": 64,
-     "conf": 0.679,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 207.6667,
-     "dur_beats": 0.3333,
-     "midi": 64,
-     "conf": 0.717,
+     "conf": 0.662,
      "out_of_key": false
     }
    ]
@@ -2982,37 +3003,58 @@
    "melody": [
     {
      "start_beats": 208.0,
-     "dur_beats": 0.6667,
+     "dur_beats": 0.3333,
+     "midi": 66,
+     "conf": 0.523,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 208.3333,
+     "dur_beats": 0.3334,
      "midi": 63,
-     "conf": 0.858,
+     "conf": 0.853,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 209.0,
+     "dur_beats": 0.3333,
+     "midi": 61,
+     "conf": 0.427,
      "out_of_key": false
     },
     {
      "start_beats": 209.3333,
      "dur_beats": 0.3334,
      "midi": 68,
-     "conf": 0.463,
+     "conf": 0.454,
      "out_of_key": false
     },
     {
      "start_beats": 209.6667,
      "dur_beats": 0.3333,
      "midi": 71,
-     "conf": 0.673,
+     "conf": 0.703,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 210.3333,
+     "dur_beats": 0.3334,
+     "midi": 70,
+     "conf": 0.405,
      "out_of_key": false
     },
     {
      "start_beats": 210.6667,
      "dur_beats": 0.6666,
      "midi": 70,
-     "conf": 0.896,
+     "conf": 0.895,
      "out_of_key": false
     },
     {
      "start_beats": 211.3333,
      "dur_beats": 0.6667,
      "midi": 66,
-     "conf": 0.853,
+     "conf": 0.864,
      "out_of_key": false
     }
    ]
@@ -3039,56 +3081,49 @@
      "start_beats": 212.0,
      "dur_beats": 1.0,
      "midi": 68,
-     "conf": 0.668,
+     "conf": 0.916,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 213.0,
+     "dur_beats": 0.3333,
+     "midi": 59,
+     "conf": 0.766,
      "out_of_key": false
     },
     {
      "start_beats": 213.3333,
      "dur_beats": 0.3334,
      "midi": 71,
-     "conf": 0.7,
+     "conf": 0.628,
      "out_of_key": false
     },
     {
      "start_beats": 213.6667,
      "dur_beats": 0.6666,
      "midi": 68,
-     "conf": 0.873,
+     "conf": 0.875,
      "out_of_key": false
     },
     {
      "start_beats": 214.3333,
-     "dur_beats": 0.3334,
+     "dur_beats": 0.6667,
      "midi": 66,
-     "conf": 0.655,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 214.6667,
-     "dur_beats": 0.3333,
-     "midi": 71,
-     "conf": 0.662,
+     "conf": 0.618,
      "out_of_key": false
     },
     {
      "start_beats": 215.0,
      "dur_beats": 0.3333,
-     "midi": 71,
-     "conf": 0.432,
+     "midi": 59,
+     "conf": 0.566,
      "out_of_key": false
     },
     {
      "start_beats": 215.3333,
      "dur_beats": 0.3334,
-     "midi": 64,
-     "conf": 0.805,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 215.6667,
-     "dur_beats": 0.3333,
-     "midi": 71,
-     "conf": 0.588,
+     "midi": 63,
+     "conf": 0.856,
      "out_of_key": false
     }
    ]
@@ -3115,35 +3150,35 @@
      "start_beats": 216.0,
      "dur_beats": 0.3333,
      "midi": 68,
-     "conf": 0.627,
+     "conf": 0.57,
      "out_of_key": false
     },
     {
      "start_beats": 216.3333,
      "dur_beats": 0.6667,
      "midi": 66,
-     "conf": 0.848,
+     "conf": 0.861,
      "out_of_key": false
     },
     {
-     "start_beats": 217.0,
-     "dur_beats": 0.6667,
-     "midi": 71,
-     "conf": 0.678,
+     "start_beats": 217.3333,
+     "dur_beats": 0.3334,
+     "midi": 64,
+     "conf": 0.449,
      "out_of_key": false
     },
     {
      "start_beats": 217.6667,
-     "dur_beats": 1.3333,
+     "dur_beats": 1.0,
      "midi": 63,
-     "conf": 0.911,
+     "conf": 0.936,
      "out_of_key": false
     },
     {
-     "start_beats": 219.0,
-     "dur_beats": 0.6667,
+     "start_beats": 218.6667,
+     "dur_beats": 1.0,
      "midi": 63,
-     "conf": 0.896,
+     "conf": 0.89,
      "out_of_key": false
     }
    ]
@@ -3170,42 +3205,49 @@
      "start_beats": 220.0,
      "dur_beats": 0.3333,
      "midi": 64,
-     "conf": 0.744,
+     "conf": 0.747,
      "out_of_key": false
     },
     {
      "start_beats": 220.3333,
      "dur_beats": 0.3334,
      "midi": 63,
-     "conf": 0.91,
+     "conf": 0.898,
      "out_of_key": false
     },
     {
      "start_beats": 220.6667,
-     "dur_beats": 2.0,
+     "dur_beats": 0.6666,
      "midi": 61,
-     "conf": 0.85,
+     "conf": 0.831,
+     "out_of_key": false
+    },
+    {
+     "start_beats": 221.3333,
+     "dur_beats": 1.3334,
+     "midi": 61,
+     "conf": 0.832,
      "out_of_key": false
     },
     {
      "start_beats": 222.6667,
      "dur_beats": 0.3333,
      "midi": 61,
-     "conf": 0.88,
+     "conf": 0.905,
      "out_of_key": false
     },
     {
      "start_beats": 223.0,
      "dur_beats": 0.6667,
      "midi": 61,
-     "conf": 0.688,
+     "conf": 0.714,
      "out_of_key": false
     },
     {
      "start_beats": 223.6667,
      "dur_beats": 0.3333,
      "midi": 59,
-     "conf": 0.489,
+     "conf": 0.683,
      "out_of_key": false
     }
    ]
@@ -3229,24 +3271,24 @@
    ],
    "melody": [
     {
+     "start_beats": 225.6667,
+     "dur_beats": 0.3333,
+     "midi": 56,
+     "conf": 0.412,
+     "out_of_key": false
+    },
+    {
      "start_beats": 226.0,
      "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.891,
+     "conf": 0.899,
      "out_of_key": false
     },
     {
      "start_beats": 226.6667,
-     "dur_beats": 1.0,
+     "dur_beats": 1.3333,
      "midi": 61,
-     "conf": 0.953,
-     "out_of_key": false
-    },
-    {
-     "start_beats": 227.6667,
-     "dur_beats": 0.6666,
-     "midi": 61,
-     "conf": 0.512,
+     "conf": 0.949,
      "out_of_key": false
     }
    ]
@@ -3269,17 +3311,17 @@
    ],
    "melody": [
     {
-     "start_beats": 228.3333,
-     "dur_beats": 0.3334,
+     "start_beats": 228.0,
+     "dur_beats": 0.6667,
      "midi": 59,
-     "conf": 0.801,
+     "conf": 0.815,
      "out_of_key": false
     },
     {
      "start_beats": 228.6667,
      "dur_beats": 1.3333,
      "midi": 59,
-     "conf": 0.82,
+     "conf": 0.861,
      "out_of_key": false
     }
    ]
@@ -3305,21 +3347,21 @@
      "start_beats": 232.6667,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.495,
+     "conf": 0.493,
      "out_of_key": false
     },
     {
      "start_beats": 233.3333,
      "dur_beats": 0.3334,
-     "midi": 67,
-     "conf": 0.532,
-     "out_of_key": true
+     "midi": 68,
+     "conf": 0.384,
+     "out_of_key": false
     },
     {
      "start_beats": 233.6667,
      "dur_beats": 0.3333,
      "midi": 64,
-     "conf": 0.596,
+     "conf": 0.512,
      "out_of_key": false
     }
    ]
@@ -3345,7 +3387,7 @@
      "start_beats": 236.6667,
      "dur_beats": 0.3333,
      "midi": 66,
-     "conf": 0.503,
+     "conf": 0.442,
      "out_of_key": false
     }
    ]
@@ -3377,10 +3419,10 @@
    ],
    "melody": [
     {
-     "start_beats": 243.3333,
-     "dur_beats": 0.3334,
+     "start_beats": 243.0,
+     "dur_beats": 0.3333,
      "midi": 71,
-     "conf": 0.441,
+     "conf": 0.479,
      "out_of_key": false
     }
    ]
@@ -3406,22 +3448,29 @@
      "start_beats": 244.0,
      "dur_beats": 0.3333,
      "midi": 63,
-     "conf": 0.644,
+     "conf": 0.677,
      "out_of_key": false
     },
     {
      "start_beats": 245.0,
-     "dur_beats": 0.6667,
-     "midi": 71,
-     "conf": 0.61,
+     "dur_beats": 0.3333,
+     "midi": 73,
+     "conf": 0.566,
      "out_of_key": false
     },
     {
-     "start_beats": 246.0,
+     "start_beats": 245.6667,
      "dur_beats": 0.3333,
-     "midi": 67,
-     "conf": 0.464,
+     "midi": 72,
+     "conf": 0.461,
      "out_of_key": true
+    },
+    {
+     "start_beats": 246.3333,
+     "dur_beats": 0.3334,
+     "midi": 78,
+     "conf": 0.432,
+     "out_of_key": false
     }
    ]
   }

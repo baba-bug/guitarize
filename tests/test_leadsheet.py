@@ -587,3 +587,27 @@ def test_song_yaml_chord_overrides_round_trip(tmp_path):
     got = build_leadsheet(beats, chords, melody, ("C", "major"), {}, cfg.overrides["chords"])
     assert [[(c["beat"], c["dur_beats"], c["label"]) for c in b["chords"]] for b in got["bars"]] == [
         [(1, 4, "N")], [(1, 2, "E"), (3, 2, "F#")], [(1, 4, "B")], [(1, 2, "C#m7"), (3, 2, "F#")]]
+
+
+def test_melody_step_reads_the_lead_vocal(tmp_path, monkeypatch):
+    # 旋律只从居中的主唱识别（伴唱摆在左右会把旋律带偏）；lead.wav 不在时从人声分轨抽出来；
+    # overrides.melody_source: vocals 可改回整条人声
+    import dataclasses
+
+    import numpy as np
+    import soundfile as sf
+
+    from guitarize.analyze import pipeline
+
+    paths, cfg = _paths_cfg(tmp_path)
+    _write_analysis(paths, beats=_padded_beats(), chords={**CHORDS, "key": {"tonic": "C", "mode": "major", "r": 0.9}})
+    paths.stems_dir.mkdir(parents=True, exist_ok=True)
+    t = np.arange(22050) / 22050
+    sf.write(paths.stem("vocals"), np.stack([np.sin(2 * np.pi * 220 * t)] * 2, axis=1), 22050)
+    used = []
+    monkeypatch.setattr(pipeline, "extract_melody", lambda wav, bj, pcs: used.append(wav) or {"grid": "sixteenth", "notes": []})
+    pipeline.run_analysis(paths, cfg, ["melody"])
+    assert used[-1] == paths.stem("lead") and paths.stem("lead").exists()
+    cfg2 = dataclasses.replace(cfg, overrides={**cfg.overrides, "melody_source": "vocals"})
+    pipeline.run_analysis(paths, cfg2, ["melody"])
+    assert used[-1] == paths.stem("vocals")

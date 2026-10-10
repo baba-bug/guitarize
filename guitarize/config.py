@@ -58,6 +58,7 @@ class SongConfig:
     - melody_octave：指弹旋律的八度（arrange/capo.py 的 octave_plan）。默认 "song"：整曲一个移位，
       保持人声原有的高低关系；"section"：按段落各自选；整数（12 的倍数）：整曲固定移；{小节: 移位}：从该小节起移。
     - capo：指定变调夹（arrange）
+    - melody_source：旋律从哪条音频识别。默认 "lead"：人声分轨里居中的主唱（去掉摆在左右的伴唱）；"vocals"：整条人声
     """
     slug: str
     title: str

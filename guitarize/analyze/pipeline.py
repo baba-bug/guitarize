@@ -13,7 +13,7 @@ from .chords import reference_chords
 from .key import chosen_key, cross_check_key, estimate_key, key_report, parse_key, scale_pcs
 from .leadsheet import build_leadsheet
 from .melody import extract_melody
-from .stems import separate
+from .stems import extract_lead, separate
 from .webchart import parse_webchart
 
 STEPS = ("stems", "beats", "chords", "melody", "leadsheet")
@@ -34,6 +34,18 @@ def _need(path: Path, slug: str, step: str) -> dict:
     return _read(path)
 
 
+def _melody_source(paths: SongPaths, overrides: dict) -> Path:
+    """旋律识别用的音频：默认居中的主唱 lead.wav（没有就从人声分轨抽出来）；overrides.melody_source: vocals 用整条人声。"""
+    source = overrides.get("melody_source", "lead")
+    if source not in ("lead", "vocals"):
+        raise ValueError(f'overrides.melody_source must be "lead" or "vocals", got {source!r}')
+    if source == "vocals":
+        return paths.stem("vocals")
+    if not paths.stem("lead").exists() and paths.stem("vocals").exists():
+        extract_lead(paths.stem("vocals"), paths.stem("lead"))
+    return paths.stem("lead")
+
+
 def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS) -> None:
     unknown = set(steps) - set(STEPS)
     if unknown:
@@ -42,6 +54,7 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
     slug = paths.slug
     if "stems" in steps:
         separate(paths.original_wav, paths.stems_dir)
+        extract_lead(paths.stem("vocals"), paths.stem("lead"))
     if "beats" in steps:
         _write(paths.beats_json, track_beats(paths.original_wav, paths.stems_dir, overrides))
     beats = chords = None
@@ -69,7 +82,7 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
         chords = chords or _need(paths.chords_json, slug, "chords")
         key = chosen_key(chords)
     if "melody" in steps:
-        melody = extract_melody(paths.stem("vocals"), beats, scale_pcs(*key))
+        melody = extract_melody(_melody_source(paths, overrides), beats, scale_pcs(*key))
         melody["beats_signature"] = beats_signature(beats)
         melody["key"] = {"tonic": key[0], "mode": key[1]}  # 量化时用的调；leadsheet 用另一个调时据此报错
         _write(paths.melody_json, melody)
