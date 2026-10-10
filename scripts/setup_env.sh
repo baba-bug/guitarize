@@ -14,6 +14,8 @@ fi
 "$ENV_PY" -m pip install demucs librosa mir_eval soundfile pretty_midi pyyaml \
   yt-dlp pytest scipy matplotlib torchcrepe
 "$ENV_PY" -m pip install "git+https://github.com/CPJKU/beat_this.git"
+# 主唱 / 伴唱分离（analyze 的 lead 步骤）；模型文件另放 tools/karaoke/models/，不在时退回居中掩码
+"$ENV_PY" -m pip install "audio-separator==0.47.0" onnxruntime
 
 brew list fluid-synth >/dev/null 2>&1 || brew install fluid-synth
 brew list gh >/dev/null 2>&1 || brew install gh

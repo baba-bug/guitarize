@@ -99,10 +99,11 @@ overrides: {}            # 人工覆盖项，如 {tempo_bpm: 168, key: B, capo: 
 | 步骤 | 方法 | 产物 |
 |---|---|---|
 | 分轨 | Demucs `htdemucs_6s`：人声 / 鼓 / 贝斯 / 吉他 / 钢琴 / 其他（Apple M4 的 MPS 加速） | `stems/*.wav` |
+| 主唱 / 伴唱 | 人声分轨 → becruily 的 Mel-Band Roformer 伴唱分离模型（audio-separator）→ 主唱再过一遍 L/R 居中掩码；模型不可用时只用居中掩码 | `stems/lead.wav`、`stems/backing.wav`、`stems/lead.json` |
 | 节拍 / 小节线 | `beat_this` 模型。检查速度稳定性，判断 Shuffle 律动。`overrides` 可强制指定速度 | `beats.json` |
 | 调性 | 色度谱 + Krumhansl 调性模板，再和和弦结果交叉确认 | 写入 `leadsheet.json` |
 | 参考和弦 | **三方投票**，见下文 | `chords.json` |
-| 人声旋律 | 人声分轨 → 基频提取（优先 RMVPE，备选 torchcrepe）→ 稳定音高切段 → 按节拍网格量化（Shuffle 用三连音网格）→ 修正八度跳错、标出调外音 | `melody.json` |
+| 人声旋律 | 主唱分轨 → 基频提取（优先 RMVPE，备选 torchcrepe）→ 稳定音高切段 → 按节拍网格量化（Shuffle 用三连音网格）→ 修正八度跳错、标出调外音 | `melody.json` |
 | 段落 | 按小节的色度自相似矩阵找重复段落，再由 Claude 结合参考谱标注 Intro / A / B / サビ | 写入 `leadsheet.json` |
 
 **参考和弦的三方投票**

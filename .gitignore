@@ -12,6 +12,7 @@ songs/*/reports/**/snippets/
 
 # 环境与缓存
 node_modules/
+tools/karaoke/models/
 __pycache__/
 *.pyc
 .pytest_cache/
