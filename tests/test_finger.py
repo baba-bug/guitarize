@@ -17,9 +17,19 @@ MID = load_profile("intermediate")
 
 
 def _plain(line: str) -> str:
-    """去掉和弦指型 / 力度标记（{ch "X"}、{dy f}，或二者合在一起），只看音和节奏。"""
-    line = re.sub(r' \{(?:ch "[^"]*"\s*)?(?:dy \w+)?\}', "", line)
-    return line
+    """去掉和弦指型 / 力度标记（ch "X"、dy f），只看音和节奏；其余拍效果（d、tu 3）保留。"""
+    line = re.sub(r'(?:ch "[^"]*"|dy \w+)\s*', "", line)
+    return re.sub(r" \{\s*\}", "", line).replace(" }", "}")
+
+
+def _rhythm(line: str) -> list[str]:
+    """一行拍子记号 → 只看节奏：起音写 n、连音线延续写 -、休止写 r（和弦 / 力度标记去掉）。"""
+    tokens = re.findall(r"(\([^)]*\)|[^\s(]+?)\.(\d+)( \{[^}]*\})?(?= |$)", _plain(line).rstrip(" |"))
+    out = []
+    for notes, code, eff in tokens:
+        kind = "r" if notes == "r" else "-" if notes.lstrip("(").startswith("-") else "n"
+        out.append(f"{kind}.{code}{eff}")
+    return out
 
 
 def leadsheet(feel="shuffle"):
@@ -253,12 +263,95 @@ def test_every_bar_shows_its_chord_shape():
     assert text.count('ch "C"') == 3
 
 
-def test_skeleton_keeps_both_notes_that_land_on_the_same_eighth():
-    # なんもねえ 第 1 小节：B3（第 3 拍，1/3 拍）后紧跟长音 F#4（3+1/3）——Shuffle 记谱都落在第 3 拍；
-    # 后一个顺延到下一个空着的八分位，不能丢掉进副歌的长音
-    ls = _sheet([_bar(0, None, "N", [(1 + 2 / 3, 1 / 3, 66), (2, 1, 66), (3, 1 / 3, 59), (3 + 1 / 3, 4 / 3, 66)])],
-                feel="shuffle")
-    assert skeleton_notes(ls, MID) == [(1.5, 66), (2.0, 66), (3.0, 59), (3.5, 66)]
+PICKUP = [(1 + 2 / 3, 1 / 3, 66), (2, 1, 66), (3, 1 / 3, 59), (3 + 1 / 3, 4 / 3, 66)]   # なんもねえ 第 1 小节（进副歌）
+
+
+def _positions(notes):
+    return [(round(pos, 6), p) for pos, p in notes]
+
+
+def test_skeleton_writes_a_beat_with_a_third_as_a_triplet():
+    # B3（第 4 拍，1/3 拍）后紧跟长音 F#4（4+⅓）：这一拍写成三连音，两个音都在原唱的位置；
+    # 没有 +1/3 的拍照旧写成摇摆八分（2+⅔ 记在反拍八分 1.5）
+    ls = _sheet([_bar(0, None, "N", PICKUP)], feel="shuffle")
+    assert _positions(skeleton_notes(ls, MID)) == [(1.5, 66), (2.0, 66), (3.0, 59), (round(3 + 1 / 3, 6), 66)]
+
+
+def test_skeleton_triplet_beat_keeps_the_on_beat_note_and_the_longest():
+    # 一拍三个骨架音（拍点、+1/3、+2/3）、中级每拍最多 2 个：留拍点上的音和唱得最长的音
+    # （拍点以外的音要唱满 2/3 拍才算骨架音，见 skeleton_mask）
+    mel = [(0, 1 / 3, 60), (1 / 3, 2 / 3, 62), (2 / 3, 4 / 3, 64),        # 第 1 拍：+2/3 最长 → 丢 +1/3，不是三连音拍
+           (1, 1 / 3, 60), (1 + 1 / 3, 2 / 3, 62),                        # 第 2 拍：+1/3 → 三连音拍
+           (2, 1, 64),
+           (3 + 1 / 3, 2 / 3, 65), (3 + 2 / 3, 2 / 3, 67)]                # 第 4 拍：没有拍点音的三连音拍
+    ls = _sheet([_bar(0, None, "N", mel)], feel="shuffle")
+    got = _positions(skeleton_notes(ls, MID))
+    third, two_thirds = round(1 / 3, 6), round(2 / 3, 6)
+    assert got == [(0.0, 60), (0.5, 64),                                # 第 1 拍：拍点 + 最长（+2/3 写成反拍八分）
+                   (1.0, 60), (round(1 + third, 6), 62),                # 第 2 拍：三连音拍
+                   (2.0, 64),
+                   (round(3 + third, 6), 65), (round(3 + two_thirds, 6), 67)]   # 第 4 拍：三连音拍，拍点是休止
+    beginner = load_profile("beginner")                                 # 每拍 1 个：拍点音；没有拍点音时取最长的
+    assert _positions(skeleton_notes(ls, beginner)) == [(0.0, 60), (1.0, 60), (2.0, 64), (round(3 + third, 6), 65)]
+
+
+def test_straight_skeleton_still_pushes_a_long_note_to_the_next_eighth():
+    # 直拍不写三连音（+1/4 的十六分音符留给以后）：长音与前一个音落在同一个八分位时照旧顺延半拍
+    ls = _sheet([_bar(0, None, "N", [(3, 0.25, 59), (3.25, 1.5, 66)])])
+    assert skeleton_notes(ls, MID) == [(3.0, 59), (3.5, 66)]
+
+
+def test_generate_finger_writes_the_pickup_as_a_triplet_beat(tmp_path):
+    # 进副歌的拾音：F#4（2+⅔）F#4（3）B3（4，1/3 拍）F#4（4+⅓，连到下一小节）——
+    # 第 4 拍写成三连音：B3 三连音八分 + F#4 三连音四分，跨小节线用连音线接上
+    ls = _sheet([_bar(0, None, "N", PICKUP), _bar(1, None, "N", [])], feel="shuffle")
+    ls["tempo_bpm"] = 167.0
+    text = generate_finger(ls, 0, MID, "T")
+    v1 = text.split("\\voice")[1]
+    bar1 = v1.split("// bar 1\n")[1].splitlines()[0]
+    bar2 = v1.split("// bar 2\n")[1].splitlines()[0]
+    assert _rhythm(bar1) == ["r.4", "r.8", "n.8", "n.4", "n.8 {tu 3}", "n.4 {tu 3}"]
+    assert _rhythm(bar2)[0] == "-.4"
+    src = tmp_path / "f.atex"
+    src.write_text(text, encoding="utf-8")
+    score = load_score(alphatab.build(src, tmp_path / "b", "f")["json"])
+    onsets = [round(a.start, 4) for a in score.attacks()]
+    assert onsets == [round(x, 4) for x in (1 + 2 / 3, 2, 3, 3 + 1 / 3)]
+    assert [e.tuplet for e in score.events if e.voice == 0 and e.bar == 0 and not e.rest][-2:] == [3, 3]
+    assert check_playability(score, MID, "finger") == []
+    s = metrics.summarize(metrics.score_bars(score, ls, "finger"), [], Thresholds(), "finger")
+    assert s["melody_f1"] == pytest.approx(1.0)
+    bars = metrics.score_bars(score, ls, "finger")
+    assert bars[0].mel_issues == []
+
+
+def test_triplet_melody_keeps_chord_marks_and_dynamics(tmp_path):
+    # 三连音拍的第一个音上照样挂指型和力度
+    mel = [(0, 1 / 3, 67), (1 / 3, 2 / 3, 69), (1, 1, 71), (2, 2, 67)]
+    ls = _sheet([_bar(0, None, "C", mel)], feel="shuffle")
+    text = generate_finger(ls, 0, MID, "T")
+    bar1 = text.split("\\voice")[1].split("// bar 1\n")[1].splitlines()[0]
+    assert re.search(r'\.8 \{ch "C" dy f tu 3\}', bar1)
+    src = tmp_path / "f.atex"
+    src.write_text(text, encoding="utf-8")
+    score = load_score(alphatab.build(src, tmp_path / "b", "f")["json"])
+    first = next(e for e in score.events if e.voice == 0 and not e.rest)
+    assert first.chord == "C" and first.tuplet == 3
+    assert check_playability(score, MID, "finger") == []
+
+
+def test_repair_labels_name_triplet_positions():
+    assert finger._at(3 + 1 / 3) == "@4+⅓"
+    assert finger._at(4 + 2 + 2 / 3) == "@3+⅔"
+    assert finger._at(4.5) == "@1.5" and finger._at(7.0) == "@4"
+
+
+def test_straight_feel_draft_has_no_triplets():
+    # 直拍不受影响：同样的旋律（+1/3 处的音）按最近的八分记，不写 {tu 3}
+    ls = _sheet([_bar(0, None, "N", PICKUP), _bar(1, None, "N", [])])
+    text = generate_finger(ls, 0, MID, "T")
+    assert "tu 3" not in text
+    assert all(abs(pos * 2 - round(pos * 2)) < 1e-9 for pos, _ in skeleton_notes(ls, MID))
 
 
 def test_held_melody_note_ties_across_the_bar_line():

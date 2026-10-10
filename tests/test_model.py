@@ -89,3 +89,19 @@ def test_model_matches_real_midi_timing(tmp_path):
     expected = sorted(score.seconds(a.start) for a in score.attacks())
     assert len(onsets) == len(expected)
     assert onsets == pytest.approx(expected, abs=0.005)
+
+
+def test_triplet_beat_next_to_swung_pairs(tmp_path):
+    # 三连音拍按记谱演奏（k/3），不参与、也不打断前后的八分对；模型与 alphaTab 的 MIDI 一致
+    from guitarize.render import alphatab
+
+    body = "\\tf triplet-8th\n:8 0.1 1.1 0.2 {tu 3} :4 1.2 {tu 3} :8 2.1 r :4 r {tu 3} :8 3.1 {tu 3} |"
+    src = tmp_path / "t.atex"
+    src.write_text(TEX_HEAD + body, encoding="utf-8")
+    built = alphatab.build(src, tmp_path / "b", "t")
+    score = load_score(built["json"])
+    assert [e.start for e in score.events] == pytest.approx([0, 2 / 3, 1, 4 / 3, 2, 8 / 3, 3, 11 / 3])
+    assert [e.written_start for e in score.events] == pytest.approx([0, 0.5, 1, 4 / 3, 2, 2.5, 3, 11 / 3])
+    assert [e.tuplet for e in score.events] == [1, 1, 3, 3, 1, 1, 3, 3]
+    onsets = sorted(n.start for n in pretty_midi.PrettyMIDI(str(built["mid"])).instruments[0].notes)
+    assert onsets == pytest.approx([score.seconds(a.start) for a in score.attacks()], abs=0.005)

@@ -92,3 +92,12 @@ def test_max_fret_relative_to_neck_with_capo(build_tex):
     vs = check_playability(s, PROFILE, "finger")
     assert [v.rule for v in vs] == ["max_fret"] and "变调夹 4" in vs[0].detail
     assert rules(build_tex(":4 10.1 r r r |", head=head)) == []
+
+
+def test_tuplet_notes_are_not_straight_offbeats(build_tex):
+    # 三连音拍（B3 三连音八分 + F#4 三连音四分，连音线接到下一拍）不算"按直拍播放的反拍音"；
+    # 连音组里恰好落在 +1/2 的音（十六分三连音）也一样
+    s = build_tex("\\tf triplet-8th\n:4 r :8 0.3 {tu 3} :4 7.2 {tu 3} :4 -.2 "
+                  ":16 0.1 {tu 3} 0.1 {tu 3} 0.1 {tu 3} 0.1 {tu 3} 0.1 {tu 3} 0.1 {tu 3} |")
+    assert any(e.tuplet == 3 and abs(e.written_start - 3.5) < 1e-6 for e in s.events)
+    assert rules(s) == []

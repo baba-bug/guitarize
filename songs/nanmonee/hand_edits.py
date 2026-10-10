@@ -73,9 +73,11 @@ def finger(text: str) -> str:
         if n not in edits2 and not re.search(r"\b\d+\.1\.", body):
             edits2[n] = (b7_top, "B7-shape top F#")
     v2 = _edit(v2, edits2)
+    def marks(old: str, name: str) -> list[str]:      # 指型名可能和别的拍效果写在一起（三连音拍里是 {ch "D" tu 3}）
+        return ["{" + m + "}" for m in re.findall(f'ch "{name}"', old)]
+
     v1 = _edit(v1, {
-        21: (lambda old: " ".join(t for t in ["r.2", *re.findall(r'\{ch "C"\}', old), "r.2",
-                                               *re.findall(r'\{ch "D"\}', old)]) + " |", "riff bar: melody rests"),
+        21: (lambda old: " ".join(["r.2", *marks(old, "C"), "r.2", *marks(old, "D")]) + " |", "riff bar: melody rests"),
         62: (lambda old: old.replace("4.2.2 |", "3.1.2 |"), "end on G"),
     })
     return "\\voice\n".join([head, v1, v2])

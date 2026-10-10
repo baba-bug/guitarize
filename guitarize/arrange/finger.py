@@ -1,4 +1,5 @@
 """指弹编配草稿：旋律骨架（voice 1）+ 低音与填充（voice 2），指法由 Viterbi 分配。
+Shuffle 下旋律按原唱的三连音格记谱：有 +1/3 起音的拍整拍写成三连音（{tu 3}），其余拍照旧写成摇摆八分对。
 给出自检（与 verify 同一套可弹性检查）时按违规逐轮修补：截短仍按着的音、去掉填充 / 低音；
 换把找不到 t 时可修的音时，改在前一个起音处修，最后才把旋律音移八度。
 每处指法降级与修补都写进该小节的 `// bar N` 注释，方便审阅。"""
@@ -30,7 +31,8 @@ EPS = 1e-6
 
 
 def written_position(perf: float, feel: str) -> float:
-    """演奏位置（拍）→ 记谱位置（八分格）。Shuffle：2/3 → 反拍八分，1/3 → 拍点；直拍取最近的八分。"""
+    """演奏位置（拍）→ 记谱位置（八分格）。Shuffle：2/3 → 反拍八分，1/3 → 拍点；直拍取最近的八分。
+    （Shuffle 的骨架旋律不用它：+1/3 写成三连音，见 skeleton_notes。）"""
     whole = int(np.floor(perf + 1e-6))
     frac = perf - whole
     if feel == "shuffle":
@@ -42,35 +44,74 @@ def written_position(perf: float, feel: str) -> float:
     return round(perf * 2) / 2
 
 
+def performed_position(pos: float, feel: str) -> float:
+    """记谱位置 → 演奏位置（与 alphaTab 一致）：Shuffle 的反拍八分（+1/2，总是八分对的后一个，见 atex.split_for_swing）
+    在 +2/3 演奏；拍点、三连音位置（k/3）照记谱演奏；直拍不变。"""
+    if feel == "shuffle" and abs(pos % 1 - 0.5) < EPS:
+        return pos + 1 / 6
+    return pos
+
+
+def triplet_slot(perf: float) -> tuple[int, int]:
+    """Shuffle 的演奏位置（拍）→ (拍, 三连音格 k)：k = 0 拍点、1 = +1/3、2 = +2/3。取最近的格，
+    分界与 written_position 一致（+1/2 归 +2/3，5/6 以后归下一拍）。"""
+    n = int(np.floor(perf * 3 + 0.5 + 1e-6))
+    return n // 3, n % 3
+
+
+def _keep_per_beat(slots: list[tuple[float, float, int]], limit: int) -> list[tuple[float, float, int]]:
+    """同一拍的骨架音 [(位置, 演唱时值, 音高)]（按位置排序）超过 limit 个时：留拍点上的音和唱得最长的音（一样长取靠前的）。"""
+    if len(slots) <= limit:
+        return slots
+    beat = int(slots[0][0] + EPS)
+    rank = sorted(slots, key=lambda x: (abs(x[0] - beat) > EPS, -x[1], x[0]))
+    return sorted(rank[:limit])
+
+
 def section_bars(leadsheet: dict) -> list[int]:
     """带段落标记的小节（0-based）。"""
     return [i for i, b in enumerate(leadsheet["bars"]) if b.get("section")]
 
 
 def skeleton_notes(leadsheet: dict, profile: Profile) -> list[tuple[float, int]]:
+    """骨架旋律 → [(记谱位置, 音高)]。
+    Shuffle：音落在三连音格上（拍点、+1/3、+2/3）。某拍留下的音里有 +1/3 的，整拍写成三连音（记谱 = 演奏 = k/3，
+    如 B3（4）后紧跟进副歌的长音 F#4（4+⅓））；其余拍照旧是摇摆八分对（+2/3 记在反拍八分 +1/2）。
+    直拍：取最近的八分；长音与前一个音落在同一个八分位时顺延半拍、两个都保留——只留给直拍
+    （Shuffle 的 +1/3 有三连音可写，不必顺延；直拍的 +1/4 十六分音符以后再说）。
+    每拍最多 profile.melody_max_per_beat 个：多了留拍点上的音和唱得最长的音。"""
     notes = sorted((m for b in leadsheet["bars"] for m in b["melody"]), key=lambda m: m["start_beats"])
     mask = skeleton_mask([m["start_beats"] for m in notes], [m["dur_beats"] for m in notes])
     feel = leadsheet.get("feel", "straight")
-    at: dict[float, int] = {}
+    at: dict[float, tuple[float, int]] = {}   # 位置 → (演唱时值, 音高)；Shuffle 的位置是三连音格 k/3
     for m, keep in zip(notes, mask):
         if not keep:
             continue
-        pos = written_position(m["start_beats"], feel)
-        if pos in at and pos + 0.5 not in at and m["dur_beats"] >= 1 - EPS:
-            pos += 0.5   # 长音与前一个音落在同一个八分位（如 B3 后紧跟进副歌的长音 F#4）：顺延半拍，两个都保留；
-            #             短的三连音经过音照旧丢掉（顺延会让它比原唱晚 1/3 拍）
-        at.setdefault(pos, m["midi"])
-    out, per_beat = [], {}
+        if feel == "shuffle":
+            beat, k = triplet_slot(m["start_beats"])
+            pos = beat + k / 3
+        else:
+            pos = written_position(m["start_beats"], feel)
+            if pos in at and pos + 0.5 not in at and m["dur_beats"] >= 1 - EPS:
+                pos += 0.5   # 直拍：长音与前一个音落在同一个八分位，顺延半拍、两个都保留（短的经过音照旧丢掉）
+        at.setdefault(pos, (m["dur_beats"], m["midi"]))
+    beats: dict[int, list[tuple[float, float, int]]] = {}
     for pos in sorted(at):
-        beat = int(pos)
-        if per_beat.get(beat, 0) < profile.melody_max_per_beat:
-            per_beat[beat] = per_beat.get(beat, 0) + 1
-            out.append((pos, at[pos]))
+        beats.setdefault(int(pos + EPS), []).append((pos, *at[pos]))
+    out = []
+    for beat, slots in sorted(beats.items()):
+        kept = _keep_per_beat(slots, profile.melody_max_per_beat)
+        triplet = any(abs(pos - beat - 1 / 3) < EPS for pos, _, _ in kept)
+        for pos, _, midi in kept:
+            if feel == "shuffle" and not triplet and abs(pos - beat - 2 / 3) < EPS:
+                pos = beat + 0.5   # 不是三连音拍：+2/3 记成反拍八分，alphaTab 按八分对后移到 +2/3 演奏
+            out.append((pos, midi))
     return out
 
 
 def melody_line(leadsheet: dict, capo: int, profile: Profile, octave: OctavePolicy = "song") -> list[tuple[float, int]]:
-    """骨架旋律 → (记谱位置, 指法调音高)；八度移位见 capo.octave_plan（默认整曲一个移位，保持人声的高低关系）。"""
+    """骨架旋律 → (记谱位置, 指法调音高)；八度移位见 capo.octave_plan（默认整曲一个移位，保持人声的高低关系）。
+    记谱位置见 skeleton_notes（Shuffle 的三连音拍里是 k/3）。"""
     mel = [(pos, p - capo) for pos, p in skeleton_notes(leadsheet, profile)]
     out = list(mel)
     for idx, shift, _ in octave_plan(mel, section_bars(leadsheet), octave):
@@ -252,7 +293,13 @@ class Placed:
 
 
 def _at(t: float) -> str:
-    return f"@{t % 4 + 1:g}"   # 小节内第几拍（1 起）
+    """修补说明里的位置：小节内第几拍（1 起），八分格写 @2.5，三连音位置写 @4+⅓ / @4+⅔。"""
+    x = round(t % 4, 6)
+    beat = int(x)
+    for k, mark in ((1, "+⅓"), (2, "+⅔")):
+        if abs(x - beat - k / 3) < 1e-4:
+            return f"@{beat + 1}{mark}"
+    return f"@{x + 1:g}"
 
 
 def _strings(it: Placed) -> set[int]:
@@ -335,11 +382,11 @@ def previous_hand(v1: list[Placed], v2: list[Placed], t: float) -> float | None:
     return next((o for o in sorted(onsets, reverse=True) if hand(v1, v2, o)), None)
 
 
-def jump(v1: list[Placed], v2: list[Placed], t: float) -> int:
+def jump(v1: list[Placed], v2: list[Placed], t: float, feel: str) -> int:
     """模型里 t 的换把幅度：t 的把位（最低按弦品）与 1 拍以内前一个把位之差；t 没有把位、或 1 拍内没有前一个把位则为 0。
-    记谱时间与演奏时间对"相隔是否不到 1 拍"的判断一致（起音都在八分格上，Shuffle 的反拍成对后移）。"""
+    "相隔是否不到 1 拍"按演奏时间算（与校验一致）：三连音 +2/3 到下一拍的反拍八分记谱只差 5/6 拍，演奏正好 1 拍。"""
     here, prev = hand(v1, v2, t), previous_hand(v1, v2, t)
-    if not here or prev is None or t - prev > 1 - EPS:
+    if not here or prev is None or performed_position(t, feel) - performed_position(prev, feel) > 1 - EPS:
         return 0
     return abs(here[0] - hand(v1, v2, prev)[0])
 
@@ -429,18 +476,18 @@ def _move_octave(v1: list[Placed], v2: list[Placed], t: float, prev: float,
 
 
 def _repair_shift(v1: list[Placed], v2: list[Placed], t: float, max_fret: int,
-                  touched: set[float]) -> tuple[float, str] | None:
+                  touched: set[float], feel: str) -> tuple[float, str] | None:
     """按 _shift_steps 的顺序，先取第一个能让模型里的跳动（jump）变小的一步；都不能时取第一个做得了的
     （为后面的步骤让路）；什么都做不了时 (b) 移旋律八度。前一个起音本轮已经改过的留到下一轮。"""
     prev = previous_hand(v1, v2, t)
     if prev is not None and prev in touched:
         return None
-    old, first = jump(v1, v2, t), None
+    old, first = jump(v1, v2, t, feel), None
     for at, name, act in _shift_steps(t, prev):
         trial = copy.deepcopy((v1, v2))
         if not act(*trial):
             continue
-        if jump(*trial, t) < old:
+        if jump(*trial, t, feel) < old:
             act(v1, v2)
             return at, name
         first = first or (at, name, act)
@@ -450,9 +497,23 @@ def _repair_shift(v1: list[Placed], v2: list[Placed], t: float, max_fret: int,
     return None if prev is None else _move_octave(v1, v2, t, prev, max_fret)
 
 
+def attack_positions(v1: list[Placed], v2: list[Placed], feel: str) -> list[tuple[float, float]]:
+    """当前渲染出来的起音：[(演奏位置, 记谱位置)]（来自 Placed.pieces，连音线延续不算起音）。"""
+    return sorted({(performed_position(a, feel), a) for it in v1 + v2 for a, _, notes, tie in it.pieces()
+                   if notes and not tie})
+
+
+def written_at(perf: float, attacks: list[tuple[float, float]], feel: str) -> float:
+    """违规的演奏时间 → 记谱位置：取在这个时刻起音的那个（三连音拍里记谱 = 演奏 = k/3，摇摆反拍 +2/3 → +1/2）；
+    没有对得上的起音时按八分格折算（written_position）。"""
+    found = next((w for p, w in attacks if abs(p - perf) < 1e-3), None)
+    return written_position(perf, feel) if found is None else found
+
+
 def repair(v1: list[Placed], v2: list[Placed], violations: Iterable[Violation], feel: str,
            max_fret: int, max_shift: int | None = None) -> list[tuple[float, str]]:
-    """按自检违规修补（就地修改 v1 / v2）。Violation.start 是演奏时间，先换回记谱位置 t。每个 t 每轮只修一处：
+    """按自检违规修补（就地修改 v1 / v2）。Violation.start 是演奏时间，先换回记谱位置 t（本轮修补之前渲染出来的
+    起音里在这个时刻起音的那个，见 written_at）。每个 t 每轮只修一处：
     - 跨度 / 手指数：依次 1. 截短 t 之前起音、t 时仍按着的低音 / 填充；2. 截短 t 时仍按着的旋律音；
       3. 去掉 t 时起音的填充；4. 再去掉低音。
     - 换把：同样的顺序，但截短之后先截短前一个手上有音的起音 t′ 时仍按着的低音 / 填充（宁可截短也不丢新起音），
@@ -461,15 +522,16 @@ def repair(v1: list[Placed], v2: list[Placed], violations: Iterable[Violation], 
     只动按弦音（空弦不占手型），只修手型类规则。违规来自本轮修补之前的文本：给了 max_shift 时，
     本轮前面的修补已让 t 的跳动 ≤ max_shift 的换把不再修（免得白白去音）。返回 (修补位置, 说明)；空表示无可修。"""
     done, seen, touched = [], set(), set()
+    attacks = attack_positions(v1, v2, feel)
     for v in violations:
-        t = written_position(v.start, feel)
+        t = written_at(v.start, attacks, feel)
         if v.rule not in HAND_RULES or t in seen:
             continue
         seen.add(t)
         if v.rule == "shift":
-            if max_shift is not None and jump(v1, v2, t) <= max_shift:
+            if max_shift is not None and jump(v1, v2, t, feel) <= max_shift:
                 continue
-            found = _repair_shift(v1, v2, t, max_fret, touched)
+            found = _repair_shift(v1, v2, t, max_fret, touched, feel)
         else:
             what = _repair_at(v1, v2, t)
             found = (t, what) if what else None
@@ -501,8 +563,9 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
     mel = melody_line(leadsheet, capo, profile, octave)
     items = []
     for j, (pos, p) in enumerate(mel):
-        nxt = mel[j + 1][0] if j + 1 < len(mel) else pos + MAX_MELODY_NOTE
-        items.append((pos, min(nxt, pos + MAX_MELODY_NOTE, n_bars * 4.0) - pos, p))   # 可以跨小节线（连音线）
+        cap = float(np.floor((pos + MAX_MELODY_NOTE) * 2 + EPS)) / 2   # 最长 2 拍，止在八分格上（三连音位置起的音不另造三连音拍）
+        nxt = mel[j + 1][0] if j + 1 < len(mel) else cap
+        items.append((pos, min(nxt, cap, n_bars * 4.0) - pos, p))   # 可以跨小节线（连音线）
     bass = bass_events(leadsheet, capo, profile)
     m_at = {pos: p for pos, _, p in items}
     b_at = {pos: (p, place_fill(fill_pc, p, melody_floor(items, pos, dur))) for pos, dur, p, fill_pc in bass}
