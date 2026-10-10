@@ -38,6 +38,7 @@ function toModel(score) {
               rest: b.isRest,
               dots: b.dots,
               chord: b.chord ? b.chord.name : null,
+              text: b.text ?? null,
               pick: PICK[b.pickStroke] ?? null,
               brush: BRUSH[b.brushType] ?? null,
               notes: b.notes.map((n) => ({

@@ -1,4 +1,6 @@
-"""一次校验：构建 → 合成 → 可弹性 → 评分 → reports/<arr>/iter-NN（报告、片段、色度图）+ history.csv。"""
+"""一次校验：构建 → 合成 → 可弹性 → 评分 → reports/<arr>/iter-NN（报告、片段、色度图）+ history.csv。
+旋律谱（melody）对照人声分轨：试听片段是人声 ↔ 合成，图是人声基频 vs 谱上的音（音高图），问题小节和
+需人耳确认的小节都出图。"""
 from __future__ import annotations
 
 import csv
@@ -22,7 +24,7 @@ from .playability import Violation, check_playability, soft_stats
 
 HISTORY_FIELDS = ["iter", "time", "violations", "chord_agreement", "melody_f1",
                   "harmonic_similarity", "rhythm_correlation", "pass",
-                  "chord_mark_issues", "arrangement_bars", "reference_bars", "scored_beats"]
+                  "chord_mark_issues", "arrangement_bars", "reference_bars", "scored_beats", "vocal_similarity"]
 MAX_SNIPPETS = 20
 CHECK_NAMES = {"playability": "可弹性", "chord": "和弦", "melody": "旋律", "chord_marks": "和弦标记",
                "bar_count": "小节数", "reference": "参考不足"}
@@ -40,6 +42,15 @@ def _load_json(path: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
+def melody_reference(paths: SongPaths, overrides: dict) -> Path:
+    """旋律谱对照的人声：识别旋律用的那条分轨。默认居中的主唱 stems/lead.wav（去掉了左右的伴唱）；
+    overrides.melody_source: vocals、或还没有 lead.wav 时用整条人声 stems/vocals.wav。"""
+    lead = paths.stem("lead")
+    if overrides.get("melody_source", "lead") == "lead" and lead.exists():
+        return lead
+    return paths.stem("vocals")
+
+
 def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
     profile = load_profile(cfg.level)
     built = alphatab.build(paths.atex(arr), paths.build_dir, arr)
@@ -47,8 +58,10 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
     synth = midi_to_wav(built["mid"], paths.build(arr, "wav"))
     violations = check_playability(score, profile, arr)
     leadsheet = _load_json(paths.leadsheet_json)
+    vocals = melody_reference(paths, cfg.overrides)
     bars = metrics.score_bars(score, leadsheet, arr, synth_wav=synth, harmonic_wav=paths.stem("harmonic"),
-                              onset_wavs=(paths.stem("drums"), paths.stem("guitar")))
+                              onset_wavs=(paths.stem("drums"), paths.stem("guitar")), vocal_wav=vocals,
+                              low_conf=cfg.thresholds.melody_conf_flag)
     summary = metrics.summarize(
         bars, violations, cfg.thresholds, arr,
         arrangement_bars=len(score.bars),
@@ -56,11 +69,19 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
         has_reference=leadsheet is not None,
     )
     problems = metrics.problem_bars(bars, violations, cfg.thresholds, arr)
+    if arr == "melody":
+        summary["vocal_reference"] = vocals.name   # 相似度、试听片段、音高图对照的分轨
 
     root = paths.report_root(arr)
     out = next_iter_dir(root)
-    snippets = _write_snippets(out, problems, score, leadsheet, synth, paths.original_wav)
-    plots = _write_plots(out, problems, score, leadsheet, synth, paths.stem("harmonic"))
+    if arr == "melody":   # 问题小节在前，再是需人耳确认的小节
+        listen = problems + [b.bar for b in bars if b.ear_notes and b.bar not in problems]
+        snippets = _write_snippets(out, listen, score, leadsheet, synth, vocals, "vocal")
+        contour = _vocal_contour(paths, leadsheet, vocals) if leadsheet and listen else None
+        plots = _write_pitch_plots(out, listen, score, leadsheet, contour)
+    else:
+        snippets = _write_snippets(out, problems, score, leadsheet, synth, paths.original_wav)
+        plots = _write_plots(out, problems, score, leadsheet, synth, paths.stem("harmonic"))
     (out / "scores.json").write_text(json.dumps({
         "summary": summary,
         "problems": problems,
@@ -90,7 +111,8 @@ def _cut(wav: Path, a: float, b: float, dst: Path) -> None:
 
 
 def _write_snippets(out: Path, problems: list[int], score: Score, leadsheet: dict | None,
-                    synth: Path, original: Path) -> dict[int, list[str]]:
+                    synth: Path, original: Path, ref_name: str = "orig") -> dict[int, list[str]]:
+    """前 MAX_SNIPPETS 个小节的 A/B 试听：bar-NNN_<ref_name>.wav（参考：原曲，旋律谱是人声分轨）↔ bar-NNN_synth.wav。"""
     res: dict[int, list[str]] = {}
     folder = out / "snippets"
     for bar in problems[:MAX_SNIPPETS]:
@@ -99,8 +121,8 @@ def _write_snippets(out: Path, problems: list[int], score: Score, leadsheet: dic
         folder.mkdir(exist_ok=True)
         if leadsheet and original.exists() and i < len(leadsheet["bars"]):
             lb = leadsheet["bars"][i]
-            p = folder / f"bar-{bar:03d}_orig.wav"
-            _cut(original, lb["t_start"], lb["t_end"], p)
+            p = folder / f"bar-{bar:03d}_{ref_name}.wav"
+            _cut(original, max(0.0, lb["t_start"]), lb["t_end"], p)
             files.append(p.relative_to(out).as_posix())
         if i < len(score.bars):
             sb = score.bars[i]
@@ -149,6 +171,93 @@ def _write_plots(out: Path, problems: list[int], score: Score, leadsheet: dict |
             ax.set_yticks(range(12))
             ax.set_yticklabels(theory.PITCH_CLASSES)
         fig.suptitle(f"bar {bar} chroma")
+        p = folder / f"bar-{bar:03d}.png"
+        fig.savefig(p, dpi=90, bbox_inches="tight")
+        plt.close(fig)
+        res[bar] = p.relative_to(out).as_posix()
+    return res
+
+
+def _vocal_contour(paths: SongPaths, leadsheet: dict, vocals: Path) -> tuple[np.ndarray, np.ndarray] | None:
+    """vocals（melody_reference）的基频（与 melody 步骤同一条 Viterbi 曲线，缓存在 analysis/vocal_f0.npz）
+    → (拍位置, MIDI 浮点音高或 nan)。拍轴与 melody.json 相同（beats.json 的 time_to_beat）；没有 beats.json 时
+    按 leadsheet 的小节起止时间逐小节线性换算。没有这条分轨时 None。"""
+    if not vocals.exists():
+        return None
+    from ..analyze.melody import cached_vocal_pitch
+
+    times, midi, _ = cached_vocal_pitch(vocals, paths.vocal_f0)
+    if paths.beats_json.exists():
+        from ..analyze.beats import time_to_beat
+
+        beats = np.asarray(time_to_beat(json.loads(paths.beats_json.read_text(encoding="utf-8")), times), dtype=float)
+    else:
+        bpb = leadsheet.get("beats_per_bar", 4)
+        edges = [b["t_start"] for b in leadsheet["bars"]] + [leadsheet["bars"][-1]["t_end"]]
+        beats = np.interp(times, edges, np.arange(len(edges)) * bpb, left=np.nan, right=np.nan)
+    return beats, np.asarray(midi, dtype=float)
+
+
+def _write_pitch_plots(out: Path, bars_to_plot: list[int], score: Score, leadsheet: dict | None,
+                       contour: tuple[np.ndarray, np.ndarray] | None) -> dict[int, str]:
+    """旋律谱的逐小节音高图（找错音的主要工具）：横轴是拍（小节内，1 起），纵轴是 MIDI 音高。
+    蓝线：人声基频；橙色横条：谱上的音（实际音高 = 指法调 + 变调夹）；虚线框：参考旋律音（leadsheet / melody.json）。
+    竖线：拍线（实线）与细分（Shuffle 三连音、直拍十六分，点线）。"""
+    if not leadsheet or contour is None or not bars_to_plot:
+        return {}
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch, Rectangle
+
+    f0_beats, f0 = contour
+    tab = [s for s in score.sounding() if s.voice == 0]
+    refs = [m for b in leadsheet["bars"] for m in b.get("melody", [])]
+    sub = 3 if leadsheet.get("feel") == "shuffle" else 4
+    folder = out / "plots"
+    folder.mkdir(exist_ok=True)
+    res: dict[int, str] = {}
+    n = min(len(score.bars), len(leadsheet["bars"]))
+    for bar in bars_to_plot:
+        i = bar - 1
+        if i >= n:
+            continue
+        a, length = score.bars[i].start, score.bars[i].length
+        lo, hi = a - 0.25, a + length + 0.25
+        win = (f0_beats >= lo) & (f0_beats < hi)
+        mine = [s for s in tab if s.start < hi and s.end > lo]
+        ref = [m for m in refs if m["start_beats"] < hi and m["start_beats"] + m["dur_beats"] > lo]
+        voiced = f0[win][~np.isnan(f0[win])]
+        pitches = [s.midi for s in mine] + [m["midi"] for m in ref] + list(voiced) or [60]
+        y0, y1 = int(np.floor(min(pitches))) - 2, int(np.ceil(max(pitches))) + 2
+        fig, ax = plt.subplots(figsize=(8, 3.6))
+        for k in range(int(round(length * sub)) + 1):
+            on_beat = k % sub == 0
+            ax.axvline(1 + k / sub, color="0.7" if on_beat else "0.88", lw=1.0 if on_beat else 0.6,
+                       ls="-" if on_beat else ":", zorder=0)
+        for m in ref:
+            ax.add_patch(Rectangle((m["start_beats"] - a + 1, m["midi"] - 0.45), m["dur_beats"], 0.9,
+                                   fill=False, ls="--", ec="0.3", lw=1.0, zorder=1))
+        for s in mine:
+            ax.add_patch(Rectangle((s.start - a + 1, s.midi - 0.3), s.end - s.start, 0.6,
+                                   color="tab:orange", alpha=0.75, zorder=2))
+        ax.plot(f0_beats[win] - a + 1, f0[win], color="tab:blue", lw=1.3, zorder=3)
+        ax.set_xlim(lo - a + 1, hi - a + 1)
+        ax.set_ylim(y0, y1)
+        ax.set_xticks(range(1, int(round(length)) + 2))
+        ax.set_xlabel("beat")
+        step = 1 if y1 - y0 <= 24 else 2
+        ticks = list(range(y0, y1 + 1, step))
+        ax.set_yticks(ticks)
+        ax.set_yticklabels([theory.midi_name(p) for p in ticks], fontsize=7)
+        ax.grid(axis="y", color="0.93", lw=0.5)
+        ax.legend(handles=[Line2D([], [], color="tab:blue", lw=1.3, label="vocal f0 (crepe)"),
+                           Patch(color="tab:orange", alpha=0.75, label=f"tab (sounding, capo {score.capo})"),
+                           Patch(fill=False, ls="--", ec="0.3", label="reference (melody.json)")],
+                  loc="upper left", bbox_to_anchor=(1.01, 1.0), fontsize=7, frameon=False)
+        ax.set_title(f"bar {bar} · vocal pitch vs tab", fontsize=10)
         p = folder / f"bar-{bar:03d}.png"
         fig.savefig(p, dpi=90, bbox_inches="tight")
         plt.close(fig)
@@ -216,19 +325,31 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
     lines = [f"# {ARR_NAMES[arr]}校验报告 · {iter_name}", "", f"**结论：{status}**", ""]
     if not has_reference:
         lines += ["> 没有参考（leadsheet.json），只做了可弹性检查，未做差异校验。", ""]
+    if s.get("vocal_reference"):
+        lines += [f"> 对照的人声分轨：analysis/stems/{s['vocal_reference']}（相似度、试听片段、音高图）", ""]
     lines += ["| 指标 | 本轮 | 上一轮 | 达标线 |", "|---|---|---|---|"]
-    rows = [("可弹性违规", "violations", False, "0"),
-            ("和弦一致率", "chord_agreement", True, f"≥ {s['chord_target']:.0%}")]
+    rows = [("可弹性违规", "violations", False, "0")]
+    if arr == "melody":   # 单旋律线：不评和弦；召回按全部参考音；相似度对照人声分轨
+        rows += [("旋律 F1", "melody_f1", False, f"≥ {s['melody_target']:.2f}"),
+                 ("旋律精确率", "melody_precision", True, ""),
+                 ("旋律召回率（全部参考音）", "melody_recall", True, ""),
+                 ("八度完全正确", "melody_octave_exact", True, ""),
+                 ("人声相似度（均值）", "vocal_similarity", False, "仅用于定位"),
+                 ("需人耳确认（调外 / 低置信音所在小节）", "ear_check_bars", False, "转人耳确认")]
+    else:
+        rows.append(("和弦一致率", "chord_agreement", True, f"≥ {s['chord_target']:.0%}"))
     if arr == "finger":
         rows += [("旋律 F1", "melody_f1", False, f"≥ {s['melody_target']:.2f}"),
                  ("旋律精确率", "melody_precision", True, ""),
                  ("旋律召回率（骨架音）", "melody_recall", True, ""),
                  ("八度完全正确", "melody_octave_exact", True, "")]
-    rows.append(("和弦标记不符", "chord_mark_issues", False, "0" if arr == "strum" else "仅报告"))
-    rows.append(("和声相似度（均值）", "harmonic_similarity", False, "仅用于定位"))
+    if arr != "melody":
+        rows.append(("和弦标记不符", "chord_mark_issues", False, "0" if arr == "strum" else "仅报告"))
+        rows.append(("和声相似度（均值）", "harmonic_similarity", False, "仅用于定位"))
     if arr == "strum":
         rows.append(("节奏相关度（均值）", "rhythm_correlation", False, "仅报告"))
-    rows.append(("低置信参考拍", "low_conf_beats", False, "转人耳确认"))
+    if arr != "melody":
+        rows.append(("低置信参考拍", "low_conf_beats", False, "转人耳确认"))
     for name, key, pct, target in rows:
         pv = _num(prev.get(key)) if prev and key in prev else None
         lines.append(f"| {name} | {_fmt(s[key], pct)} | {_fmt(pv, pct)} | {target} |")
@@ -252,16 +373,32 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
                 lines.append(f"- 和弦一致 {b.chord_agree}/{b.chord_total}")
                 lines += [f"  - {x}" for x in b.chord_issues]
             if b.mel_f1 is not None:
-                lines.append(f"- 旋律 F1 {b.mel_f1:.2f}（命中 {b.mel_hit}/{b.mel_est}，骨架覆盖 {b.mel_found}/{b.mel_ref}）")
+                cover = "覆盖" if arr == "melody" else "骨架覆盖"
+                lines.append(f"- 旋律 F1 {b.mel_f1:.2f}（命中 {b.mel_hit}/{b.mel_est}，{cover} {b.mel_found}/{b.mel_ref}）")
                 lines += [f"  - {x}" for x in b.mel_issues]
             lines += [f"- 和弦标记不符：{x}" for x in b.mark_issues]
             if b.harmonic_sim is not None:
                 lines.append(f"- 和声相似度 {b.harmonic_sim:.2f}")
+            if b.vocal_sim is not None:
+                lines.append(f"- 人声相似度 {b.vocal_sim:.2f}")
+            if b.ear_notes:
+                lines.append(f"- 需人耳确认：{'；'.join(b.ear_notes)}")
         lines += [f"- 违规 `{v.rule}`：{v.detail}" for v in violations if v.bar == bar]
         if snippets.get(bar):
             lines.append("- 试听：" + " ↔ ".join(snippets[bar]))
         if plots.get(bar):
-            lines.append(f"- 色度图：{plots[bar]}")
+            lines.append(f"- {'音高图' if arr == 'melody' else '色度图'}：{plots[bar]}")
+
+    if arr == "melody":
+        ear = [b for b in bars if b.ear_notes]
+        lines += ["", f"## 需人耳确认（参考旋律里调外 / 低置信的音，共 {s['ear_check_notes']} 个，{len(ear)} 小节）"]
+        for b in ear:
+            extra = "".join(f" · {k}：{v}" for k, v in (("试听", " ↔ ".join(snippets.get(b.bar, []))),
+                                                       ("音高图", plots.get(b.bar))) if v and b.bar not in problems)
+            lines.append(f"- 第 {b.bar} 小节：{'；'.join(b.ear_notes)}{extra}")
+        if not ear:
+            lines.append("- 无")
+        return "\n".join(lines) + "\n"
 
     low = [b for b in bars if b.low_conf_beats]
     lines += ["", f"## 需人耳确认（参考和弦低置信，共 {s['low_conf_beats']} 拍）"]

@@ -13,7 +13,7 @@ import yaml
 from .config import load_song_config
 from .paths import REPO_ROOT, SongPaths
 
-ARRS = ("strum", "finger")
+ARRS = ("strum", "finger", "melody")
 SHOW_VIOLATIONS = 5
 
 

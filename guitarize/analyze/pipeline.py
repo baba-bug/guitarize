@@ -82,10 +82,11 @@ def run_analysis(paths: SongPaths, cfg: SongConfig, steps: Sequence[str] = STEPS
         chords = chords or _need(paths.chords_json, slug, "chords")
         key = chosen_key(chords)
     if "melody" in steps:
-        melody = extract_melody(_melody_source(paths, overrides), beats, scale_pcs(*key))
+        melody = extract_melody(_melody_source(paths, overrides), beats, scale_pcs(*key), f0_cache=paths.vocal_f0)
         melody["beats_signature"] = beats_signature(beats)
         melody["key"] = {"tonic": key[0], "mode": key[1]}  # 量化时用的调；leadsheet 用另一个调时据此报错
         _write(paths.melody_json, melody)
     if "leadsheet" in steps:
         melody = _need(paths.melody_json, slug, "melody")
-        _write(paths.leadsheet_json, build_leadsheet(beats, chords, melody, key, cfg.sections, overrides.get("chords")))
+        _write(paths.leadsheet_json, build_leadsheet(beats, chords, melody, key, cfg.sections, overrides.get("chords"),
+                                                     overrides.get("melody")))

@@ -39,6 +39,34 @@ def vocal_pitch(vocals_wav: Path, decoder: str = "viterbi",
     return np.arange(len(f0)) * HOP / SR, midi, per
 
 
+F0_CACHE_VERSION = 1   # vocal_pitch 的参数（SR / HOP / 有声阈值）改了就加一，旧缓存作废
+
+
+def _stem_signature(vocals_wav: Path) -> np.ndarray:
+    st = Path(vocals_wav).stat()
+    return np.array([st.st_size, st.st_mtime_ns, F0_CACHE_VERSION, SR, HOP, round(VOICED_PERIODICITY * 1000)],
+                    dtype=np.int64)
+
+
+def write_vocal_f0(cache: Path, vocals_wav: Path, times: np.ndarray, midi: np.ndarray, periodicity: np.ndarray) -> None:
+    """把人声基频（vocal_pitch 的结果）连同分轨的签名（大小、修改时间、参数版本）写进缓存。"""
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    with open(cache, "wb") as f:   # 文件对象：np.savez 不会再补一个 .npz 后缀
+        np.savez(f, times=times, midi=midi, periodicity=periodicity, stem=_stem_signature(vocals_wav))
+
+
+def cached_vocal_pitch(vocals_wav: Path, cache: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """vocal_pitch（Viterbi）带缓存（analysis/vocal_f0.npz）：人声分轨没变（大小、修改时间、参数版本都相同）就直接读，
+    否则重算并写缓存。melody 步骤和旋律谱校验的音高图共用同一条基频曲线。"""
+    if cache.exists():
+        with np.load(cache) as z:
+            if "stem" in z and np.array_equal(z["stem"], _stem_signature(vocals_wav)):
+                return z["times"], z["midi"], z["periodicity"]
+    times, midi, per = vocal_pitch(vocals_wav)
+    write_vocal_f0(cache, vocals_wav, times, midi, per)
+    return times, midi, per
+
+
 def snap_to_key(m: float, key_pcs: set[int]) -> tuple[int, bool]:
     """浮点音高 → 整数音高：离调内音 ≤ 0.75 半音则吸附；否则四舍五入并标记调外。"""
     cands = [p for p in range(int(np.floor(m)) - 1, int(np.ceil(m)) + 2) if p % 12 in key_pcs]
@@ -155,13 +183,14 @@ def fill_gaps(main: list[dict], alt: list[dict], stable) -> list[dict]:
     return sorted([dict(n) for n in main] + extra, key=lambda n: n["start_beats"])
 
 
-def extract_melody(vocals_wav: Path, beats_json: dict, key_pcs: set[int]) -> dict:
+def extract_melody(vocals_wav: Path, beats_json: dict, key_pcs: set[int], f0_cache: Path | None = None) -> dict:
+    """f0_cache：Viterbi 基频的缓存文件（analysis/vocal_f0.npz，见 cached_vocal_pitch）；None 时不缓存。"""
     import librosa
 
     y, _ = librosa.load(str(vocals_wav), sr=SR, mono=True)
     onsets = time_to_beat(beats_json, librosa.onset.onset_detect(y=y, sr=SR, hop_length=HOP, units="time"))
     slot = 1 / 3 if beats_json.get("feel") == "shuffle" else 1 / 4
-    times, midi, per = vocal_pitch(vocals_wav)
+    times, midi, per = cached_vocal_pitch(vocals_wav, f0_cache) if f0_cache else vocal_pitch(vocals_wav)
     beat_pos = time_to_beat(beats_json, times)
     main = quantize(beat_pos, midi, per, onsets, key_pcs, slot)
     times_w, midi_w, per_w = vocal_pitch(vocals_wav, "weighted_argmax", FILL_PERIODICITY)

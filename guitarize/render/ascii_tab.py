@@ -35,6 +35,12 @@ def _widen(blk: dict[str, str], n: int, extra: int) -> None:
         blk[f"s{s}"] += "-" * extra
 
 
+def _bar_text(score: Score, bar: Bar) -> str | None:
+    """小节第一拍（声部 1）上的文字：旋律谱把段落名写成文字而不是段落标记（见 arrange/melody.py）。"""
+    first = min((e for e in score.events if e.bar == bar.index and e.voice == 0), key=lambda e: e.start, default=None)
+    return first.text if first is not None else None
+
+
 def _columns(score: Score, bar: Bar) -> list[_Col]:
     cols: dict[float, _Col] = {}
     for e in score.events:
@@ -97,7 +103,8 @@ def render_ascii(score: Score, bars_per_line: int = 4) -> str:
         strings = [names[s - 1].rjust(label_w) + "|" for s in range(1, n + 1)]
         for bar in group:
             blk = _bar_block(score, bar)
-            label = f"{bar.index + 1}" + (f" [{bar.section}]" if bar.section else "")
+            section = bar.section or _bar_text(score, bar)
+            label = f"{bar.index + 1}" + (f" [{section}]" if section else "")
             # 小节号需要 显示宽度+1 的空间；块太窄时右侧补齐，保证下一小节号对齐它自己的内容
             width = len(blk["s1"])
             need = _display_width(label) + 1

@@ -59,6 +59,11 @@ class SongPaths:
         return self.analysis_dir / "melody.json"
 
     @property
+    def vocal_f0(self) -> Path:
+        """人声基频缓存（analyze/melody.py 的 cached_vocal_pitch）：melody 步骤写，旋律谱校验的音高图读。"""
+        return self.analysis_dir / "vocal_f0.npz"
+
+    @property
     def leadsheet_json(self) -> Path:
         return self.analysis_dir / "leadsheet.json"
 

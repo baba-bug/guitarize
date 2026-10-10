@@ -1,4 +1,4 @@
-"""闭环（续）：合成歌曲 → 分析 → 编配（弹唱 / 指弹）→ 校验。spec §8：已知答案的歌走完整条真实路径。
+"""闭环（续）：合成歌曲 → 分析 → 编配（弹唱 / 指弹 / 旋律谱）→ 校验。spec §8：已知答案的歌走完整条真实路径。
 
 歌按真实布局放进临时 songs 目录（source/original.wav、analysis/stems/*.wav、analysis/webchart.txt、song.yaml），
 分析只跑 beats / chords / melody / leadsheet——合成分轨是现成的，不经 Demucs。
@@ -43,7 +43,7 @@ def song(tmp_path_factory):
     paths.webchart_txt.write_text(S.truth_webchart(), encoding="utf-8")
     paths.config.write_text(yaml.safe_dump({
         "slug": SLUG, "title": "Synthetic Closed Loop", "artist": "guitarize tests", "version": "tv",
-        "level": "intermediate", "arrangements": ["strum", "finger"], "outputs": ["html", "pdf", "txt"],
+        "level": "intermediate", "arrangements": ["strum", "finger", "melody"], "outputs": ["html", "pdf", "txt"],
         "reference_charts": [], "overrides": {}, "sections": SECTIONS,
     }, sort_keys=False), encoding="utf-8")
     cfg = load_song_config(paths)
@@ -51,7 +51,7 @@ def song(tmp_path_factory):
 
     run_analysis(paths, cfg, steps=("beats", "chords", "melody", "leadsheet"))
     out = {"paths": paths, "cfg": cfg}
-    for arr in ("strum", "finger"):
+    for arr in ("strum", "finger", "melody"):
         _, _, violations = arrange(paths, cfg, arr)  # capo 自动选
         out[arr] = {"violations": violations}
         run_verify(paths, cfg, arr)
@@ -75,7 +75,7 @@ def test_leadsheet_matches_the_known_song(song):
         assert got == want if k < BARS - 1 else got[:1] == want, (bar["bar"], got, want)  # 末小节全音符尾部可能被切出一个短音
 
 
-@pytest.mark.parametrize("arr", ["strum", "finger"])
+@pytest.mark.parametrize("arr", ["strum", "finger", "melody"])
 def test_draft_has_no_playability_violations(song, arr):
     assert song[arr]["violations"] == []  # 草稿 0 违规是硬约束
 
@@ -97,6 +97,20 @@ def test_verify_reports_match_the_reference(song, arr):
 def test_finger_melody_f1(song):
     s = song["finger"]["scores"]["summary"]
     assert s["melody_ref_notes"] > 0 and s["melody_f1"] >= 0.80, s
+
+
+def test_melody_arrangement_plays_the_known_melody(song):
+    """旋律谱：每个旋律音都在谱上（召回按全部参考音），单声部 0 违规，和人声分轨的色度对得上；不评和弦。"""
+    s = song["melody"]["scores"]["summary"]
+    n_bars = len(json.loads(song["paths"].leadsheet_json.read_text(encoding="utf-8"))["bars"])
+    assert s["violations"] == 0 and s["arrangement_bars"] == s["reference_bars"] == n_bars
+    assert s["melody_f1"] >= 0.9 and s["melody_recall"] >= 0.9 and s["melody_precision"] >= 0.9, s
+    assert s["melody_ref_notes"] >= len(S.melody_truth()) - 1, s
+    assert "chord" not in s["checks"] and s["chord_agreement"] is None
+    assert s["vocal_similarity"] is not None and s["vocal_similarity"] >= 0.7, s
+    assert s["checks"]["melody"] and s["checks"]["playability"] and s["checks"]["reference"], s
+    assert song["paths"].vocal_f0.exists()                  # melody 步骤写的人声基频缓存（音高图用）
+    assert "\\voice" not in song["paths"].atex("melody").read_text(encoding="utf-8")
 
 
 def test_history_records_each_verify(song):
