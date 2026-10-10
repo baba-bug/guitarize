@@ -25,3 +25,5 @@ songs/*/reports/**/plots/
 
 # 人声基频缓存（由人声分轨计算，可再生）
 songs/*/analysis/vocal_f0.npz
+# 人声基频缓存（由音频计算，可再生）
+songs/*/analysis/vocal_f0.npz

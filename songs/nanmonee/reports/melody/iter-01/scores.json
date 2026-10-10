@@ -1,0 +1,1899 @@
+{
+ "summary": {
+  "violations": 0,
+  "chord_agreement": null,
+  "melody_precision": 1.0,
+  "melody_recall": 1.0,
+  "melody_f1": 1.0,
+  "melody_octave_exact": 1.0,
+  "harmonic_similarity": null,
+  "rhythm_correlation": null,
+  "vocal_similarity": 0.9133870523951862,
+  "ear_check_bars": 28,
+  "ear_check_notes": 39,
+  "low_conf_beats": 0,
+  "scored_beats": 0,
+  "melody_ref_notes": 300,
+  "arrangement_bars": 62,
+  "reference_bars": 62,
+  "chord_mark_issues": 0,
+  "chord_target": null,
+  "melody_target": 0.9,
+  "checks": {
+   "playability": true,
+   "reference": true,
+   "bar_count": true,
+   "melody": true
+  },
+  "pass": true
+ },
+ "problems": [],
+ "bars": [
+  {
+   "bar": 1,
+   "section": "イントロ",
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 3,
+   "mel_est": 3,
+   "mel_found": 3,
+   "mel_ref": 3,
+   "mel_octave_exact": 3,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9250961839163878,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 2,
+   "section": "サビ",
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 4,
+   "mel_est": 4,
+   "mel_found": 4,
+   "mel_ref": 4,
+   "mel_octave_exact": 4,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9202793752149488,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 3,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 3,
+   "mel_est": 3,
+   "mel_found": 3,
+   "mel_ref": 3,
+   "mel_octave_exact": 3,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.8379851130511051,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 4,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9706939590692893,
+   "ear_notes": [
+    "拍 1+⅓ G4（调外）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 5,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9440917011193898,
+   "ear_notes": [
+    "拍 3& A#4（置信 0.42）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 6,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9608550822270231,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 7,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 8,
+   "mel_est": 8,
+   "mel_found": 8,
+   "mel_ref": 8,
+   "mel_octave_exact": 8,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9435430824195846,
+   "ear_notes": [
+    "拍 3+⅓ B3（置信 0.42）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 8,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9674573815274826,
+   "ear_notes": [
+    "拍 2& D4（调外）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 9,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.858638671108838,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 10,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 3,
+   "mel_est": 3,
+   "mel_found": 3,
+   "mel_ref": 3,
+   "mel_octave_exact": 3,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9519811931884417,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 11,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 3,
+   "mel_est": 3,
+   "mel_found": 3,
+   "mel_ref": 3,
+   "mel_octave_exact": 3,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.894116446073336,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 12,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9255309637341441,
+   "ear_notes": [
+    "拍 2 G4（调外）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 13,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 4,
+   "mel_est": 4,
+   "mel_found": 4,
+   "mel_ref": 4,
+   "mel_octave_exact": 4,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9707540767833635,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 14,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9546426944330076,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 15,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9067056952327757,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 16,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.7695466467051757,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 17,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 4,
+   "mel_est": 4,
+   "mel_found": 4,
+   "mel_ref": 4,
+   "mel_octave_exact": 4,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9747480426264657,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 18,
+   "section": "間奏",
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 2,
+   "mel_est": 2,
+   "mel_found": 2,
+   "mel_ref": 2,
+   "mel_octave_exact": 2,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.8758422207818175,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 19,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 2,
+   "mel_est": 2,
+   "mel_found": 2,
+   "mel_ref": 2,
+   "mel_octave_exact": 2,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9459004152329334,
+   "ear_notes": [
+    "拍 1+⅓ A4（调外，置信 0.50）",
+    "拍 2 G#4（置信 0.40）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 20,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 3,
+   "mel_est": 3,
+   "mel_found": 3,
+   "mel_ref": 3,
+   "mel_octave_exact": 3,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9523192526467583,
+   "ear_notes": [
+    "拍 1+⅓ A#4（置信 0.35）",
+    "拍 3+⅓ B4（置信 0.41）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 21,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 2,
+   "mel_est": 2,
+   "mel_found": 2,
+   "mel_ref": 2,
+   "mel_octave_exact": 2,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9265226410137469,
+   "ear_notes": [
+    "拍 1+⅓ B4（置信 0.49）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 22,
+   "section": "Aメロ",
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9451103550015321,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 23,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 7,
+   "mel_est": 7,
+   "mel_found": 7,
+   "mel_ref": 7,
+   "mel_octave_exact": 7,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9530238133293532,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 24,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9581940599517826,
+   "ear_notes": [
+    "拍 4& E3（置信 0.44）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 25,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 3,
+   "mel_est": 3,
+   "mel_found": 3,
+   "mel_ref": 3,
+   "mel_octave_exact": 3,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.8906379224262347,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 26,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9595799078798719,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 27,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9294258723607843,
+   "ear_notes": [
+    "拍 4 C#4（置信 0.49）",
+    "拍 4+⅓ A3（调外）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 28,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9188808519434853,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 29,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9388388484768377,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 30,
+   "section": "Bメロ",
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9070306634087063,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 31,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 7,
+   "mel_est": 7,
+   "mel_found": 7,
+   "mel_ref": 7,
+   "mel_octave_exact": 7,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9033791133739315,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 32,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9005088199517994,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 33,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 7,
+   "mel_est": 7,
+   "mel_found": 7,
+   "mel_ref": 7,
+   "mel_octave_exact": 7,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9506506272635061,
+   "ear_notes": [
+    "拍 1+⅓ C4（调外）",
+    "拍 2+⅓ C#4（置信 0.49）",
+    "拍 2& A#3（置信 0.37）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 34,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 8,
+   "mel_est": 8,
+   "mel_found": 8,
+   "mel_ref": 8,
+   "mel_octave_exact": 8,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9589114689641317,
+   "ear_notes": [
+    "拍 3 C4（调外）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 35,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 8,
+   "mel_est": 8,
+   "mel_found": 8,
+   "mel_ref": 8,
+   "mel_octave_exact": 8,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9533647341504445,
+   "ear_notes": [
+    "拍 3+⅓ C#4（置信 0.48）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 36,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 8,
+   "mel_est": 8,
+   "mel_found": 8,
+   "mel_ref": 8,
+   "mel_octave_exact": 8,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9295523044915736,
+   "ear_notes": [
+    "拍 4& C4（调外）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 37,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 4,
+   "mel_est": 4,
+   "mel_found": 4,
+   "mel_ref": 4,
+   "mel_octave_exact": 4,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.890318691537235,
+   "ear_notes": [
+    "拍 2& G#4（置信 0.45）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 38,
+   "section": "サビ",
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.8814300468099174,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 39,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 3,
+   "mel_est": 3,
+   "mel_found": 3,
+   "mel_ref": 3,
+   "mel_octave_exact": 3,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.8843849410756637,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 40,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.912855362214841,
+   "ear_notes": [
+    "拍 2+⅓ G4（调外）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 41,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9761904137035741,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 42,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9259969476076237,
+   "ear_notes": [
+    "拍 3& B4（置信 0.48）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 43,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 7,
+   "mel_est": 7,
+   "mel_found": 7,
+   "mel_ref": 7,
+   "mel_octave_exact": 7,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9599083709090485,
+   "ear_notes": [
+    "拍 3+⅓ C4（调外，置信 0.46）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 44,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9161350268035591,
+   "ear_notes": [
+    "拍 1& B3（置信 0.49）",
+    "拍 4 G#3（置信 0.46）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 45,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.8966590763653008,
+   "ear_notes": [
+    "拍 2 D4（调外）",
+    "拍 4 G4（调外）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 46,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 3,
+   "mel_est": 3,
+   "mel_found": 3,
+   "mel_ref": 3,
+   "mel_octave_exact": 3,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9412178138236078,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 47,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9474333837190456,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 48,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 2,
+   "mel_est": 2,
+   "mel_found": 2,
+   "mel_ref": 2,
+   "mel_octave_exact": 2,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.8144197784406284,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 49,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 4,
+   "mel_est": 4,
+   "mel_found": 4,
+   "mel_ref": 4,
+   "mel_octave_exact": 4,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.974726225277005,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 50,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9406445825655784,
+   "ear_notes": [
+    "拍 1& A#4（置信 0.45）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 51,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 6,
+   "mel_est": 6,
+   "mel_found": 6,
+   "mel_ref": 6,
+   "mel_octave_exact": 6,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9261856890634935,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 52,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 4,
+   "mel_est": 4,
+   "mel_found": 4,
+   "mel_ref": 4,
+   "mel_octave_exact": 4,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.7040556763877208,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 53,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 8,
+   "mel_est": 8,
+   "mel_found": 8,
+   "mel_ref": 8,
+   "mel_octave_exact": 8,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9486644049035444,
+   "ear_notes": [
+    "拍 2 C#4（置信 0.43）",
+    "拍 2+⅓ G#4（置信 0.45）",
+    "拍 3+⅓ A#4（置信 0.41）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 54,
+   "section": "アウトロ",
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 7,
+   "mel_est": 7,
+   "mel_found": 7,
+   "mel_ref": 7,
+   "mel_octave_exact": 7,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9246275456548081,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 55,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 5,
+   "mel_est": 5,
+   "mel_found": 5,
+   "mel_ref": 5,
+   "mel_octave_exact": 5,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.8422579928095466,
+   "ear_notes": [
+    "拍 2+⅓ E4（置信 0.45）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 56,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 7,
+   "mel_est": 7,
+   "mel_found": 7,
+   "mel_ref": 7,
+   "mel_octave_exact": 7,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.7580229509987719,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 57,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 3,
+   "mel_est": 3,
+   "mel_found": 3,
+   "mel_ref": 3,
+   "mel_octave_exact": 3,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9400815117227482,
+   "ear_notes": [
+    "拍 2& G#3（置信 0.41）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 58,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 2,
+   "mel_est": 2,
+   "mel_found": 2,
+   "mel_ref": 2,
+   "mel_octave_exact": 2,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.7951841452946652,
+   "ear_notes": [],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 59,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 3,
+   "mel_est": 3,
+   "mel_found": 3,
+   "mel_ref": 3,
+   "mel_octave_exact": 3,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9086469717113723,
+   "ear_notes": [
+    "拍 1& F#4（置信 0.49）",
+    "拍 2+⅓ G#4（置信 0.38）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 60,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 1,
+   "mel_est": 1,
+   "mel_found": 1,
+   "mel_ref": 1,
+   "mel_octave_exact": 1,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.9180866748319514,
+   "ear_notes": [
+    "拍 1& F#4（置信 0.44）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 61,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 1,
+   "mel_est": 1,
+   "mel_found": 1,
+   "mel_ref": 1,
+   "mel_octave_exact": 1,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.8805703701897448,
+   "ear_notes": [
+    "拍 4 B4（置信 0.48）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  },
+  {
+   "bar": 62,
+   "section": null,
+   "chord_agree": 0,
+   "chord_total": 0,
+   "chord_issues": [],
+   "low_conf_beats": [],
+   "mel_hit": 4,
+   "mel_est": 4,
+   "mel_found": 4,
+   "mel_ref": 4,
+   "mel_octave_exact": 4,
+   "mel_issues": [],
+   "mark_issues": [],
+   "harmonic_sim": null,
+   "rhythm_corr": null,
+   "vocal_sim": 0.8469524530005693,
+   "ear_notes": [
+    "拍 2& C5（调外，置信 0.46）",
+    "拍 3+⅓ F#5（置信 0.43）"
+   ],
+   "chord_ratio": null,
+   "mel_f1": 1.0
+  }
+ ],
+ "violations": [],
+ "soft": {
+  "1": {
+   "attacks_per_beat": 0.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": []
+  },
+  "2": {
+   "attacks_per_beat": 1.0,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G"
+   ]
+  },
+  "3": {
+   "attacks_per_beat": 0.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C"
+   ]
+  },
+  "4": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "B7/D#"
+   ]
+  },
+  "5": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "Em"
+   ]
+  },
+  "6": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C"
+   ]
+  },
+  "7": {
+   "attacks_per_beat": 2.0,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G/B"
+   ]
+  },
+  "8": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "A"
+   ]
+  },
+  "9": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "B7"
+   ]
+  },
+  "10": {
+   "attacks_per_beat": 0.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G"
+   ]
+  },
+  "11": {
+   "attacks_per_beat": 0.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C"
+   ]
+  },
+  "12": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "B7/D#"
+   ]
+  },
+  "13": {
+   "attacks_per_beat": 1.0,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "Em"
+   ]
+  },
+  "14": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C"
+   ]
+  },
+  "15": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G/B"
+   ]
+  },
+  "16": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "Am7"
+   ]
+  },
+  "17": {
+   "attacks_per_beat": 1.0,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "D"
+   ]
+  },
+  "18": {
+   "attacks_per_beat": 0.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G"
+   ]
+  },
+  "19": {
+   "attacks_per_beat": 0.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": []
+  },
+  "20": {
+   "attacks_per_beat": 0.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G"
+   ]
+  },
+  "21": {
+   "attacks_per_beat": 0.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C",
+    "D"
+   ]
+  },
+  "22": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G"
+   ]
+  },
+  "23": {
+   "attacks_per_beat": 1.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G"
+   ]
+  },
+  "24": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "D"
+   ]
+  },
+  "25": {
+   "attacks_per_beat": 0.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "D"
+   ]
+  },
+  "26": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "Em"
+   ]
+  },
+  "27": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "Em"
+   ]
+  },
+  "28": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "B7"
+   ]
+  },
+  "29": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "B7"
+   ]
+  },
+  "30": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C"
+   ]
+  },
+  "31": {
+   "attacks_per_beat": 1.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "D"
+   ]
+  },
+  "32": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G",
+    "F"
+   ]
+  },
+  "33": {
+   "attacks_per_beat": 1.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "Em"
+   ]
+  },
+  "34": {
+   "attacks_per_beat": 2.0,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "A"
+   ]
+  },
+  "35": {
+   "attacks_per_beat": 2.0,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "B7"
+   ]
+  },
+  "36": {
+   "attacks_per_beat": 2.0,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C"
+   ]
+  },
+  "37": {
+   "attacks_per_beat": 1.0,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "D",
+    "D7"
+   ]
+  },
+  "38": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G"
+   ]
+  },
+  "39": {
+   "attacks_per_beat": 0.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C"
+   ]
+  },
+  "40": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "B7/D#"
+   ]
+  },
+  "41": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "Em"
+   ]
+  },
+  "42": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C"
+   ]
+  },
+  "43": {
+   "attacks_per_beat": 1.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G/B"
+   ]
+  },
+  "44": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "A"
+   ]
+  },
+  "45": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "B7"
+   ]
+  },
+  "46": {
+   "attacks_per_beat": 0.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G"
+   ]
+  },
+  "47": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C"
+   ]
+  },
+  "48": {
+   "attacks_per_beat": 0.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "B7/D#"
+   ]
+  },
+  "49": {
+   "attacks_per_beat": 1.0,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "Em"
+   ]
+  },
+  "50": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C"
+   ]
+  },
+  "51": {
+   "attacks_per_beat": 1.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G/B"
+   ]
+  },
+  "52": {
+   "attacks_per_beat": 1.0,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "A7"
+   ]
+  },
+  "53": {
+   "attacks_per_beat": 2.0,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "B7"
+   ]
+  },
+  "54": {
+   "attacks_per_beat": 1.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C"
+   ]
+  },
+  "55": {
+   "attacks_per_beat": 1.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G/B"
+   ]
+  },
+  "56": {
+   "attacks_per_beat": 1.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "A7"
+   ]
+  },
+  "57": {
+   "attacks_per_beat": 0.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "D"
+   ]
+  },
+  "58": {
+   "attacks_per_beat": 0.5,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G"
+   ]
+  },
+  "59": {
+   "attacks_per_beat": 0.75,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": []
+  },
+  "60": {
+   "attacks_per_beat": 0.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G"
+   ]
+  },
+  "61": {
+   "attacks_per_beat": 0.25,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "C",
+    "D"
+   ]
+  },
+  "62": {
+   "attacks_per_beat": 1.0,
+   "max_span": 0,
+   "barre": false,
+   "chord_marks": [
+    "G"
+   ]
+  }
+ }
+}
