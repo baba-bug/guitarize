@@ -1,5 +1,7 @@
 """指弹草稿修补逻辑（纯函数，不需要 alphaTab）。"""
-from guitarize.arrange.finger import Placed, annotate, cut_crossings, cut_same_string, hand, repair
+import pytest
+
+from guitarize.arrange.finger import Placed, annotate, cut_crossings, cut_same_string, hand, jump, repair
 from guitarize.verify.playability import Violation
 
 
@@ -216,3 +218,39 @@ def test_held_melody_still_yields_to_a_bass_on_its_string():
     v2 = [Placed(2.0, 2.0, [None, (5, 0)])]
     assert cut_same_string(v1, v2) == [(2.0, "melody cut @3 (same string)")]
     assert v1[0].dur == 2.0
+
+
+def triplet_voices():
+    # 第 4 拍是三连音拍：B3 空弦（4，1/3 拍）→ 1 弦 7 品（4+⅓）；第 3 拍起的低音（5 弦 2 品）还按着 → 跨度 2–7
+    v1 = [Placed(2.0, 1.0, [(1, 0)]), Placed(3.0, 1 / 3, [(2, 0)]), Placed(3 + 1 / 3, 2 / 3, [(1, 7)])]
+    v2 = [Placed(2.0, 2.0, [None, (5, 2)])]
+    return v1, v2
+
+
+def test_repair_maps_a_triplet_violation_to_its_attack():
+    # 三连音拍记谱 = 演奏（k/3）：4+⅓ 的违规修在 4+⅓ 的起音上，不是折回拍点 4
+    v1, v2 = triplet_voices()
+    assert hand(v1, v2, 3 + 1 / 3) == [2, 7]
+    assert repair(v1, v2, [V(3 + 1 / 3)], "shuffle", 12) == [(3 + 1 / 3, "bass cut @4+⅓ (span)")]
+    assert v2[0].dur == pytest.approx(4 / 3)
+
+
+def test_repair_maps_two_thirds_to_the_triplet_attack_not_the_offbeat_eighth():
+    v1 = [Placed(3.0, 1 / 3, [(2, 0)]), Placed(3 + 1 / 3, 1 / 3, [(2, 0)]), Placed(3 + 2 / 3, 1 / 3, [(1, 7)])]
+    v2 = [Placed(2.0, 2.0, [None, (5, 2)])]
+    assert repair(v1, v2, [V(3 + 2 / 3)], "shuffle", 12) == [(3 + 2 / 3, "bass cut @4+⅔ (span)")]
+    assert v2[0].dur == pytest.approx(5 / 3)
+
+
+def test_repair_still_maps_a_swung_offbeat_to_the_written_eighth():
+    # 摇摆八分对的后一个（记谱 +1/2）演奏在 +2/3：照旧换回记谱位置
+    v1 = [Placed(2.0, 0.5, [(1, 0)]), Placed(2.5, 1.5, [(1, 7)])]
+    v2 = [Placed(2.0, 2.0, [None, (5, 2)])]
+    assert repair(v1, v2, [V(2 + 2 / 3)], "shuffle", 12) == [(2.5, "bass cut @3.5 (span)")]
+
+
+def test_jump_measures_the_gap_in_performed_time():
+    # 三连音 3+⅔ → 下一拍的反拍八分（记谱 3.5，演奏 3+⅔）：记谱只差 5/6 拍，演奏正好 1 拍——校验不算快速换把
+    v1 = [Placed(2.0, 2 / 3, [(1, 0)]), Placed(2 + 2 / 3, 5 / 6, [(1, 1)]), Placed(3.5, 0.5, [(1, 8)])]
+    assert jump(v1, [], 3.5, "shuffle") == 0
+    assert jump(v1, [], 3.5, "straight") == 7
