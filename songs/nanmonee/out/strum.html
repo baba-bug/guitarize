@@ -24,7 +24,8 @@
 <header>
   <h1>なんもねえ · 弹唱</h1>
   <button id="play" disabled>▶ 合成音</button>
-  <span id="refs"></span>
+  <label>参考 <select id="ref"></select></label>
+  <button id="refplay">▶ 从当前小节播放</button>
   <label>速度 <select id="speed"><option>0.5</option><option>0.75</option><option selected>1</option></select></label>
   <label><input type="checkbox" id="metro"> 节拍器</label>
   <label><input type="checkbox" id="loop"> 循环选区</label>
@@ -50,6 +51,7 @@
 \chord "F" 1 1 2 3 3 1
 \chord "D7" 2 1 2 0 x x
 \chord "A7" 0 2 0 2 0 x
+\chordDiagramsInScore
 \ts 4 4
 \ks B
 \tf triplet-8th
@@ -179,7 +181,7 @@ r.2 (0.6 2.5).4 {tu 3} (2.6 4.5).4 {tu 3} (0.4 2.3).4 {tu 3} |
 r.4 (3.1 0.2 0.3 0.4 2.5 3.6).2 {ch "G" sd d} |
 </script>
 <script>window.BAR_TIMES = [[-0.26, 1.2], [1.2, 2.66], [2.66, 4.08], [4.08, 5.54], [5.54, 6.98], [6.98, 8.44], [8.44, 9.86], [9.86, 11.3], [11.3, 12.76], [12.76, 14.2], [14.2, 15.64], [15.64, 17.08], [17.08, 18.54], [18.54, 19.98], [19.98, 21.44], [21.44, 22.88], [22.88, 24.32], [24.32, 25.76], [25.76, 27.18], [27.18, 28.64], [28.64, 30.1], [30.1, 31.56], [31.56, 33.0], [33.0, 34.44], [34.44, 35.88], [35.88, 37.34], [37.34, 38.78], [38.78, 40.22], [40.22, 41.66], [41.66, 43.12], [43.12, 44.56], [44.56, 46.0], [46.0, 47.46], [47.46, 48.9], [48.9, 50.36], [50.36, 51.8], [51.8, 53.24], [53.24, 54.7], [54.7, 56.14], [56.14, 57.58], [57.58, 59.02], [59.02, 60.48], [60.48, 61.9], [61.9, 63.36], [63.36, 64.8], [64.8, 66.26], [66.26, 67.7], [67.7, 69.14], [69.14, 70.6], [70.6, 72.04], [72.04, 73.48], [73.48, 74.92], [74.92, 76.36], [76.36, 77.82], [77.82, 79.28], [79.28, 80.72], [80.72, 82.14], [82.14, 83.58], [83.58, 85.04], [85.04, 86.48], [86.48, 87.94], [87.94, 89.4]];
-window.REF_AUDIO = [{"label": "原曲", "url": "../source/original.wav"}, {"label": "人声", "url": "../analysis/stems/vocals.wav"}];
+window.REF_AUDIO = [{"label": "原曲", "url": "../source/original.wav"}, {"label": "人声", "url": "../analysis/stems/vocals.wav"}, {"label": "吉他", "url": "../analysis/stems/guitar.wav"}, {"label": "贝斯", "url": "../analysis/stems/bass.wav"}, {"label": "鼓", "url": "../analysis/stems/drums.wav"}, {"label": "其他", "url": "../analysis/stems/other.wav"}, {"label": "钢琴", "url": "../analysis/stems/piano.wav"}, {"label": "和声混合", "url": "../analysis/stems/harmonic.wav"}];
 </script>
 <script src="../../../tools/alphatab/node_modules/@coderline/alphatab/dist/alphaTab.js"></script>
 <script>
@@ -195,17 +197,17 @@ window.REF_AUDIO = [{"label": "原曲", "url": "../source/original.wav"}, {"labe
   const status = document.getElementById("status");
   const playBtn = document.getElementById("play");
   let currentBar = 0;
-  // 参考音频（原曲、提取的人声）：各一个"从当前小节播放"按钮，同一时间只放一个
-  const refs = window.REF_AUDIO.map((r) => {
-    const btn = document.createElement("button");
-    const audio = new Audio(r.url);
-    audio.preload = "auto";
-    const idle = "▶ " + r.label + "（当前小节起）";
-    btn.textContent = idle;
-    document.getElementById("refs").append(btn, " ");
-    return { btn, audio, idle, label: r.label };
+  // 参考音频（原曲、人声、吉他、贝斯、鼓……）：下拉选一轨，从当前小节播放；同一时间只放一个
+  const refSel = document.getElementById("ref");
+  const refBtn = document.getElementById("refplay");
+  const IDLE = "▶ 从当前小节播放";
+  const refs = window.REF_AUDIO.map((r, i) => {
+    refSel.add(new Option(r.label, String(i)));
+    return { audio: null, url: r.url, label: r.label };
   });
-  const stopRefs = () => refs.forEach((r) => { r.audio.pause(); r.btn.textContent = r.idle; });
+  const audioOf = (r) => { if (!r.audio) { r.audio = new Audio(r.url); r.audio.preload = "auto"; } return r.audio; };
+  const stopRefs = () => { refs.forEach((r) => r.audio && r.audio.pause()); refBtn.textContent = IDLE; };
+  refSel.onchange = stopRefs;
 
   api.tex(document.getElementById("tex").textContent);
   api.playerReady.on(() => {
@@ -220,27 +222,28 @@ window.REF_AUDIO = [{"label": "原曲", "url": "../source/original.wav"}, {"labe
   document.getElementById("speed").onchange = (e) => {
     const v = parseFloat(e.target.value);
     api.playbackSpeed = v;
-    refs.forEach((r) => { r.audio.playbackRate = v; });
+    refs.forEach((r) => { if (r.audio) r.audio.playbackRate = v; });
   };
   document.getElementById("metro").onchange = (e) => { api.metronomeVolume = e.target.checked ? 1 : 0; };
   document.getElementById("loop").onchange = (e) => { api.isLooping = e.target.checked; };
 
-  refs.forEach((r) => {
-    if (!window.BAR_TIMES.length) {
-      r.btn.disabled = true;
-      r.btn.title = "缺少原曲小节时间（leadsheet.json）";
-    }
-    r.btn.onclick = () => {
-      const playing = !r.audio.paused;
-      stopRefs();
-      if (playing) return;
-      api.pause();
-      const t = window.BAR_TIMES[Math.min(currentBar, window.BAR_TIMES.length - 1)];
-      r.audio.currentTime = Math.max(0, t[0]);
-      r.audio.play();
-      r.btn.textContent = "⏸ " + r.label;
-    };
-  });
+  if (!window.BAR_TIMES.length) {
+    refBtn.disabled = true;
+    refBtn.title = "缺少原曲小节时间（leadsheet.json）";
+  }
+  refBtn.onclick = () => {
+    const r = refs[Number(refSel.value)];
+    const audio = audioOf(r);
+    const playing = !audio.paused;
+    stopRefs();
+    if (playing) return;
+    api.pause();
+    const t = window.BAR_TIMES[Math.min(currentBar, window.BAR_TIMES.length - 1)];
+    audio.playbackRate = api.playbackSpeed;
+    audio.currentTime = Math.max(0, t[0]);
+    audio.play();
+    refBtn.textContent = "⏸ 停止（" + r.label + "）";
+  };
 </script>
 </body>
 </html>

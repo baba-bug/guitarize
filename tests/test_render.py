@@ -48,3 +48,16 @@ def test_viewer_offers_original_and_vocal_playback_from_the_current_bar(demo_son
     targets = [(out_dir / r["url"]).resolve() for r in refs]
     assert targets == [demo_song.original_wav.resolve(), vocals.resolve()]     # 相对链接指向原曲与人声分轨
     assert "{{" not in page
+
+
+def test_viewer_lists_every_available_stem(demo_song):
+    # 参考音频做成列表：原曲 + 有的分轨（人声、吉他、贝斯、鼓、其他、钢琴、和声混合）都能选来从当前小节播放
+    from guitarize.render.viewer import build_viewer
+    for name in ("vocals", "guitar", "drums"):
+        p = demo_song.stem(name)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b"RIFF")
+    page = build_viewer(demo_song, "finger", "T").read_text(encoding="utf-8")
+    refs = json.loads(page.split("window.REF_AUDIO = ")[1].split(";\n")[0])
+    assert [r["label"] for r in refs] == ["原曲", "人声", "吉他", "鼓"]
+    assert 'id="ref"' in page and 'id="refplay"' in page

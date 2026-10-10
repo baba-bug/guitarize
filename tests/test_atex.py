@@ -192,3 +192,13 @@ def test_straight_items_are_untouched_by_triplet_splitting():
     items = [atex.Item(0, 1, [(1, 3)]), atex.Item(1, 0.5, []), atex.Item(1.5, 2.5, [(1, 5)], ["sd"])]
     assert atex.split_triplets(items) == items
     assert atex.voice_bar_tokens(items, "straight") == ["3.1.4", "r.8", "5.1.2 {sd}", "-.1.8"]
+
+
+def test_chord_diagrams_drawn_above_the_beats(tmp_path):
+    # 用户要求：每小节标的指型旁边直接画出和弦图（不只是谱首的列表）
+    head = atex.header("T", 120, 4, "shuffle", "score tabs", {"G": (3, 0, 0, 0, 2, 3)}, key=("B", "major"))
+    assert "\\chordDiagramsInScore" in head
+    src = tmp_path / "d.atex"
+    src.write_text(atex.document(head, [[atex.bar_line(atex.beat_tokens([(1, 3)], 4, ['ch "G"']), 1)]]), encoding="utf-8")
+    alphatab.build(src, tmp_path / "b", "d")              # alphaTab 认这个元数据，构建不报错
+    assert "\\chordDiagramsInScore" not in atex.header("T", 120, 0, "straight", "tabs")   # 没有和弦图时不加

@@ -178,6 +178,8 @@ def header(title: str, tempo: float, capo: int, feel: str, staff: str,
         lines.append(f"\\capo {capo}")
     for name, frets in (chords or {}).items():
         lines.append(f"\\chord {quote(name)} " + " ".join("x" if f is None else str(f) for f in frets))
+    if chords:
+        lines.append("\\chordDiagramsInScore")   # 每处指型标记画成和弦图（谱首仍有总表）
     lines.append("\\ts 4 4")
     if key is not None:
         lines.append(f"\\ks {key_signature(*key)}")

@@ -11,6 +11,8 @@ from ..paths import REPO_ROOT, SongPaths
 from .synth import ALPHATAB_DIST
 
 TEMPLATE = REPO_ROOT / "web" / "viewer.html"
+STEM_LABELS = (("vocals", "人声"), ("guitar", "吉他"), ("bass", "贝斯"), ("drums", "鼓"), ("other", "其他"),
+               ("piano", "钢琴"), ("harmonic", "和声混合"))
 
 
 def _rel(target: Path, start: Path) -> str:
@@ -25,8 +27,9 @@ def build_viewer(paths: SongPaths, arr: str, title: str) -> Path:
         leadsheet = json.loads(paths.leadsheet_json.read_text(encoding="utf-8"))
         bar_times = [[b["t_start"], b["t_end"]] for b in leadsheet["bars"]]
     refs = [{"label": "原曲", "url": _rel(paths.original_wav, out.parent)}]
-    if paths.stem("vocals").exists():   # 提取出的人声：对照旋律用
-        refs.append({"label": "人声", "url": _rel(paths.stem("vocals"), out.parent)})
+    for name, label in STEM_LABELS:   # 本地有的分轨都列出来，可选来从当前小节播放（对照旋律 / 伴奏）
+        if paths.stem(name).exists():
+            refs.append({"label": label, "url": _rel(paths.stem(name), out.parent)})
     replacements = {
         "{{TITLE}}": html.escape(f"{title} · {ARR_NAMES[arr]}"),
         "{{ALPHATAB_BASE}}": _rel(ALPHATAB_DIST, out.parent) + "/",
