@@ -42,6 +42,15 @@ def _load_json(path: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
+def melody_reference(paths: SongPaths, overrides: dict) -> Path:
+    """旋律谱对照的人声：识别旋律用的那条分轨。默认居中的主唱 stems/lead.wav（去掉了左右的伴唱）；
+    overrides.melody_source: vocals、或还没有 lead.wav 时用整条人声 stems/vocals.wav。"""
+    lead = paths.stem("lead")
+    if overrides.get("melody_source", "lead") == "lead" and lead.exists():
+        return lead
+    return paths.stem("vocals")
+
+
 def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
     profile = load_profile(cfg.level)
     built = alphatab.build(paths.atex(arr), paths.build_dir, arr)
@@ -49,7 +58,7 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
     synth = midi_to_wav(built["mid"], paths.build(arr, "wav"))
     violations = check_playability(score, profile, arr)
     leadsheet = _load_json(paths.leadsheet_json)
-    vocals = paths.stem("vocals")
+    vocals = melody_reference(paths, cfg.overrides)
     bars = metrics.score_bars(score, leadsheet, arr, synth_wav=synth, harmonic_wav=paths.stem("harmonic"),
                               onset_wavs=(paths.stem("drums"), paths.stem("guitar")), vocal_wav=vocals,
                               low_conf=cfg.thresholds.melody_conf_flag)
@@ -60,13 +69,15 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
         has_reference=leadsheet is not None,
     )
     problems = metrics.problem_bars(bars, violations, cfg.thresholds, arr)
+    if arr == "melody":
+        summary["vocal_reference"] = vocals.name   # 相似度、试听片段、音高图对照的分轨
 
     root = paths.report_root(arr)
     out = next_iter_dir(root)
     if arr == "melody":   # 问题小节在前，再是需人耳确认的小节
         listen = problems + [b.bar for b in bars if b.ear_notes and b.bar not in problems]
         snippets = _write_snippets(out, listen, score, leadsheet, synth, vocals, "vocal")
-        contour = _vocal_contour(paths, leadsheet) if leadsheet and listen else None
+        contour = _vocal_contour(paths, leadsheet, vocals) if leadsheet and listen else None
         plots = _write_pitch_plots(out, listen, score, leadsheet, contour)
     else:
         snippets = _write_snippets(out, problems, score, leadsheet, synth, paths.original_wav)
@@ -167,11 +178,10 @@ def _write_plots(out: Path, problems: list[int], score: Score, leadsheet: dict |
     return res
 
 
-def _vocal_contour(paths: SongPaths, leadsheet: dict) -> tuple[np.ndarray, np.ndarray] | None:
-    """人声基频（与 melody 步骤同一条 Viterbi 曲线，缓存在 analysis/vocal_f0.npz）→ (拍位置, MIDI 浮点音高或 nan)。
-    拍轴与 melody.json 相同（beats.json 的 time_to_beat）；没有 beats.json 时按 leadsheet 的小节起止时间逐小节线性换算。
-    没有人声分轨时 None。"""
-    vocals = paths.stem("vocals")
+def _vocal_contour(paths: SongPaths, leadsheet: dict, vocals: Path) -> tuple[np.ndarray, np.ndarray] | None:
+    """vocals（melody_reference）的基频（与 melody 步骤同一条 Viterbi 曲线，缓存在 analysis/vocal_f0.npz）
+    → (拍位置, MIDI 浮点音高或 nan)。拍轴与 melody.json 相同（beats.json 的 time_to_beat）；没有 beats.json 时
+    按 leadsheet 的小节起止时间逐小节线性换算。没有这条分轨时 None。"""
     if not vocals.exists():
         return None
     from ..analyze.melody import cached_vocal_pitch
@@ -315,6 +325,8 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
     lines = [f"# {ARR_NAMES[arr]}校验报告 · {iter_name}", "", f"**结论：{status}**", ""]
     if not has_reference:
         lines += ["> 没有参考（leadsheet.json），只做了可弹性检查，未做差异校验。", ""]
+    if s.get("vocal_reference"):
+        lines += [f"> 对照的人声分轨：analysis/stems/{s['vocal_reference']}（相似度、试听片段、音高图）", ""]
     lines += ["| 指标 | 本轮 | 上一轮 | 达标线 |", "|---|---|---|---|"]
     rows = [("可弹性违规", "violations", False, "0")]
     if arr == "melody":   # 单旋律线：不评和弦；召回按全部参考音；相似度对照人声分轨

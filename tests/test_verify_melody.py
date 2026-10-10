@@ -150,7 +150,7 @@ def test_verify_melody_writes_vocal_snippets_pitch_plots_and_report(demo_song, m
     assert not (it / "snippets" / "bar-002_orig.wav").exists()
     report = (it / "report.md").read_text(encoding="utf-8")
     assert "旋律校验报告" in report and "旋律召回率（全部参考音）" in report and "人声相似度" in report
-    assert "和弦一致率" not in report
+    assert "和弦一致率" not in report and "对照的人声分轨：analysis/stems/vocals.wav" in report
     assert "试听：snippets/bar-002_vocal.wav ↔ snippets/bar-002_synth.wav" in report
     assert "音高图：plots/bar-002.png" in report
     assert "第 3 小节：拍 1 F4（调外）" in report
@@ -159,3 +159,18 @@ def test_verify_melody_writes_vocal_snippets_pitch_plots_and_report(demo_song, m
     assert main(["--songs-dir", songs, "render", "demo", "--arr", "melody"]) == 0
     assert demo_song.out("melody", "html").exists() and "旋律" in demo_song.out("melody", "html").read_text(encoding="utf-8")
     assert "e|" in demo_song.out("melody", "txt").read_text(encoding="utf-8")
+
+
+def test_melody_is_checked_against_the_stem_it_was_transcribed_from(tmp_path):
+    # melody 步骤默认从居中的主唱 stems/lead.wav 识别旋律（overrides.melody_source: vocals 时用整条人声）：
+    # 旋律谱的人声相似度、试听片段、音高图都对照同一条分轨；没有 lead.wav 时退回 vocals.wav
+    from guitarize.paths import SongPaths
+    from guitarize.verify.report import melody_reference
+
+    paths = SongPaths(tmp_path / "song")
+    paths.stems_dir.mkdir(parents=True)
+    assert melody_reference(paths, {}) == paths.stem("vocals")
+    paths.stem("lead").write_bytes(b"RIFF")
+    assert melody_reference(paths, {}) == paths.stem("lead")
+    assert melody_reference(paths, {"melody_source": "lead"}) == paths.stem("lead")
+    assert melody_reference(paths, {"melody_source": "vocals"}) == paths.stem("vocals")
