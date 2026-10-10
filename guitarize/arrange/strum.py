@@ -55,6 +55,7 @@ def bar_slots(chords: list[str], pattern: str) -> list[str]:
 def bar_tokens(chords: list[str], pattern: str, shapes: dict[str, Voicing],
                prev: str | None, feel: str = "straight", mute: Collection[int] = ()) -> tuple[list[str], str | None]:
     """chords：指法调逐拍和弦（4 个）。换和弦或休止之后的延续格改为下扫；无和弦的格为休止。
+    指型名标在每小节第一下扫弦和每次换和弦处。
     mute：改成闷音的格（保留扫弦方向和弦的范围）。Shuffle 下反拍扫弦按八分对切分（atex.voice_bar_tokens）。"""
     slot_chord = [chords[k // 2] for k in range(8)]
     slots = bar_slots(chords, pattern)
@@ -73,7 +74,9 @@ def bar_tokens(chords: list[str], pattern: str, shapes: dict[str, Voicing],
                 n += 1
             label = slot_chord[k]
             v = shapes[label]
-            effects = ([f"ch {atex.quote(v.name)}"] if label != last else []) + ["su" if slots[k] == "U" else "sd"]
+            first_in_bar = not any(it.notes for it in items)   # 每小节第一下扫弦都标指型（和弦没变也标）
+            mark = label != last or first_in_bar
+            effects = ([f"ch {atex.quote(v.name)}"] if mark else []) + ["su" if slots[k] == "U" else "sd"]
             items.append(atex.Item(k * 0.5, n * 0.5, _notes(v, slots[k]), effects,
                                    dead=slots[k] == "x" or k in mute))
             last = label

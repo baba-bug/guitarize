@@ -170,7 +170,7 @@ def _starts_beat(pieces: list[tuple[float, float, list, bool]], x: float) -> boo
 
 
 def shape_marks(leadsheet: dict, capo: int, profile: Profile) -> tuple[dict[float, str], dict[str, tuple]]:
-    """指弹谱上该按的和弦指型：每小节第 1、3 拍（低音所在）的和弦换成指法调的指型，指型变了才标（无和弦之后重标）。
+    """指弹谱上该按的和弦指型：每小节第 1 拍都标；第 3 拍（低音所在）指型变了再标（无和弦之后重标）。
     → ({记谱位置: 指型名}, {指型名: 和弦图品位（1 弦 → 6 弦）})。"""
     marks: dict[float, str] = {}
     diagrams: dict[str, tuple] = {}
@@ -188,7 +188,7 @@ def shape_marks(leadsheet: dict, capo: int, profile: Profile) -> tuple[dict[floa
             if not options:
                 continue
             v = options[0]
-            if v.name != last:
+            if v.name != last or k == 0:   # 每小节第 1 拍都标（和弦没变也标），小节中间换了再标
                 marks[i * 4.0 + k] = v.name
                 diagrams.setdefault(v.name, v.frets)
                 last = v.name

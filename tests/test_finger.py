@@ -241,3 +241,13 @@ def test_finger_draft_marks_chord_shapes_and_balances_voices(tmp_path):
                  if s.voice == v and (round(score.seconds(s.start), 2), s.midi) in velocity] for v in (0, 1)}
     assert voice[0] and voice[1] and max(voice[1]) < min(voice[0])     # 伴奏（声部 2）比旋律轻
     assert check_playability(score, MID, "finger") == []
+
+
+def test_every_bar_shows_its_chord_shape():
+    # 每小节第 1 拍都标指型（和弦没变也标）；同一小节第 3 拍指型不变时不重复
+    mel = [(0, 1, 67), (1, 1, 69), (2, 2, 71)]
+    ls = _sheet([_bar(0, None, "C", mel), _bar(1, None, "C", mel), _bar(2, None, "C", mel)])
+    marks, _ = finger.shape_marks(ls, 0, MID)
+    assert marks == {0.0: "C", 4.0: "C", 8.0: "C"}
+    text = generate_finger(ls, 0, MID, "T")
+    assert text.count('ch "C"') == 3

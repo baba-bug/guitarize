@@ -144,3 +144,12 @@ def test_beginner_b_major_song_at_every_capo(tmp_path):
         check, _ = _check(BEG, tmp_path / str(capo))
         text = generate_strum(ls, capo, BEG, ["pop"] * len(bars), "T", check=check)
         assert check_playability(build(text, tmp_path, f"beg{capo}"), BEG, "strum") == [], capo
+
+
+def test_every_bar_shows_its_chord_shape(tmp_path):
+    # 用户要求：每小节上方都标出指型（和弦没变也标），小节中间换和弦再标；同一小节内不重复
+    ls = leadsheet([[("C", 1, 4)], [("C", 1, 4)], [("C", 1, 2), ("G", 3, 2)]])
+    text = generate_strum(ls, 0, MID, ["pop"] * 3, "T")
+    bars = [line for line in text.splitlines() if line.endswith("|")]
+    assert [b.count('ch "C"') for b in bars] == [1, 1, 1] and bars[2].count('ch "G"') == 1
+    assert check_playability(build(text, tmp_path), MID, "strum") == []
