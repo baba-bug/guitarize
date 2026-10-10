@@ -256,3 +256,62 @@ def test_chord_diagrams_drawn_above_the_beats(tmp_path):
     src.write_text(atex.document(head, [[atex.bar_line(atex.beat_tokens([(1, 3)], 4, ['ch "G"']), 1)]]), encoding="utf-8")
     alphatab.build(src, tmp_path / "b", "d")              # alphaTab 认这个元数据，构建不报错
     assert "\\chordDiagramsInScore" not in atex.header("T", 120, 0, "straight", "tabs")   # 没有和弦图时不加
+
+
+# ---------- 音符效果（击勾弦 h、连奏滑音 sl、滑出 sod / sou）：挂在音尾，即这个音最后一个记号上 ----------
+
+def test_note_effects_follow_the_note_inside_and_outside_chords():
+    # alphaTab 1.8.4：音符效果紧跟在 品.弦 后面、时值前面（'5.3{h}.4'）；和弦里跟在各自的音后面；
+    # 拍效果仍写在时值后面（'5.3{h}.4 {d}'）。'5.3.4{h}' 会被当成拍效果，报 Unrecognized property
+    assert atex.notes_token([(3, 5)], effects={3: ["h"]}) == "5.3{h}"
+    assert atex.notes_token([(3, 5), (2, 3)], effects={3: ["h"]}) == "(5.3{h} 3.2)"
+    assert atex.notes_token([(3, 5)], tie=True, effects={3: ["sl"]}) == "-.3{sl}"
+    assert atex.notes_token([(3, 5)], effects={2: ["h"]}) == "5.3"                  # 别的弦的效果不挂
+    assert atex.beat_tokens([(3, 5)], 1.5, note_effects={3: ["h"]}) == ["5.3{h}.4 {d}"]
+    # 拆成几个记号时：拍效果在第一个，音符效果在最后一个（连音线延续的那一段，紧挨着下一个音）
+    assert atex.beat_tokens([(3, 5)], 2.5, ['ch "G"'], note_effects={3: ["h"]}) == ['5.3.2 {ch "G"}', "-.3{h}.8"]
+
+
+def _legato_score(tmp_path, tokens, name="t"):
+    head = atex.header("T", 120, 0, "shuffle", "tabs")
+    src = tmp_path / f"{name}.atex"
+    src.write_text(atex.document(head, [[atex.bar_line(tokens, 1)]]), encoding="utf-8")
+    return load_score(alphatab.build(src, tmp_path / "b", name)["json"])
+
+
+def test_swing_split_keeps_the_note_effect_on_the_last_piece_only(tmp_path):
+    # Shuffle：3 弦 5 品从拍点按到反拍，接着反拍上击弦到 7 品。八分对切分把 5 品切成 4 分 + 连音线八分：
+    # h 只在连音线那一段（紧挨着 7 品），不丢也不重复
+    items = [atex.Item(0, 1.5, [(3, 5)], note_effects={3: ["h"]}), atex.Item(1.5, 0.5, [(3, 7)]), atex.Item(2, 2, [])]
+    pieces = atex.split_for_swing(items, "shuffle")
+    assert [dict(p.note_effects or {}) for p, _ in pieces] == [{}, {3: ["h"]}, {}, {}]
+    tokens = atex.voice_bar_tokens(items, "shuffle")
+    assert tokens == ["5.3.4", "-.3{h}.8", "7.3.8", "r.2"]
+    score = _legato_score(tmp_path, tokens)
+    notes = [(round(e.written_start, 4), n.fret, n.tie, n.hammer) for e in score.events for n in e.notes]
+    assert notes == [(0.0, 5, False, False), (1.0, 5, True, True), (1.5, 7, False, False)]
+    assert [round(a.start, 3) for a in score.attacks()] == [0.0, 1.667]          # 击弦的音照样按摇摆演奏
+
+
+def test_triplet_split_keeps_the_note_effect_on_the_last_piece_only(tmp_path):
+    # 跨进三连音拍的音在拍线处切开：sl 挂在拍内那一段（三连音的连音线延续）上
+    items = [atex.Item(0, 4 / 3, [(3, 5)], note_effects={3: ["sl"]}), atex.Item(4 / 3, 2 / 3, [(3, 9)]),
+             atex.Item(2, 2, [])]
+    out = atex.split_triplets(items)
+    assert [dict(p.note_effects or {}) for p in out] == [{}, {3: ["sl"]}, {}, {}]
+    tokens = atex.voice_bar_tokens(items, "shuffle")
+    assert tokens == ["5.3.4", "-.3{sl}.8 {tu 3}", "9.3.4 {tu 3}", "r.2"]
+    score = _legato_score(tmp_path, tokens)
+    notes = [(round(e.written_start, 4), n.fret, n.slide) for e in score.events for n in e.notes]
+    assert notes == [(0.0, 5, None), (1.0, 5, "legato"), (1.3333, 9, None)]
+
+
+def test_slide_out_and_chord_note_effects_build(tmp_path):
+    items = [atex.Item(0, 1, [(3, 5), (2, 3)], note_effects={3: ["h"]}), atex.Item(1, 1, [(3, 7), (2, 3)]),
+             atex.Item(2, 1, [(1, 3)], note_effects={1: ["sod"]}), atex.Item(3, 1, [(1, 5)], note_effects={1: ["sou"]})]
+    tokens = atex.voice_bar_tokens(items, "straight")
+    assert tokens == ["(5.3{h} 3.2).4", "(7.3 3.2).4", "3.1{sod}.4", "5.1{sou}.4"]
+    score = _legato_score(tmp_path, tokens)
+    assert [[(n.fret, n.hammer, n.slide) for n in e.notes] for e in score.events] == [
+        [(5, True, None), (3, False, None)], [(7, False, None), (3, False, None)], [(3, False, "out_down")],
+        [(5, False, "out_up")]]
