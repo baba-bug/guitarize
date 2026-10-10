@@ -26,10 +26,10 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(name, help=help_text)
         p.add_argument("slug")
         p.add_argument("--arr", choices=ARRS, required=True)
-    p = sub.add_parser("analyze", help="分析原曲：分轨 / 节拍 / 和弦 / 旋律 / leadsheet")
+    p = sub.add_parser("analyze", help="分析原曲：分轨 / 主唱 / 节拍 / 和弦 / 旋律 / leadsheet")
     p.add_argument("slug")
-    p.add_argument("--steps", default="stems,beats,chords,melody,leadsheet",
-                   help="逗号分隔，可选 stems,beats,chords,melody,leadsheet")
+    p.add_argument("--steps", default="stems,lead,beats,chords,melody,leadsheet",
+                   help="逗号分隔，可选 stems,lead,beats,chords,melody,leadsheet（lead：只重做主唱 / 伴唱分离）")
     p = sub.add_parser("summary", help="打印 leadsheet 的逐小节摘要")
     p.add_argument("slug")
     p.add_argument("--capo", type=int, default=0)
