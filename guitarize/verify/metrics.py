@@ -1,4 +1,6 @@
-"""编配 vs 参考（leadsheet.json）的逐小节评分。"""
+"""编配 vs 参考（leadsheet.json）的逐小节评分。
+弹唱 / 指弹：和弦一致率、旋律（指弹：召回只考骨架音）、与和声分轨的色度相似度、节奏（弹唱）。
+旋律谱（melody）：只评旋律（召回按全部参考音）和与人声分轨的色度相似度，并列出要人耳确认的参考音；不评和弦。"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -27,13 +29,15 @@ class BarScore:
     low_conf_beats: list[int] = field(default_factory=list)
     mel_hit: int = 0           # 编配旋律音命中参考（精确率分子）
     mel_est: int = 0           # 编配旋律音数（精确率分母）
-    mel_found: int = 0         # 参考骨架音被覆盖（召回率分子）
-    mel_ref: int = 0           # 参考骨架音数（召回率分母）
+    mel_found: int = 0         # 参考骨架音被覆盖（召回率分子；旋律谱：全部参考音）
+    mel_ref: int = 0           # 参考骨架音数（召回率分母；旋律谱：全部参考音）
     mel_octave_exact: int = 0
     mel_issues: list[str] = field(default_factory=list)
     mark_issues: list[str] = field(default_factory=list)  # 谱上和弦名与实际音不符
     harmonic_sim: float | None = None
     rhythm_corr: float | None = None
+    vocal_sim: float | None = None                         # 旋律谱：与人声分轨的色度相似度
+    ear_notes: list[str] = field(default_factory=list)    # 旋律谱：参考里调外 / 低置信、要人耳确认的音
 
     @property
     def chord_ratio(self) -> float | None:
@@ -154,11 +158,13 @@ def _match(a: Sequence[tuple[float, int]], b: Sequence[tuple[float, int]], tol: 
     return out
 
 
-def score_melody(score: Score, leadsheet: dict, bars: list[BarScore]) -> None:
+def score_melody(score: Score, leadsheet: dict, bars: list[BarScore], skeleton: bool = True) -> None:
+    """精确率：编配旋律音命中任一参考音；召回率：skeleton 时只考参考骨架音（指弹只弹骨架），否则考全部参考音（旋律谱）。"""
     n = len(bars)
     ref_all = sorted((m for b in leadsheet["bars"][:n] for m in b.get("melody", [])), key=lambda m: m["start_beats"])
     mask = skeleton_mask([m["start_beats"] for m in ref_all], [m["dur_beats"] for m in ref_all])
-    skel = [m for m, keep in zip(ref_all, mask) if keep]
+    skel = [m for m, keep in zip(ref_all, mask) if keep or not skeleton]
+    missed = "漏掉骨架音" if skeleton else "漏掉旋律音"
     ref_bars = {_bar_of(score, m["start_beats"]) for m in ref_all} - {None}
     # 匹配用被评分小节内的全部编配旋律音，这样落在邻小节（无参考旋律）的同名音也能覆盖参考骨架音；
     # “该小节有参考旋律”的过滤只用于精确率一侧的计数
@@ -189,7 +195,21 @@ def score_melody(score: Score, leadsheet: dict, bars: list[BarScore]) -> None:
             bs.mel_found += 1
         else:
             shape = theory.midi_name(m["midi"] - score.capo)
-            bs.mel_issues.append(f"漏掉骨架音：拍 {pos} {theory.midi_name(m['midi'])}（指法调 {shape}）")
+            bs.mel_issues.append(f"{missed}：拍 {pos} {theory.midi_name(m['midi'])}（指法调 {shape}）")
+
+
+def ear_check(leadsheet: dict, bars: list[BarScore], low_conf: float) -> None:
+    """参考旋律里调外、或置信（平均周期性）低于 low_conf 的音 → 该小节的 ear_notes（要人耳确认的音）。
+    overrides.melody 写的音（manual）已经人耳确认过，不列。"""
+    bpb = int(leadsheet.get("beats_per_bar", 4))
+    for i, (bs, lbar) in enumerate(zip(bars, leadsheet["bars"])):
+        for m in lbar.get("melody", []):
+            if m.get("manual"):
+                continue
+            why = (["调外"] if m.get("out_of_key") else []) + ([f"置信 {m['conf']:.2f}"] if m["conf"] < low_conf else [])
+            if why:
+                pos = beat_label(m["start_beats"] - i * bpb)
+                bs.ear_notes.append(f"拍 {pos} {theory.midi_name(m['midi'])}（{'，'.join(why)}）")
 
 
 # ---------- 和声相似度 ----------
@@ -224,12 +244,15 @@ def _ref_windows(leadsheet: dict, n: int) -> list[tuple[float, float]]:
     return [(b["t_start"], b["t_end"]) for b in leadsheet["bars"][:n]]
 
 
-def score_harmonic(score: Score, leadsheet: dict, bars: list[BarScore], synth_wav: Path, harmonic_wav: Path) -> None:
+def score_harmonic(score: Score, leadsheet: dict, bars: list[BarScore], synth_wav: Path, ref_wav: Path,
+                   attr: str = "harmonic_sim") -> None:
+    """逐小节色度余弦相似度：合成音 vs 参考分轨 ref_wav，写进 BarScore 的 attr。
+    弹唱 / 指弹比和声分轨（harmonic_sim），旋律谱比人声分轨（vocal_sim）。"""
     n = len(bars)
-    ref = bar_chroma(harmonic_wav, _ref_windows(leadsheet, n))
+    ref = bar_chroma(ref_wav, _ref_windows(leadsheet, n))
     syn = bar_chroma(synth_wav, _synth_windows(score, n))
     for i, bs in enumerate(bars):
-        bs.harmonic_sim = cosine(ref[i], syn[i])
+        setattr(bs, attr, cosine(ref[i], syn[i]))
 
 
 # ---------- 节奏（弹唱） ----------
@@ -280,13 +303,23 @@ def score_rhythm(score: Score, leadsheet: dict, bars: list[BarScore], onset_wavs
 # ---------- 汇总 ----------
 
 def score_bars(score: Score, leadsheet: dict | None, arr: str, synth_wav: Path | None = None,
-               harmonic_wav: Path | None = None, onset_wavs: Sequence[Path] = ()) -> list[BarScore]:
+               harmonic_wav: Path | None = None, onset_wavs: Sequence[Path] = (), vocal_wav: Path | None = None,
+               low_conf: float = Thresholds.melody_conf_flag) -> list[BarScore]:
+    """vocal_wav / low_conf 只用于旋律谱（arr = melody）：人声分轨相似度、要人耳确认的低置信参考音。
+    旋律谱是单旋律线：不评和弦、也不核对谱上的和弦名（只是标出该按的指型，一条旋律线听不出和弦）。"""
     if leadsheet is None:
         bars = [BarScore(bar=b.index + 1, section=b.section) for b in score.bars]
-        chord_mark_issues(score, bars)
+        if arr != "melody":
+            chord_mark_issues(score, bars)
         return bars
     n = min(len(score.bars), len(leadsheet["bars"]))
     bars = [BarScore(bar=i + 1, section=score.bars[i].section or leadsheet["bars"][i].get("section")) for i in range(n)]
+    if arr == "melody":
+        score_melody(score, leadsheet, bars, skeleton=False)
+        ear_check(leadsheet, bars, low_conf)
+        if synth_wav is not None and vocal_wav is not None and Path(vocal_wav).exists():
+            score_harmonic(score, leadsheet, bars, Path(synth_wav), Path(vocal_wav), attr="vocal_sim")
+        return bars
     chord_mark_issues(score, bars)
     score_chords(score, leadsheet, bars)
     if arr == "finger":
@@ -309,22 +342,28 @@ def summarize(bars: list[BarScore], violations: list, th: Thresholds, arr: str,
     mel = f1(hit, est, found, ref)
     hs = [b.harmonic_sim for b in bars if b.harmonic_sim is not None]
     rc = [b.rhythm_corr for b in bars if b.rhythm_corr is not None]
+    vs = [b.vocal_sim for b in bars if b.vocal_sim is not None]
     marks = sum(len(b.mark_issues) for b in bars)
     target = th.chord_strum if arr == "strum" else th.chord_finger
-    checks = {"playability": not violations, "chord": chord is None or chord >= target}
+    mel_target = th.melody_line if arr == "melody" else th.melody_f1
+    checks = {"playability": not violations}
+    if arr != "melody":   # 旋律谱是单旋律线：不评和弦
+        checks["chord"] = chord is None or chord >= target
     # 没有任何东西被核对（无参考，或参考和弦全是低置信 / 没有旋律）时不能算通过
     if not has_reference:
         checks["reference"] = False
     elif arr == "finger":
         checks["reference"] = ct > 0 and ref > 0
+    elif arr == "melody":
+        checks["reference"] = ref > 0
     else:
         checks["reference"] = ct > 0
     if arrangement_bars is not None and reference_bars is not None:
         checks["bar_count"] = arrangement_bars == reference_bars
     if arr == "strum":
         checks["chord_marks"] = marks == 0
-    if arr == "finger":
-        checks["melody"] = mel is None or mel >= th.melody_f1
+    if arr in ("finger", "melody"):
+        checks["melody"] = mel is None or mel >= mel_target
     return {
         "violations": len(violations),
         "chord_agreement": chord,
@@ -334,22 +373,31 @@ def summarize(bars: list[BarScore], violations: list, th: Thresholds, arr: str,
         "melody_octave_exact": sum(b.mel_octave_exact for b in bars) / hit if hit else None,
         "harmonic_similarity": float(np.mean(hs)) if hs else None,
         "rhythm_correlation": float(np.mean(rc)) if rc else None,
+        "vocal_similarity": float(np.mean(vs)) if vs else None,
+        "ear_check_bars": sum(1 for b in bars if b.ear_notes),
+        "ear_check_notes": sum(len(b.ear_notes) for b in bars),
         "low_conf_beats": sum(len(b.low_conf_beats) for b in bars),
         "scored_beats": ct,
         "melody_ref_notes": ref,
         "arrangement_bars": arrangement_bars,
         "reference_bars": reference_bars,
         "chord_mark_issues": marks,
-        "chord_target": target,
-        "melody_target": th.melody_f1 if arr == "finger" else None,
+        "chord_target": None if arr == "melody" else target,
+        "melody_target": mel_target if arr in ("finger", "melody") else None,
         "checks": checks,
         "pass": all(checks.values()),
     }
 
 
 def problem_bars(bars: list[BarScore], violations: list, th: Thresholds, arr: str) -> list[int]:
+    """旋律谱：每个音都要对上（小节旋律 F1 < melody_line 就标出），以及与人声分轨相似度低的小节。"""
     bad = {v.bar for v in violations}
     for b in bars:
+        if arr == "melody":
+            if (b.mel_f1 is not None and b.mel_f1 < th.melody_line) or \
+                    (b.vocal_sim is not None and b.vocal_sim < th.bar_vocal_flag):
+                bad.add(b.bar)
+            continue
         if arr == "strum" and b.mark_issues:
             bad.add(b.bar)
         if b.chord_ratio is not None and b.chord_ratio < th.bar_chord_flag:

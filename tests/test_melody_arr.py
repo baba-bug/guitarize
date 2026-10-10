@@ -1,11 +1,14 @@
 """旋律谱（arr = melody）：leadsheet 的每一个旋律音、按原唱的节奏（Shuffle 三连音位置精确）、单声部、可弹。"""
 import re
 
+import pytest
+
 from guitarize.arrange import melody as M
 from guitarize.arrange.melody import generate_melody
 from guitarize.arrange.pipeline import self_check
-from guitarize.config import load_profile
+from guitarize.config import Thresholds, load_profile
 from guitarize.render import alphatab
+from guitarize.verify import metrics
 from guitarize.verify.model import load_score
 from guitarize.verify.playability import Violation, check_playability
 
@@ -61,6 +64,9 @@ def test_keeps_every_note_at_its_sung_position(tmp_path):
     want = [(round(m["start_beats"], 4), m["midi"]) for b in ls["bars"] for m in b["melody"]]
     assert _onsets(score) == want
     assert check_playability(score, MID, "melody") == []
+    bars = metrics.score_bars(score, ls, "melody")
+    s = metrics.summarize(bars, [], Thresholds(), "melody")
+    assert s["melody_f1"] == pytest.approx(1.0) and s["melody_recall"] == pytest.approx(1.0)
 
 
 def test_shuffle_beats_with_a_third_are_triplets_others_swing_pairs():

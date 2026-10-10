@@ -22,3 +22,6 @@ scripts/.setup.log
 
 # 校验色度图（由原曲分轨计算，体积大且可再生）
 songs/*/reports/**/plots/
+
+# 人声基频缓存（由人声分轨计算，可再生）
+songs/*/analysis/vocal_f0.npz

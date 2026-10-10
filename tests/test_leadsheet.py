@@ -234,7 +234,7 @@ def test_pipeline_stamps_beats_signature(tmp_path, monkeypatch):
     cb[list(theory.chord_tones("C")), :] = 1 / np.sqrt(3)
     monkeypatch.setattr(pipeline.features, "load_mix", lambda wavs: np.zeros(10))
     monkeypatch.setattr(pipeline.features, "beat_sync_chroma", lambda y, times: cb)
-    monkeypatch.setattr(pipeline, "extract_melody", lambda wav, bj, pcs: {"grid": "sixteenth", "notes": []})
+    monkeypatch.setattr(pipeline, "extract_melody", lambda wav, bj, pcs, **kw: {"grid": "sixteenth", "notes": []})
     pipeline.run_analysis(paths, cfg, ["chords", "melody", "leadsheet"])
     sig = beats_signature(beats)
     assert sig == {"n_beats": 11, "pad_beats": 1, "pickup_beats": 3, "feel": "straight"}
@@ -347,7 +347,7 @@ def test_pipeline_records_melody_key_and_catches_a_later_key_change(tmp_path, mo
     monkeypatch.setattr(pipeline.features, "beat_sync_chroma", lambda y, times: cb)
     seen = []
     monkeypatch.setattr(pipeline, "extract_melody",
-                        lambda wav, bj, pcs: seen.append(pcs) or {"grid": "sixteenth", "notes": []})
+                        lambda wav, bj, pcs, **kw: seen.append(pcs) or {"grid": "sixteenth", "notes": []})
     pipeline.run_analysis(paths, cfg, ["chords", "melody", "leadsheet"])
     chords = json.loads(paths.chords_json.read_text(encoding="utf-8"))
     melody = json.loads(paths.melody_json.read_text(encoding="utf-8"))
@@ -587,3 +587,4 @@ def test_song_yaml_chord_overrides_round_trip(tmp_path):
     got = build_leadsheet(beats, chords, melody, ("C", "major"), {}, cfg.overrides["chords"])
     assert [[(c["beat"], c["dur_beats"], c["label"]) for c in b["chords"]] for b in got["bars"]] == [
         [(1, 4, "N")], [(1, 2, "E"), (3, 2, "F#")], [(1, 4, "B")], [(1, 2, "C#m7"), (3, 2, "F#")]]
+

@@ -34,6 +34,8 @@ class Thresholds:
     bar_chord_flag: float = 0.75
     bar_melody_flag: float = 0.60
     bar_harmonic_flag: float = 0.60
+    bar_vocal_flag: float = 0.60    # 旋律谱：与人声分轨的小节色度相似度低于它 → 问题小节
+    melody_conf_flag: float = 0.50  # 旋律谱：参考旋律音的置信（平均周期性）低于它 → 需人耳确认
 
 
 @dataclass(frozen=True)
