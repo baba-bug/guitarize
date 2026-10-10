@@ -100,6 +100,25 @@ def test_tied_item_continues_only_its_notes():
     assert atex.voice_bar_tokens(items, "straight") == ["(0.2 1.4).4", "-.4.4", "r.2"]
 
 
+def test_held_notes_ring_under_fresh_notes_in_one_beat(tmp_path):
+    # 低音（6 弦）接着响，同一拍新拨两个合音：和弦里低音写成连音线、合音照常起音；拆开的后续片段都是连音线
+    assert atex.notes_token([(2, 0), (3, 0), (6, 3)], held={6}) == "(0.2 0.3 -.6)"
+    items = [atex.Item(0, 1, [(6, 3)]), atex.Item(1, 1 / 3, [(2, 0), (3, 0), (6, 3)], held=frozenset({6})),
+             atex.Item(4 / 3, 2 / 3, [(6, 3)], tie=True), atex.Item(2, 2, [])]
+    tokens = atex.voice_bar_tokens(items, "shuffle")
+    assert tokens == ["3.6.4", "(0.2 0.3 -.6).8 {tu 3}", "-.6.4 {tu 3}", "r.2"]
+    long = [atex.Item(0, 1, [(6, 3)]), atex.Item(1, 1.25, [(2, 0), (6, 3)], held=frozenset({6})),
+            atex.Item(2.25, 1.75, [])]
+    assert atex.voice_bar_tokens(long, "straight")[:3] == ["3.6.4", "(0.2 -.6).4", "(-.2 -.6).16"]
+    head = atex.header("T", 120, 0, "shuffle", "tabs")
+    src = tmp_path / "h.atex"
+    src.write_text(atex.document(head, [[atex.bar_line(tokens, 1)]]), encoding="utf-8")
+    score = load_score(alphatab.build(src, tmp_path / "b", "h")["json"])
+    assert [(round(s.start, 3), round(s.end, 3), s.midi) for s in score.sounding()] == [
+        (0.0, 2.0, 43), (1.0, 1.333, 59), (1.0, 1.333, 55)]
+    assert [(round(a.start, 3), len(a.notes)) for a in score.attacks()] == [(0.0, 1), (1.0, 2)]
+
+
 def test_tied_item_in_shuffle_is_split_but_not_an_onset(tmp_path):
     # 反拍上的连音线延续没有起音：不触发八分对切分；被别的反拍起音切开时，各片段仍是连音线
     items = [atex.Item(0, 1.5, [(2, 0), (4, 1)]), atex.Item(1.5, 2.5, [(4, 1)], tie=True)]

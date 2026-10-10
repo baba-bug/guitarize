@@ -1,7 +1,17 @@
-"""指弹编配草稿：旋律骨架（voice 1）+ 低音与填充（voice 2），指法由 Viterbi 分配。
-Shuffle 下旋律按原唱的三连音格记谱：有 +1/3 起音的拍整拍写成三连音（{tu 3}），其余拍照旧写成摇摆八分对。
-给出自检（与 verify 同一套可弹性检查）时按违规逐轮修补：截短仍按着的音、去掉填充 / 低音；
-换把找不到 t 时可修的音时，改在前一个起音处修，最后才把旋律音移八度。
+"""指弹编配草稿，指法由 Viterbi 分配（fretting.assign_frets）。两种写法（style）：
+
+- full（默认，"旋律优先"）：voice 1 是旋律谱的每一个音（melody.melody_line：同样的起音、时值、三连音、连音线、
+  八度移位，连奏 / 尾滑在同一根弦上时同样写 h / sl / sod / sou；只有指法可以不同，让左手按着和弦指型）。
+  voice 2 是低音与合音：第 1 拍弹和弦的低音（斜杠和弦弹斜杠低音），第 3 拍换和弦弹新低音、不换弹五音
+  （交替低音，Shuffle 的 boom-chick；五音放不下换根音），低音响到下一个低音；第 2、4 拍旋律没有正好在拍上起音时
+  弹两个和弦内音的短音（STAB：Shuffle 一个三连音八分），在低音之上、比附近的旋律至少低 3 个半音；
+  拍上 / 摇摆反拍起音、唱满 1 拍的旋律长音下面加一个低 3–9 个半音的和弦内音（双音，优先三度、六度）。
+  合音一律可丢：Viterbi 里放不下就不取，自检违规时先丢合音，旋律和低音从不为合音让路；旋律的音高、时值也从不修改。
+- skeleton：旧的骨架旋律（≤ melody_max_per_beat 个 / 拍、短音丢掉、长音最长 2 拍）+ 第 1 / 3 拍的低音与填充。
+  Shuffle 下旋律按原唱的三连音格记谱：有 +1/3 起音的拍整拍写成三连音（{tu 3}），其余拍照旧写成摇摆八分对。
+
+给出自检（与 verify 同一套可弹性检查）时按违规逐轮修补：截短仍按着的音、去掉填充（合音）/ 低音；
+换把找不到 t 时可修的音时，改在前一个起音处修，最后才动旋律音的位置（skeleton 移八度，full 只换弦、不改音高）。
 每处指法降级与修补都写进该小节的 `// bar N` 注释，方便审阅。"""
 from __future__ import annotations
 
@@ -13,12 +23,15 @@ from typing import Callable, Iterable
 import numpy as np
 
 from .. import theory
-from ..config import Profile
+from ..config import FINGER_STYLES, Profile
 from ..skeleton import skeleton_mask
 from ..verify.playability import Violation
 from . import atex
 from .capo import OctavePolicy, effective_profile, octave_plan
 from .fretting import FretEvent, assign_frets
+from .layout import _at, _voice_lines, annotate, section_bars, shape_marks
+from .melody import SLIDE_OUT, Sung, note_effects
+from .melody import melody_line as sung_line
 from .shapes import OPEN_STRINGS, voicings
 from .strum import beat_chords
 
@@ -28,6 +41,12 @@ FILL_GAP = 3         # 填充音至少比它持续期间的最低旋律音低 3 
 REPAIR_ROUNDS = 10
 HAND_RULES = ("span", "fingers", "shift")   # 校验把仍按着的音算进手型的规则：可以靠截短 / 去音修补
 EPS = 1e-6
+STAB = {"shuffle": 1 / 3, "straight": 0.5}   # 第 2、4 拍和弦短音的记谱时值：Shuffle 一个三连音八分，直拍一个八分
+STAB_TAKE, STAB_CANDIDATES = 2, 4            # 短音取 2 个和弦内音，给 Viterbi 的候选
+DOUBLE_GAP = (3, 9)                          # 双音比旋律音低 3–9 个半音
+SWEET = (3, 4, 8, 9)                         # 双音优先三度、六度
+DOUBLE_CANDIDATES = 3
+HARMONY_TOP = 64                             # 附近没有旋律时合音不高于 E4（与填充一样）
 
 
 def written_position(perf: float, feel: str) -> float:
@@ -66,11 +85,6 @@ def _keep_per_beat(slots: list[tuple[float, float, int]], limit: int) -> list[tu
     beat = int(slots[0][0] + EPS)
     rank = sorted(slots, key=lambda x: (abs(x[0] - beat) > EPS, -x[1], x[0]))
     return sorted(rank[:limit])
-
-
-def section_bars(leadsheet: dict) -> list[int]:
-    """带段落标记的小节（0-based）。"""
-    return [i for i, b in enumerate(leadsheet["bars"]) if b.get("section")]
 
 
 def skeleton_notes(leadsheet: dict, profile: Profile) -> list[tuple[float, int]]:
@@ -177,93 +191,212 @@ def bass_events(leadsheet: dict, capo: int, profile: Profile) -> list[tuple[floa
     return out
 
 
-def _split_at_bars(items: list[tuple[float, float, list, bool]]) -> list[tuple[float, float, list, bool]]:
-    """跨小节线的音在小节线处切开，后半段写成连音线延续（有音时）或休止。"""
+def _chord_pcs(label: str) -> set[int]:
+    """和弦内音的音名（强力和弦：根音、五音）。"""
+    root, quality, _ = _parse(label)
+    if quality == "power":
+        return {root, (root + 7) % 12}
+    return theory.chord_tones(label)
+
+
+def _low(pc: int) -> int:
+    """音名 → 低音区间 E2–D#3 里的音高。"""
+    return BASS_LOW + ((pc - BASS_LOW) % 12)
+
+
+def _fifth(label: str) -> int:
+    root, quality, _ = _parse(label)
+    return (root + {"dim": 6, "min7b5": 6, "aug": 8}.get(quality, 7)) % 12
+
+
+def bass_line(leadsheet: dict, capo: int, profile: Profile) -> list[tuple[float, float, int, int | None]]:
+    """完整旋律指弹的低音 → [(位置, 时值, 指法调音高, 放不下时换的低音)]。第 1 拍弹和弦的低音（斜杠和弦弹斜杠低音）；
+    第 3 拍换和弦弹新和弦的低音；和弦不变且难度允许时弹五音（交替低音），五音放不下换根音（五音就是第 1 拍的低音时
+    直接弹根音）。每个低音响到下一个低音（第 3 拍没有低音时响满一小节，第 3 拍无和弦时响到第 3 拍）。"""
     out = []
-    for pos, dur, notes, tie in items:
-        while dur > EPS:
-            bar_end = (int(round(pos, 6) // 4) + 1) * 4.0
-            part = min(dur, bar_end - pos)
-            out.append((pos, part, notes, tie))
-            pos, dur, tie = bar_end, dur - part, bool(notes)
+    for i, b in enumerate(leadsheet["bars"]):
+        chords = [c if c == "N" else theory.transpose_label(c, -capo) for c in beat_chords(b)]
+        start = i * 4.0
+        first, third = chords[0], chords[2]
+        if first != "N":
+            low, root = _bass_and_fill(first)[0], _low(_parse(first)[0])
+            if third == first and profile.bass_on_beat3:
+                fifth = _low(_fifth(first))
+                out += [(start, 2.0, low, None),
+                        (start + 2, 2.0, root, None) if fifth == low else (start + 2, 2.0, fifth, root)]
+            else:
+                out.append((start, 4.0 if third == first else 2.0, low, None))
+        if third not in ("N", first):
+            out.append((start + 2, 2.0, _bass_and_fill(third)[0], None))
     return out
 
 
-def _voice_lines(n_bars: int, items: list[tuple[float, float, list, bool]], sections: list[str | None],
-                 feel: str, effects: dict[float, list[str]] | None = None, tie_effects: bool = False,
-                 note_effects: dict[float, dict[int, list[str]]] | None = None) -> list[str]:
-    """items：(记谱位置, 时值, [(弦, 品)], 是否连音线延续)（见 Placed.pieces）；按小节铺满（空隙补休止），
-    Shuffle 下按八分对切分。effects：{记谱位置: 拍效果}（和弦指型、力度），挂在该位置起音的音 / 休止上
-    （休止在这些位置切开，保证有一拍从这里开始）；tie_effects 时也挂在从该位置开始的连音线延续上
-    （单声部的旋律谱：小节以连音线开头时指型名没有别的地方挂）。
-    note_effects：{记谱音尾: {弦: 音符效果}}（击勾弦、滑音，见 atex 模块说明），挂在到这里结束的那一段上：
-    切开的音（跨小节线、换指型处）只挂在最后一段。"""
-    marks = {round(k, 6): v for k, v in (effects or {}).items()}
-    tails = {round(k, 6): v for k, v in (note_effects or {}).items()}
-    by_bar: dict[int, list] = {}
-    for item in sorted(_split_at_bars(items), key=lambda x: x[0]):
-        by_bar.setdefault(int(round(item[0], 6) // 4), []).append(item)
-    lines = []
-    for i in range(n_bars):
-        t, end, bar_items = i * 4.0, i * 4.0 + 4.0, []
+def _shape(label: str, profile: Profile) -> tuple | None:
+    """该按的和弦指型（与 shape_marks 同一个：代价最低的指型）的品位；无和弦 / 找不到时 None。"""
+    try:
+        options = voicings(label, profile) if label != "N" else []
+    except ValueError:
+        return None
+    return options[0].frets if options else None
 
-        def rests(a: float, b: float) -> None:
-            edges = [a, *sorted(k for k in marks if a + 1e-6 < k < b - 1e-6), b]
-            for x, y in zip(edges, edges[1:]):
-                bar_items.append(atex.Item(x - i * 4.0, y - x, [], marks.get(round(x, 6), ())))
 
-        for pos, dur, notes, tie in by_bar.get(i, []):
-            if pos > t + 1e-6:
-                rests(t, pos)
-            dur = min(dur, end - pos)
-            mark = marks.get(round(pos, 6), ()) if tie_effects or not tie else ()
-            bar_items.append(atex.Item(pos - i * 4.0, dur, notes, mark, tie=tie,
-                                       note_effects=tails.get(round(pos + dur, 6)) if notes else None))
-            t = pos + dur
-        if t < end - 1e-6:
-            rests(t, end)
-        lines.append(atex.bar_line(atex.voice_bar_tokens(bar_items, feel), i + 1, sections[i]))
-    return lines
+def _shape_pitches(frets: tuple | None) -> dict[int, int]:
+    """指型里发声的音：{音高: 弦}。"""
+    return {OPEN_STRINGS[s] + f: s + 1 for s, f in enumerate(frets or ()) if f is not None}
+
+
+def stab_pitches(label: str, frets: tuple | None, bass: int, ceiling: int | None) -> tuple[int, ...]:
+    """第 2、4 拍和弦短音的候选（偏好顺序）：和弦内音，高于 bass、比 ceiling（附近最低的旋律音）至少低 FILL_GAP 个半音，
+    附近没有旋律时不高于 E4。指型在 2–4 弦上的音在前，其次指型上别的音，再次指型外的和弦内音；同一类里高的在前。"""
+    top = HARMONY_TOP if ceiling is None else ceiling - FILL_GAP
+    shape, pcs = _shape_pitches(frets), _chord_pcs(label)
+    cands = [p for p in range(bass + 1, top + 1) if p % 12 in pcs]
+    return tuple(sorted(cands, key=lambda p: (not 2 <= shape.get(p, 0) <= 4, p not in shape, -p))[:STAB_CANDIDATES])
+
+
+def double_stop_pitches(label: str, frets: tuple | None, melody: int, bass: int | None) -> tuple[int, ...]:
+    """长旋律音下面的双音候选（偏好顺序）：和弦内音，比旋律音低 3–9 个半音、高于 bass；三度、六度在前，
+    其次落在指型上的，同一类里高的在前。"""
+    lo, hi = DOUBLE_GAP
+    shape, pcs = _shape_pitches(frets), _chord_pcs(label)
+    cands = [p for p in range(melody - hi, melody - lo + 1) if p % 12 in pcs and (bass is None or p > bass)]
+    return tuple(sorted(cands, key=lambda p: (melody - p not in SWEET, p not in shape, -p))[:DOUBLE_CANDIDATES])
+
+
+def _near_floor(line: list[Sung], t: float, dur: float) -> int | None:
+    """t 起的和弦短音附近（前半拍到这一拍结束）最低的旋律音：短音要低于它，旋律听起来才在上面。"""
+    return min((n.pitch for n in line if n.pos < t + max(1.0, dur) - EPS and n.pos + n.dur > t - 0.5 + EPS),
+               default=None)
+
+
+def _long_note(n: Sung, feel: str) -> bool:
+    """加双音的旋律音：起在拍点或摇摆反拍（Shuffle +⅔、直拍 +½），唱满 1 拍。"""
+    frac = n.perf % 1
+    offbeat = 2 / 3 if feel == "shuffle" else 0.5
+    on_grid = frac < EPS or frac > 1 - EPS or abs(frac - offbeat) < EPS
+    return on_grid and performed_position(n.pos + n.dur, feel) - n.perf > 1 - EPS
+
+
+def _sounding_at(items: list[tuple[float, float, int, int | None]], t: float) -> tuple | None:
+    """t 时正在响的低音（t 之前起音）。"""
+    return next((x for x in items if x[0] < t - EPS and t < x[0] + x[1] - EPS), None)
+
+
+def _full_voices(leadsheet: dict, capo: int, profile: Profile, octave: OctavePolicy,
+                 feel: str) -> tuple[list[Placed], list[Placed], list[Sung], list[tuple[float, str]]]:
+    """完整旋律的两个声部（见模块说明）→ (voice 1, voice 2, 旋律音（与 voice 1 一一对应）, 注释 [(记谱位置, 说明)])。
+    每个起音时刻（旋律、低音、短音）一个 FretEvent；还在响的旋律音 / 低音作为接着响的音放进去（held_*），
+    所以 Viterbi 不会把低音、合音放到旋律长音的弦上，旋律也尽量和响着的低音一起按得住。"""
+    line, dropped = sung_line(leadsheet, capo, octave)
+    n_bars = len(leadsheet["bars"])
+    labels = [c if c == "N" else theory.transpose_label(c, -capo) for b in leadsheet["bars"] for c in beat_chords(b)]
+    shapes = {c: _shape(c, profile) for c in set(labels)}
+    bass = bass_line(leadsheet, capo, profile)
+    stab = STAB.get(feel, 0.5)
+    attacks = {round(n.pos, 6): n for n in line}
+    stabs = {round(i * 4.0 + k, 6) for i in range(n_bars) for k in (1, 3)
+             if labels[i * 4 + k] != "N" and round(i * 4.0 + k, 6) not in attacks}
+    bass_at = {round(x[0], 6): x for x in bass}
+    changes = {float(k) for k in range(1, len(labels)) if labels[k] != labels[k - 1]}
+    times = sorted(set(attacks) | set(bass_at) | stabs)
+    events, plan = [], []
+    for t in times:
+        n, b = attacks.get(t), bass_at.get(t)
+        held = None if n else next((x for x in line if x.pos < t - EPS and t < x.pos + x.dur - EPS), None)
+        ring = None if b else _sounding_at(bass, t)
+        low = (b or ring or (None, None, None))[2]
+        label = labels[min(int(t + EPS), len(labels) - 1)]
+        harmony, take = (), 0
+        if t in stabs and low is not None:
+            harmony, take = stab_pitches(label, shapes[label], low, _near_floor(line, t, stab)), STAB_TAKE
+        elif n is not None and label != "N" and _long_note(n, feel):
+            harmony, take = double_stop_pitches(label, shapes[label], n.pitch, low), 1
+        mel = n or held
+        events.append(FretEvent(n.perf if n else performed_position(t, feel), None if mel is None else mel.pitch,
+                                low, legato=bool(n and n.legato), slide_out=bool(n and n.slide_out in SLIDE_OUT),
+                                harmony=harmony, harmony_max=take, shape=shapes[label],
+                                bass_alt=b[3] if b else None, held_melody=held is not None, held_bass=ring is not None))
+        plan.append((t, n, b))
+    assign_frets(events, profile)
+    v1, v2, notes = [], [], list(dropped)
+    sounding = None   # 正在响的低音
+    for (t, n, b), ev in zip(plan, events):
+        if n is not None:
+            v1.append(Placed(n.pos, n.dur, [ev.melody_pos]))
+            if ev.melody_pos is not None:
+                n.pitch = _pitch(ev.melody_pos)   # 降级（melody±12）后的实际指法调音高
+        if b is not None:
+            sounding = Placed(t, b[1], [None, ev.bass_pos]) if ev.bass_pos else None
+            v2 += [sounding] if sounding else []
+        elif ev.held_bass and ev.bass_pos is None and sounding is not None and sounding.holds(t):
+            sounding.cut(_on_beat_stop(sounding, t))
+        if ev.harmony_pos:   # 双音响到旋律音的音尾，遇到下一个短音或换和弦先停
+            end = min([x for x in stabs | changes if x > t + EPS] + [t + (n.dur if n else stab)])
+            v2.append(Placed(t, (stab if t in stabs else end - t), [*ev.harmony_pos, None]))
+        if ev.fallback:
+            notes.append((t, f"{ev.fallback} {_at(t)}"))
+    return v1, v2, line, notes
+
+
+def _on_third(x: float) -> bool:
+    frac = x % 1
+    return abs(frac - 1 / 3) < EPS or abs(frac - 2 / 3) < EPS
+
+
+def _one_grid(times: Iterable[float], feel: str) -> dict[float, float]:
+    """伴奏声部的边界（起音、止音）在同一拍里既有反拍八分（+½）又有三连音位置（+⅓、+⅔）时写不出来（要 1/6 拍）：
+    Shuffle 把这一拍的 +½ 记成 +⅔（演奏时间一样，见 performed_position）；直拍把 +⅓、+⅔ 提前到拍点
+    （伴奏在直拍里只会在三连音位置止音）。→ {原边界: 记谱边界}，只列要改的。"""
+    beats: dict[int, list[float]] = {}
+    for x in times:
+        beats.setdefault(int(np.floor(x + EPS)), []).append(x)
+    out = {}
+    for beat, xs in beats.items():
+        halves = [x for x in xs if abs(x - beat - 0.5) < EPS]
+        thirds = [x for x in xs if _on_third(x)]
+        if halves and thirds:
+            out.update({x: beat + 2 / 3 for x in halves} if feel == "shuffle" else {x: float(beat) for x in thirds})
+    return out
+
+
+def merged_pieces(items: list[Placed], cuts: Iterable[float] = (),
+                  feel: str = "straight") -> list[tuple[float, float, list, bool | frozenset]]:
+    """伴奏声部的音（可以互相重叠：低音响着时拍 2 的和弦短音）→ 按时间铺开的片段 [(位置, 时值, [(弦, 品)], 连音线)]，
+    在每个起音、止音处与 cuts（要挂指型名的位置）切开；同一拍里八分格与三连音格的边界统一到一种（_one_grid）。
+    连音线：True 全是接着响的音，False 全是新起音，frozenset = 接着响的那几根弦（同一拍里低音接着响、合音新起音，
+    见 atex.Item.held）。"""
+    raw = [(it.pos, it.end(k), w) for it in items for k, w in enumerate(it.where)
+           if w is not None and it.end(k) > it.pos + EPS]
+    grid = _one_grid([x for a, b, _ in raw for x in (a, b)], feel)
+    notes = [(grid.get(a, a), grid.get(b, b), w) for a, b, w in raw]
+    notes = [(a, b, w) for a, b, w in notes if b > a + EPS]
+    edges: list[float] = []
+    for x in sorted([x for a, b, _ in notes for x in (a, b)] + list(cuts)):
+        if not edges or x > edges[-1] + EPS:
+            edges.append(x)
+    out = []
+    for a, b in zip(edges, edges[1:]):
+        on = [(s, w) for s, e, w in notes if s < b - EPS and e > a + EPS]
+        if not on:
+            continue
+        held = frozenset(w[0] for s, w in on if s < a - EPS)
+        out.append((a, b - a, sorted(w for _, w in on), True if len(held) == len(on) else held or False))
+    return out
 
 
 def _starts_beat(pieces: list[tuple[float, float, list, bool]], x: float) -> bool:
     """声部在 x 处能挂拍效果：x 不在某个发声片段的中间，也不是连音线延续片段的起点（休止会在 x 处切开）。"""
     for pos, dur, notes, tie in pieces:
-        if notes and pos - EPS < x < pos + dur - EPS and (pos < x - EPS or tie):
+        if notes and pos - EPS < x < pos + dur - EPS and (pos < x - EPS or tie is True):
             return False
     return True
 
 
-def shape_marks(leadsheet: dict, capo: int, profile: Profile) -> tuple[dict[float, str], dict[str, tuple]]:
-    """指弹谱上该按的和弦指型：每小节第 1 拍都标；第 3 拍（低音所在）指型变了再标（无和弦之后重标）。
-    → ({记谱位置: 指型名}, {指型名: 和弦图品位（1 弦 → 6 弦）})。"""
-    marks: dict[float, str] = {}
-    diagrams: dict[str, tuple] = {}
-    last = None
-    for i, b in enumerate(leadsheet["bars"]):
-        chords = beat_chords(b)
-        for k in (0, 2):
-            if chords[k] == "N":
-                last = None
-                continue
-            try:
-                options = voicings(theory.transpose_label(chords[k], -capo), profile)
-            except ValueError:
-                continue
-            if not options:
-                continue
-            v = options[0]
-            if v.name != last or k == 0:   # 每小节第 1 拍都标（和弦没变也标），小节中间换了再标
-                marks[i * 4.0 + k] = v.name
-                diagrams.setdefault(v.name, v.frets)
-                last = v.name
-    return marks, diagrams
-
-
 @dataclass
 class Placed:
-    """声部里的一个音 / 和弦（记谱位置、时值，拍）。where：voice 1 为 [旋律]，voice 2 为 [填充, 低音]；None = 不弹。
-    stop：where 下标 → 这个音单独提前止音的位置（其余的音接着响，渲染成连音线延续）。moved：修补时已移过八度。"""
+    """声部里的一个音 / 和弦（记谱位置、时值，拍）。where：voice 1 为 [旋律]；voice 2 最后一个是低音，前面是填充 / 合音
+    （skeleton [填充, 低音]；full 的低音 [None, 低音]、合音 [合音…, None]，可以互相重叠）；None = 不弹。
+    stop：where 下标 → 这个音单独提前止音的位置（其余的音接着响，渲染成连音线延续）。moved：修补时已移过位置。"""
     pos: float
     dur: float
     where: list
@@ -299,16 +432,6 @@ class Placed:
         return out
 
 
-def _at(t: float) -> str:
-    """修补说明里的位置：小节内第几拍（1 起），八分格写 @2.5，三连音位置写 @4+⅓ / @4+⅔。"""
-    x = round(t % 4, 6)
-    beat = int(x)
-    for k, mark in ((1, "+⅓"), (2, "+⅔")):
-        if abs(x - beat - k / 3) < 1e-4:
-            return f"@{beat + 1}{mark}"
-    return f"@{x + 1:g}"
-
-
 def _strings(it: Placed) -> set[int]:
     return {w[0] for w in it.where if w is not None}
 
@@ -330,30 +453,43 @@ def _cut_note(it: Placed, k: int, t: float) -> None:
     it.stop = {j: e for j, e in it.stop.items() if e < it.pos + it.dur - EPS}
 
 
-def cut_same_string(v1: list[Placed], v2: list[Placed]) -> list[tuple[float, str]]:
+def _name(it: Placed, k: int, full: bool) -> str:
+    """voice 2 的 where[k] 叫什么：最后一个是低音，其余是填充（skeleton）/ 合音（full）。"""
+    return "bass" if k == len(it.where) - 1 else "harmony" if full else "fill"
+
+
+def cut_same_string(v1: list[Placed], v2: list[Placed], full: bool = False) -> list[tuple[float, str]]:
     """同一根弦不能一边按住一边再弹：低音 / 填充持续期间有旋律音弹在它的弦上 → 只截这根弦上的音（"fill cut" /
     "bass cut"），另一个音接着响（写成连音线延续）；旋律音持续期间有低音 / 填充弹在它的弦上：
     是填充 → 去掉该填充（旋律 > 低音 > 填充，进副歌的长音不能被填充截断）；是低音 → 旋律截止到该处。
-    返回 (记谱位置, 说明)。"""
+    full（完整旋律）：填充叫合音；旋律的时值不改，长音的弦上来了低音就去掉低音；伴奏声部自己的音（低音、合音互相重叠）
+    弹在还在响的音的弦上 → 截短先响的那个。返回 (记谱位置, 说明)。"""
     out = []
     for it in v2:
-        for k, name in ((0, "fill cut"), (1, "bass cut")):
-            w = it.where[k]
+        for k, w in enumerate(it.where):
             hit = None if w is None else min((o.pos for o in v1 if k in it.sounding(o.pos) and w[0] in _strings(o)),
                                              default=None)
             if hit is not None:
                 _cut_note(it, k, hit)
-                out.append((hit, f"{name} {_at(hit)} (same string)"))
+                out.append((hit, f"{_name(it, k, full)} cut {_at(hit)} (same string)"))
     for it in v1:
         mine = _strings(it)
         for o in sorted(v2, key=lambda o: o.pos):
-            if it.holds(o.pos) and o.where[0] is not None and o.where[0][0] in mine:
-                o.where[0] = None
-                out.append((o.pos, f"drop fill {_at(o.pos)} (same string)"))
+            for k, w in enumerate(o.where):
+                if it.holds(o.pos) and w is not None and w[0] in mine and (full or k < len(o.where) - 1):
+                    o.where[k] = None
+                    out.append((o.pos, f"drop {_name(o, k, full)} {_at(o.pos)} (same string)"))
         hit = min((o.pos for o in v2 if it.holds(o.pos) and mine & _strings(o)), default=None)
         if hit is not None:
             it.cut(hit)
             out.append((hit, f"melody cut {_at(hit)} (same string)"))
+    for it in v2 if full else []:
+        for k, w in enumerate(it.where):
+            hit = None if w is None else min((o.pos for o in v2 if k in it.sounding(o.pos) and w[0] in _strings(o)),
+                                             default=None)
+            if hit is not None:
+                _cut_note(it, k, hit)
+                out.append((hit, f"{_name(it, k, full)} cut {_at(hit)} (same string)"))
     return sorted(out)
 
 
@@ -361,9 +497,9 @@ def _pitch(w: tuple[int, int]) -> int:
     return OPEN_STRINGS[w[0] - 1] + w[1]
 
 
-def cut_crossings(v1: list[Placed], v2: list[Placed]) -> list[tuple[float, str]]:
+def cut_crossings(v1: list[Placed], v2: list[Placed], full: bool = False) -> list[tuple[float, str]]:
     """填充本来按整段持续期间的最低旋律音放低至少 3 个半音；但指法降级（如 melody-12）会把后面的旋律压下来。
-    低音 / 填充持续期间有旋律音不比它高出 3 个半音 → 截止到这个旋律音。返回 (记谱位置, 说明)。"""
+    低音 / 填充（合音）持续期间有旋律音不比它高出 3 个半音 → 截止到这个旋律音。返回 (记谱位置, 说明)。"""
     out = []
     for it in v2:
         hit = min((o.pos for o in v1 if o.where[0] is not None
@@ -371,7 +507,8 @@ def cut_crossings(v1: list[Placed], v2: list[Placed]) -> list[tuple[float, str]]
                   default=None)
         if hit is not None:
             it.cut(_on_beat_stop(it, hit))
-            out.append((hit, f"bass cut {_at(hit)} (crossing)"))
+            name = "bass" if it.where[-1] is not None else _name(it, 0, full)
+            out.append((hit, f"{name} cut {_at(hit)} (crossing)"))
     return out
 
 
@@ -408,19 +545,27 @@ def jump(v1: list[Placed], v2: list[Placed], t: float, feel: str) -> int:
     return abs(here[0] - hand(v1, v2, prev)[0])
 
 
-def _cut_held(items: list[Placed], t: float, voice2: bool = False) -> bool:
-    """截短第一个 t 之前起音、t 时仍有按弦音在响的音 / 和弦（伴奏的三连音位置提前到拍点）。"""
+def _cut_held(items: list[Placed], t: float, voice2: bool = False, role: str | None = None) -> bool:
+    """截短第一个 t 之前起音、t 时仍有按弦音在响的音 / 和弦（伴奏的三连音位置提前到拍点）。
+    role（完整旋律的伴奏）："bass" 只截低音、"harmony" 只截合音；None 整个截短。"""
     for it in items:
-        if any(_fretted(it.where[k]) for k in it.sounding(t)):
+        ks = [k for k in it.sounding(t) if _fretted(it.where[k])
+              and (role is None or (k == len(it.where) - 1) == (role == "bass"))]
+        if ks and role is None:
             it.cut(_on_beat_stop(it, t) if voice2 else t)
+        for k in ks if role else []:
+            _cut_note(it, k, t)
+        if ks:
             return True
     return False
 
 
-def _drop(v2: list[Placed], t: float, k: int) -> bool:
-    """去掉 t 时起音的按弦填充（k = 0）或按弦低音（k = 1）。"""
+def _drop(v2: list[Placed], t: float, bass: bool) -> bool:
+    """去掉 t 时起音的一个按弦伴奏音：bass 时去低音，否则去第一个按弦的填充 / 合音。"""
     for it in v2:
-        if abs(it.pos - t) < EPS and _fretted(it.where[k]):
+        ks = [len(it.where) - 1] if bass else range(len(it.where) - 1)
+        k = next((k for k in ks if _fretted(it.where[k])), None) if abs(it.pos - t) < EPS else None
+        if k is not None:
             it.where[k] = None
             return True
     return False
@@ -429,25 +574,36 @@ def _drop(v2: list[Placed], t: float, k: int) -> bool:
 Step = tuple[float, str, Callable[[list[Placed], list[Placed]], bool]]   # (修补位置, 说明, 动作(v1, v2) → 是否做了)
 
 
-def _steps_at(t: float) -> list[Step]:
-    """t 时的修补顺序：截短仍按着的低音 / 填充 → 截短仍按着的旋律 → 去掉 t 时起音的填充 → 去掉 t 时起音的低音。"""
+def _steps_at(t: float, full: bool = False) -> list[Step]:
+    """t 时的修补顺序：截短仍按着的低音 / 填充 → 截短仍按着的旋律 → 去掉 t 时起音的填充 → 去掉 t 时起音的低音。
+    full（完整旋律）：先动合音（去掉 t 时起音的合音 → 截短仍按着的合音），再截短仍按着的低音、去掉 t 时起音的低音；
+    旋律的时值不改。"""
+    if full:
+        return [(t, "drop harmony", lambda v1, v2: _drop(v2, t, False)),
+                (t, "harmony cut", lambda v1, v2: _cut_held(v2, t, True, "harmony")),
+                (t, "bass cut", lambda v1, v2: _cut_held(v2, t, True, "bass")),
+                (t, "drop bass", lambda v1, v2: _drop(v2, t, True))]
     return [(t, "bass cut", lambda v1, v2: _cut_held(v2, t, True)), (t, "melody cut", lambda v1, v2: _cut_held(v1, t)),
-            (t, "drop fill", lambda v1, v2: _drop(v2, t, 0)), (t, "drop bass", lambda v1, v2: _drop(v2, t, 1))]
+            (t, "drop fill", lambda v1, v2: _drop(v2, t, False)), (t, "drop bass", lambda v1, v2: _drop(v2, t, True))]
 
 
-def _shift_steps(t: float, prev: float | None) -> list[Step]:
+def _shift_steps(t: float, prev: float | None, full: bool = False) -> list[Step]:
     """换把的修补顺序：先截短（t 时的两步，再是前一个手上有音的起音 prev 时仍按着的低音 / 填充），
-    再去音（t 起音的填充、低音，然后 prev 起音的填充、低音）。"""
-    at_t = _steps_at(t)
+    再去音（t 起音的填充、低音，然后 prev 起音的填充、低音）。
+    full：t 与 prev 的合音（去掉、截短）都在前，再截短低音（t、prev）、去掉低音（t、prev）。"""
+    at_t = _steps_at(t, full)
     if prev is None:
         return at_t
+    if full:
+        at_prev = _steps_at(prev, True)
+        return at_t[:2] + at_prev[:2] + [at_t[2], at_prev[2], at_t[3], at_prev[3]]
     return (at_t[:2] + [(prev, "bass cut", lambda v1, v2: _cut_held(v2, prev, True))] + at_t[2:]
-            + [(prev, "drop fill", lambda v1, v2: _drop(v2, prev, 0)),
-               (prev, "drop bass", lambda v1, v2: _drop(v2, prev, 1))])
+            + [(prev, "drop fill", lambda v1, v2: _drop(v2, prev, False)),
+               (prev, "drop bass", lambda v1, v2: _drop(v2, prev, True))])
 
 
-def _repair_at(v1: list[Placed], v2: list[Placed], t: float) -> str | None:
-    return next((name for _, name, act in _steps_at(t) if act(v1, v2)), None)
+def _repair_at(v1: list[Placed], v2: list[Placed], t: float, full: bool = False) -> str | None:
+    return next((name for _, name, act in _steps_at(t, full) if act(v1, v2)), None)
 
 
 def _melody_room(it: Placed, w: tuple[int, int], v2: list[Placed]) -> bool:
@@ -461,10 +617,11 @@ def _melody_room(it: Placed, w: tuple[int, int], v2: list[Placed]) -> bool:
     return True
 
 
-def _move_octave(v1: list[Placed], v2: list[Placed], t: float, prev: float,
-                 max_fret: int) -> tuple[float, str] | None:
-    """(b) 最后一招：t 与 prev 之间的换把只涉及两个旋律音（没有低音 / 填充）时，把其中一个移八度（±12），
-    选让跳动缩得最多的那个（落到空弦则没有把位），品位须在 max_fret 以内。每个音最多移一次。返回 (位置, 说明)。"""
+def _move_melody(v1: list[Placed], v2: list[Placed], t: float, prev: float,
+                 max_fret: int, shifts: tuple[int, ...] = (12, -12)) -> tuple[float, str] | None:
+    """(b) 最后一招：t 与 prev 之间的换把只涉及两个旋律音（没有低音 / 填充）时，把其中一个移八度（shifts：±12），
+    选让跳动缩得最多的那个（落到空弦则没有把位），品位须在 max_fret 以内。每个音最多移一次。返回 (位置, 说明)。
+    shifts = (0,)（完整旋律：音高不能改）：只给它换一根弦（"refret"）。"""
     here, there = hand(v1, v2, t), hand(v1, v2, prev)
     b = next((it for it in _attacked(v1, t) if _fretted(it.where[0])), None)
     a = next((it for it in v1 if _fretted(it.where[0]) and (abs(it.pos - prev) < EPS or it.holds(prev))), None)
@@ -475,11 +632,11 @@ def _move_octave(v1: list[Placed], v2: list[Placed], t: float, prev: float,
     for it, other in ((b, a), (a, b)):
         if it.moved:
             continue
-        for shift in (12, -12):
+        for shift in shifts:
             pitch = _pitch(it.where[0]) + shift
             for s in range(1, 7):
                 w = (s, pitch - OPEN_STRINGS[s - 1])
-                if not 0 <= w[1] <= max_fret or not _melody_room(it, w, v2):
+                if w == it.where[0] or not 0 <= w[1] <= max_fret or not _melody_room(it, w, v2):
                     continue
                 dist = abs(w[1] - other.where[0][1]) if w[1] > 0 else 0
                 key = (dist, max(0, s - 3), w[1])
@@ -489,18 +646,18 @@ def _move_octave(v1: list[Placed], v2: list[Placed], t: float, prev: float,
         return None
     _, it, w, shift = best
     it.where[0], it.moved = w, True
-    return it.pos, f"melody{shift:+d}"
+    return it.pos, f"melody{shift:+d}" if shift else "refret"
 
 
 def _repair_shift(v1: list[Placed], v2: list[Placed], t: float, max_fret: int,
-                  touched: set[float], feel: str) -> tuple[float, str] | None:
+                  touched: set[float], feel: str, full: bool = False) -> tuple[float, str] | None:
     """按 _shift_steps 的顺序，先取第一个能让模型里的跳动（jump）变小的一步；都不能时取第一个做得了的
-    （为后面的步骤让路）；什么都做不了时 (b) 移旋律八度。前一个起音本轮已经改过的留到下一轮。"""
+    （为后面的步骤让路）；什么都做不了时 (b) 移旋律八度（full：给旋律音换弦）。前一个起音本轮已经改过的留到下一轮。"""
     prev = previous_hand(v1, v2, t)
     if prev is not None and prev in touched:
         return None
     old, first = jump(v1, v2, t, feel), None
-    for at, name, act in _shift_steps(t, prev):
+    for at, name, act in _shift_steps(t, prev, full):
         trial = copy.deepcopy((v1, v2))
         if not act(*trial):
             continue
@@ -511,7 +668,7 @@ def _repair_shift(v1: list[Placed], v2: list[Placed], t: float, max_fret: int,
     if first is not None:
         first[2](v1, v2)
         return first[0], first[1]
-    return None if prev is None else _move_octave(v1, v2, t, prev, max_fret)
+    return None if prev is None else _move_melody(v1, v2, t, prev, max_fret, (0,) if full else (12, -12))
 
 
 def attack_positions(v1: list[Placed], v2: list[Placed], feel: str) -> list[tuple[float, float]]:
@@ -528,7 +685,7 @@ def written_at(perf: float, attacks: list[tuple[float, float]], feel: str) -> fl
 
 
 def repair(v1: list[Placed], v2: list[Placed], violations: Iterable[Violation], feel: str,
-           max_fret: int, max_shift: int | None = None) -> list[tuple[float, str]]:
+           max_fret: int, max_shift: int | None = None, full: bool = False) -> list[tuple[float, str]]:
     """按自检违规修补（就地修改 v1 / v2）。Violation.start 是演奏时间，先换回记谱位置 t（本轮修补之前渲染出来的
     起音里在这个时刻起音的那个，见 written_at）。每个 t 每轮只修一处：
     - 跨度 / 手指数：依次 1. 截短 t 之前起音、t 时仍按着的低音 / 填充；2. 截短 t 时仍按着的旋律音；
@@ -536,6 +693,7 @@ def repair(v1: list[Placed], v2: list[Placed], violations: Iterable[Violation], 
     - 换把：同样的顺序，但截短之后先截短前一个手上有音的起音 t′ 时仍按着的低音 / 填充（宁可截短也不丢新起音），
       去音之后再去掉 t′ 起音的填充、低音；优先取能缩小跳动的一步（见 _repair_shift），
       都做不了时 (b) 把 t 或 t′ 的旋律音移八度（melody±12）。
+    full（完整旋律）：合音先丢、旋律不截短、不移八度（顺序见 _steps_at / _shift_steps，(b) 改成给旋律音换弦）。
     只动按弦音（空弦不占手型），只修手型类规则。违规来自本轮修补之前的文本：给了 max_shift 时，
     本轮前面的修补已让 t 的跳动 ≤ max_shift 的换把不再修（免得白白去音）。返回 (修补位置, 说明)；空表示无可修。"""
     done, seen, touched = [], set(), set()
@@ -548,9 +706,9 @@ def repair(v1: list[Placed], v2: list[Placed], violations: Iterable[Violation], 
         if v.rule == "shift":
             if max_shift is not None and jump(v1, v2, t, feel) <= max_shift:
                 continue
-            found = _repair_shift(v1, v2, t, max_fret, touched, feel)
+            found = _repair_shift(v1, v2, t, max_fret, touched, feel, full)
         else:
-            what = _repair_at(v1, v2, t)
+            what = _repair_at(v1, v2, t, full)
             found = (t, what) if what else None
         if found:
             touched.add(found[0])
@@ -558,24 +716,9 @@ def repair(v1: list[Placed], v2: list[Placed], violations: Iterable[Violation], 
     return done
 
 
-def annotate(lines: list[str], remarks: dict[int, list[str]]) -> list[str]:
-    """把降级 / 修补说明接到对应小节（0-based）的 `// bar N ...` 注释行末尾。"""
-    out = []
-    for i, line in enumerate(lines):
-        if remarks.get(i):
-            head, body = line.split("\n", 1)
-            line = head + "".join(f" · {r}" for r in remarks[i]) + "\n" + body
-        out.append(line)
-    return out
-
-
-def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
-                    check: Callable[[str], list[Violation]] | None = None, octave: OctavePolicy = "song") -> str:
-    """check：自检（alphaTex → 违规列表）。给出时渲染后按违规修补、重新渲染，最多 10 轮。
-    octave：旋律八度策略（song.yaml 的 overrides.melody_octave，见 capo.octave_plan）。
-    谱上在低音声部标出该按的和弦指型（附和弦图）；旋律 f、伴奏 mf：试听时旋律稍突出（伴奏再轻会让与原曲器乐分轨的和声相似度下降）。"""
-    profile = effective_profile(profile, capo)
-    feel = leadsheet.get("feel", "straight")
+def _skeleton_voices(leadsheet: dict, capo: int, profile: Profile,
+                     octave: OctavePolicy) -> tuple[list[Placed], list[Placed], list[tuple[float, str]]]:
+    """骨架写法的两个声部 → (voice 1, voice 2, 注释 [(记谱位置, 说明)])。"""
     n_bars = len(leadsheet["bars"])
     mel = melody_line(leadsheet, capo, profile, octave)
     items = []
@@ -592,15 +735,42 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
     at = {e.start: e for e in events}
     v1 = [Placed(pos, d, [at[pos].melody_pos]) for pos, d, _ in items]
     v2 = [Placed(pos, d, [at[pos].fill_pos, at[pos].bass_pos]) for pos, d, _, _ in bass]
+    return v1, v2, [(e.start, f"{e.fallback} {_at(e.start)}") for e in events if e.fallback]
+
+
+def _glides(line: list[Sung], v1: list[Placed]) -> dict[float, dict[int, list[str]]]:
+    """完整旋律的音符效果（melody.note_effects：同弦连奏 h / sl、尾滑 sod / sou），按 voice 1 当前的指法算。"""
+    for n, it in zip(line, v1):
+        n.where = it.where[0]
+    return note_effects(line)
+
+
+def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
+                    check: Callable[[str], list[Violation]] | None = None, octave: OctavePolicy = "song",
+                    style: str = "full") -> str:
+    """check：自检（alphaTex → 违规列表）。给出时渲染后按违规修补、重新渲染，最多 10 轮。
+    octave：旋律八度策略（song.yaml 的 overrides.melody_octave，见 capo.octave_plan）。
+    style：full（默认，完整旋律 + 交替低音 + 合音）/ skeleton（骨架旋律 + 低音与填充），见模块说明。
+    谱上标出该按的和弦指型（附和弦图）；旋律 f、伴奏 mf：试听时旋律稍突出（伴奏再轻会让与原曲器乐分轨的和声相似度下降）。"""
+    if style not in FINGER_STYLES:
+        raise ValueError(f"finger style must be one of {FINGER_STYLES}, got {style!r}")
+    profile = effective_profile(profile, capo)
+    feel = leadsheet.get("feel", "straight")
+    n_bars = len(leadsheet["bars"])
+    full = style == "full"
+    if full:
+        v1, v2, line, found = _full_voices(leadsheet, capo, profile, octave, feel)
+    else:
+        (v1, v2, found), line = _skeleton_voices(leadsheet, capo, profile, octave), []
     remarks: dict[int, list[str]] = {}
 
     def remark(found: Iterable[tuple[float, str]]) -> None:
         for t, text in found:
             remarks.setdefault(int(t // 4), []).append(text)
 
-    remark((e.start, f"{e.fallback} {_at(e.start)}") for e in events if e.fallback)
-    remark(cut_same_string(v1, v2))
-    remark(cut_crossings(v1, v2))
+    remark(found)
+    remark(cut_same_string(v1, v2, full))
+    remark(cut_crossings(v1, v2, full))
     sections = [b.get("section") for b in leadsheet["bars"]]
     marks, diagrams = shape_marks(leadsheet, capo, profile)
     head = atex.header(title, leadsheet["tempo_bpm"], capo, feel, "score tabs", diagrams, key=atex.leadsheet_key(leadsheet))
@@ -614,8 +784,9 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
             section_start = pos % 4 == 0 and bool(sections[int(pos // 4)])
             target = effects1 if _starts_beat(pieces1, pos) and not section_start else effects2
             target.setdefault(pos, []).insert(0, f"ch {atex.quote(name)}")
-        lines1 = _voice_lines(n_bars, pieces1, sections, feel, effects1)
-        lines2 = _voice_lines(n_bars, [p for it in v2 for p in it.pieces()], [None] * n_bars, feel, effects2)
+        lines1 = _voice_lines(n_bars, pieces1, sections, feel, effects1, note_effects=_glides(line, v1) if full else None)
+        lines2 = _voice_lines(n_bars, merged_pieces(v2, effects2, feel), [None] * n_bars, feel, effects2,
+                              tie_effects=True)
         return atex.document(head, [annotate(lines1, remarks), lines2])
 
     text = render()
@@ -623,7 +794,7 @@ def generate_finger(leadsheet: dict, capo: int, profile: Profile, title: str,
         found = check(text)
         if not found:
             break
-        done = repair(v1, v2, found, feel, profile.max_fret, profile.max_shift)
+        done = repair(v1, v2, found, feel, profile.max_fret, profile.max_shift, full)
         if not done:
             break
         remark(done)

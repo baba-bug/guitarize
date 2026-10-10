@@ -105,3 +105,73 @@ def test_slide_out_note_prefers_a_fretted_position():
     assert assign_frets([FretEvent(0, 64, None, slide_out=True)], MID)[0].melody_pos == (2, 5)
     evs = assign_frets([FretEvent(0, 62, None), FretEvent(1, 64, None, slide_out=True)], MID)
     assert [e.melody_pos for e in evs] == [(2, 3), (2, 5)]
+
+
+# ---------- 合音（harmony）、接着响的音（held_*）、替代低音（bass_alt）、和弦指型（shape） ----------
+
+C_SHAPE = (0, 1, 0, 2, 3, None)
+G_SHAPE = (3, 0, 0, 0, 2, 3)
+
+
+def test_harmony_sits_between_melody_and_bass_on_the_shape():
+    # 拍 2 的合音：C 指型上的 C4（2 弦 1 品）+ G3（3 弦空弦），旋律 E4 在 1 弦、低音 C3 在 5 弦 3 品
+    ev = assign_frets([FretEvent(0, 64, 48, harmony=(60, 55, 52), harmony_max=2, shape=C_SHAPE)], MID)[0]
+    assert ev.fallback is None
+    assert ev.melody_pos == (1, 0) and ev.harmony_pos == [(2, 1), (3, 0)] and ev.bass_pos == (5, 3)
+
+
+def test_harmony_is_dropped_before_the_bass():
+    # G#2 只能弹在低音那根 6 弦上：合音放不下就不弹，旋律和低音照旧，不算降级
+    ev = assign_frets([FretEvent(0, 65, 41, harmony=(44,), harmony_max=1)], MID)[0]
+    assert ev.harmony_pos == [] and ev.melody_pos == (1, 1) and ev.bass_pos == (6, 1) and ev.fallback is None
+
+
+def test_harmony_is_kept_when_bass_moves_up_an_octave():
+    ev = assign_frets([FretEvent(0, 71, 43, harmony=(59,), harmony_max=1)], MID)[0]
+    assert ev.fallback == "bass+12"
+    assert ev.melody_pos == (1, 7) and ev.harmony_pos == [(2, 0)] and ev.bass_pos == (3, 0)
+
+
+def test_held_melody_keeps_its_place_and_its_string():
+    # D4 在 2 弦 3 品唱过第 2 拍：拍 2 的合音不能用 2 弦（B3 空弦），改取 G3 + D3 两根空弦
+    evs = assign_frets([FretEvent(0, 62, None),
+                        FretEvent(1, 62, None, held_melody=True, harmony=(59, 55, 50), harmony_max=2,
+                                  shape=G_SHAPE)], MID)
+    assert evs[0].melody_pos == evs[1].melody_pos == (2, 3)
+    assert evs[1].harmony_pos == [(3, 0), (4, 0)]
+
+
+def test_held_bass_rings_until_the_melody_needs_the_hand():
+    # G2（6 弦 3 品）接着响：E4 / G4 都能和它一起按；B4 要 1 弦 7 品，跨度放不下 → 低音在这里止音
+    evs = assign_frets([FretEvent(0, None, 43), FretEvent(1, 64, 43, held_bass=True),
+                        FretEvent(1.5, 67, 43, held_bass=True), FretEvent(2, 71, 43, held_bass=True),
+                        FretEvent(3, 69, 43, held_bass=True)], MID)
+    assert [e.bass_pos for e in evs] == [(6, 3), (6, 3), (6, 3), None, None]
+    assert evs[2].melody_pos == (1, 3) and evs[3].melody_pos == (1, 7)
+    assert [e.fallback for e in evs] == [None, None, None, "bass cut", None]   # 止过音的低音不再响
+
+
+def test_held_bass_pitch_follows_its_attack():
+    # 起音时低音升了八度（bass+12）：接着响的事件沿用实际弹的音高与位置
+    evs = assign_frets([FretEvent(0, 71, 43), FretEvent(1, 72, 43, held_bass=True)], MID)
+    assert evs[0].fallback == "bass+12" and evs[1].bass_pos == evs[0].bass_pos == (3, 0)
+
+
+def test_alternate_bass_falls_back_to_the_root():
+    # 第 3 拍的五音 F#2（6 弦 2 品）和旋律 C5（1 弦 8 品）跨度放不下 → 先换根音 B2（6 弦 7 品），不移八度
+    ev = assign_frets([FretEvent(0, 72, 42, bass_alt=47)], MID)[0]
+    assert ev.fallback == "bass root" and ev.bass_pos == (6, 7)
+
+
+def test_shape_positions_are_preferred_for_accompaniment():
+    from guitarize.arrange.fretting import _shape_bonus
+    assert _shape_bonus([(2, 1), (3, 0), (6, 3)], C_SHAPE) == 2      # 6 弦在 C 指型里不弹
+    assert _shape_bonus([(2, 1)], None) == 0
+
+
+def test_combos_respect_the_finger_count():
+    # 初级 3 根手指：四个不同品位的按弦音放不下
+    from guitarize.arrange.fretting import _candidates
+    four = ((1, 1), (2, 2), (3, 2), (4, 3))                          # 1–2–2–3 品：要 4 根手指
+    assert four in _candidates([65, 61, 57, 53], MID)
+    assert four not in _candidates([65, 61, 57, 53], load_profile("beginner"))

@@ -355,8 +355,10 @@ def test_refret_keeps_a_legato_pair_on_one_string():
     assert M.shift_breaks(line, MID.max_shift) == [] and line[1].where == (3, 9)
 
 
-def test_fingerstyle_ignores_the_flags():
+def test_skeleton_fingerstyle_ignores_the_flags():
+    # 骨架指弹不写滑音（完整旋律的指弹照旋律谱写，见 test_finger）
     from guitarize.arrange.finger import generate_finger
     mel = [(0, 1, 62, {}), (1, 1, 64, L), (2, 2, 67, {"slide_out": "down"})]
     ls = _sheet([_flagged(0, mel, "G"), _flagged(1, [(0, 2, 69, {}), (2, 2, 71, L)], "D")], feel="straight")
-    assert generate_finger(ls, 0, MID, "T") == generate_finger(_strip(ls), 0, MID, "T")
+    assert (generate_finger(ls, 0, MID, "T", style="skeleton")
+            == generate_finger(_strip(ls), 0, MID, "T", style="skeleton"))

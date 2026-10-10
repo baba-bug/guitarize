@@ -46,7 +46,7 @@ def test_b7_over_d_sharp_regression_has_no_violations_after_repair():
         calls.append(self_check(text, MID, "finger"))
         return calls[-1]
 
-    text = generate_finger(_regression_sheet(), 4, MID, "T", check=check)
+    text = generate_finger(_regression_sheet(), 4, MID, "T", check=check, style="skeleton")
     assert [(v.bar, v.rule) for v in calls[0]] == [(2, "span")]      # 修补前：第 2 小节第 2 拍跨度超限
     assert calls[-1] == [] and self_check(text, MID, "finger") == []
     assert "// bar 2 · bass cut @2 (span)" in text
@@ -70,6 +70,19 @@ def test_arrange_prints_self_check(demo_song, capsys):
         assert main(["--songs-dir", songs, "arrange", "demo", "--arr", arr, "--force"]) == 0
     out = capsys.readouterr().out
     assert out.count("自检：0 处违规") == 2
+
+
+def test_arrange_writes_the_finger_style_from_song_yaml(demo_song, monkeypatch):
+    from guitarize.arrange import pipeline
+
+    seen, real = [], pipeline.generate_finger
+    monkeypatch.setattr(pipeline, "generate_finger", lambda *a, **k: seen.append(k["style"]) or real(*a, **k))
+    songs = str(demo_song.root.parent)
+    assert main(["--songs-dir", songs, "arrange", "demo", "--arr", "finger", "--force"]) == 0
+    demo_song.config.write_text(demo_song.config.read_text(encoding="utf-8") + "\noverrides: {finger_style: skeleton}\n",
+                                encoding="utf-8")
+    assert main(["--songs-dir", songs, "arrange", "demo", "--arr", "finger", "--force"]) == 0
+    assert seen == ["full", "skeleton"]
 
 
 def test_arrange_lists_violations_without_failing(demo_song, capsys, monkeypatch):
@@ -106,12 +119,26 @@ def test_fill_cut_then_shift_is_repaired_and_keeps_the_beat3_bass():
         calls.append(self_check(text, MID, "finger"))
         return calls[-1]
 
-    text = generate_finger(capo4_bar12_leadsheet(), 4, MID, "T", check=check)
+    text = generate_finger(capo4_bar12_leadsheet(), 4, MID, "T", check=check, style="skeleton")
     assert [(v.bar, v.rule) for v in calls[0]] == [(1, "shift")]
     assert calls[-1] == [] and len(calls) == 2
     assert "// bar 1 [サビ] · fill cut @2 (same string) · bass cut @2.5 (shift)" in text
     bar = text.split("\\voice")[2].split("// bar 1\n")[1].splitlines()[0]
     assert re.sub(r' \{(?:ch "[^"]*"\s*)?(?:dy \w+)?\}', "", bar) == "(0.2 1.4).4 -.4.8 r.8 (0.2 6.5).2 |"
+
+
+@pytest.mark.parametrize("sheet", [_regression_sheet, capo4_bar12_leadsheet])
+def test_full_style_regressions_end_with_no_violations(sheet):
+    # 同样的两段（B7/D# 低音 + 1 弦 5–6 品的旋律；空弦填充弦上的旋律）用完整旋律写：修补后 0 违规，旋律音一个不少
+    calls = []
+
+    def check(text):
+        calls.append(self_check(text, MID, "finger"))
+        return calls[-1]
+
+    text = generate_finger(sheet(), 4, MID, "T", check=check)
+    assert calls[-1] == [] and self_check(text, MID, "finger") == []
+    assert "melody cut" not in text and "melody+12" not in text and "melody-12" not in text
 
 
 @pytest.mark.parametrize("error", [

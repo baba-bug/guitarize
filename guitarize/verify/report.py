@@ -15,7 +15,7 @@ import numpy as np
 import soundfile as sf
 
 from .. import theory
-from ..config import ARR_NAMES, SongConfig, load_profile, melody_source
+from ..config import ARR_NAMES, SongConfig, finger_style, load_profile, melody_source
 from ..paths import SongPaths
 from ..render import alphatab
 from ..render.synth import midi_to_wav
@@ -63,9 +63,10 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
     violations = check_playability(score, profile, arr)
     leadsheet = _load_json(paths.leadsheet_json)
     vocals = melody_reference(paths, cfg.overrides) if arr == "melody" else None   # 只有旋律谱对照人声
+    style = finger_style(cfg.overrides)   # 指弹旋律的评法跟着写法走
     bars = metrics.score_bars(score, leadsheet, arr, synth_wav=synth, harmonic_wav=paths.stem("harmonic"),
                               onset_wavs=(paths.stem("drums"), paths.stem("guitar")), vocal_wav=vocals,
-                              low_conf=cfg.thresholds.melody_conf_flag)
+                              low_conf=cfg.thresholds.melody_conf_flag, finger_style=style)
     summary = metrics.summarize(
         bars, violations, cfg.thresholds, arr,
         arrangement_bars=len(score.bars),
@@ -75,6 +76,8 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
     problems = metrics.problem_bars(bars, violations, cfg.thresholds, arr)
     if arr == "melody":
         summary["vocal_reference"] = vocals.name   # 相似度、试听片段、音高图对照的分轨
+    if arr == "finger":
+        summary["finger_style"] = style
 
     root = paths.report_root(arr)
     out = next_iter_dir(root)
@@ -344,10 +347,11 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
                  ("需人耳确认（调外 / 低置信音所在小节）", "ear_check_bars", False, "转人耳确认")]
     else:
         rows.append(("和弦一致率", "chord_agreement", True, f"≥ {s['chord_target']:.0%}"))
+    skeleton = s.get("finger_style") == "skeleton"
     if arr == "finger":
         rows += [("旋律 F1", "melody_f1", False, f"≥ {s['melody_target']:.2f}"),
                  ("旋律精确率", "melody_precision", True, ""),
-                 ("旋律召回率（骨架音）", "melody_recall", True, ""),
+                 (f"旋律召回率（{'骨架音' if skeleton else '全部参考音'}）", "melody_recall", True, ""),
                  ("八度完全正确", "melody_octave_exact", True, "")]
     if arr != "melody":
         rows.append(("和弦标记不符", "chord_mark_issues", False, "0" if arr == "strum" else "仅报告"))
@@ -379,7 +383,7 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
                 lines.append(f"- 和弦一致 {b.chord_agree}/{b.chord_total}")
                 lines += [f"  - {x}" for x in b.chord_issues]
             if b.mel_f1 is not None:
-                cover = "覆盖" if arr == "melody" else "骨架覆盖"
+                cover = "骨架覆盖" if arr == "finger" and skeleton else "覆盖"
                 lines.append(f"- 旋律 F1 {b.mel_f1:.2f}（命中 {b.mel_hit}/{b.mel_est}，{cover} {b.mel_found}/{b.mel_ref}）")
                 lines += [f"  - {x}" for x in b.mel_issues]
             elif arr == "melody" and b.mel_est:   # 参考没有旋律：F1 无定义，谱上的音都列出来

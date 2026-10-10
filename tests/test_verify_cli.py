@@ -21,7 +21,17 @@ def test_verify_twice_creates_iterations(demo_song, capsys):
     assert cells[1] == "100.0%" and cells[2] == cells[1]  # 上一轮 = 本轮
     assert "指弹校验报告" in report and "✅ 达标" in report
     assert "小节数（编配 / 参考）" in report
+    assert "旋律召回率（全部参考音）" in report and s["finger_style"] == "full"   # 默认完整旋律：考每一个音
     assert "指弹校验报告" in capsys.readouterr().out
+
+
+def test_skeleton_finger_style_is_verified_against_the_skeleton(demo_song):
+    cfg = demo_song.config.read_text(encoding="utf-8")
+    demo_song.config.write_text(cfg + "\noverrides: {finger_style: skeleton}\n", encoding="utf-8")
+    assert main(["--songs-dir", str(demo_song.root.parent), "verify", "demo", "--arr", "finger"]) == 0
+    it = demo_song.report_root("finger") / "iter-01"
+    assert json.loads((it / "scores.json").read_text(encoding="utf-8"))["summary"]["finger_style"] == "skeleton"
+    assert "旋律召回率（骨架音）" in (it / "report.md").read_text(encoding="utf-8")
 
 
 def test_verify_flags_problem_bar_with_snippet(demo_song):

@@ -15,6 +15,15 @@ def test_song_paths(tmp_path: Path):
     assert p.out("finger", "pdf") == tmp_path / "demo" / "out" / "finger.pdf"
 
 
+def test_finger_style_defaults_to_the_full_melody():
+    import pytest
+
+    from guitarize.config import finger_style
+    assert finger_style({}) == "full" and finger_style({"finger_style": "skeleton"}) == "skeleton"
+    with pytest.raises(ValueError, match="finger_style"):
+        finger_style({"finger_style": "sparse"})
+
+
 def test_load_profile_intermediate():
     p = load_profile("intermediate")
     assert (p.max_span, p.max_fingers, p.max_fret, p.max_plucks, p.max_shift) == (3, 4, 12, 4, 4)

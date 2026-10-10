@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Iterable, Mapping, Sequence
+from typing import Collection, Iterable, Mapping, Sequence
 
 from .. import theory
 
@@ -48,22 +48,23 @@ NoteEffects = Mapping[int, Sequence[str]]   # {弦: 音符效果}，如 {3: ["h"
 
 
 def notes_token(notes: Sequence[tuple[int, int]], tie: bool = False, dead: bool = False,
-                effects: NoteEffects | None = None) -> str:
+                effects: NoteEffects | None = None, held: Collection[int] = ()) -> str:
     """[(弦, 品)] → '3.1' / '(3.6 2.5)'；空 → 'r'。tie 写成连音线延续 '-.弦'，dead 写成闷音 'x.弦'。
+    held：只有这些弦上的音是连音线延续（同一拍里别的音照常起音，'(0.2 0.3 -.6)'：低音接着响、新拨两个合音）。
     effects：{弦: 音符效果}，写在该弦的音后面（'5.3{h}'、'(5.3{h} 3.2)'），见模块说明。"""
     if not notes:
         return "r"
     effects = effects or {}
-    parts = [f"{'-' if tie else ('x' if dead else fret)}.{string}"
+    parts = [f"{'-' if tie or string in held else ('x' if dead else fret)}.{string}"
              + ("{" + " ".join(effects[string]) + "}" if effects.get(string) else "") for string, fret in notes]
     return parts[0] if len(parts) == 1 else "(" + " ".join(parts) + ")"
 
 
 def beat_tokens(notes: Sequence[tuple[int, int]], length: float, effects: Iterable[str] = (),
                 dead: bool = False, tie: bool = False, tuplet: bool = False,
-                note_effects: NoteEffects | None = None) -> list[str]:
+                note_effects: NoteEffects | None = None, held: Collection[int] = ()) -> list[str]:
     """一个音 / 和弦 / 休止持续 length 拍 → 拍子记号列表。需要多个时值时，后续部分用连音线接上（休止、闷音直接拆分）。
-    tie=True 表示整段都是前一个音的延续（第一个记号也写成连音线）。
+    tie=True 表示整段都是前一个音的延续（第一个记号也写成连音线）；held 只让这些弦的音在第一个记号里写成连音线。
     tuplet=True：这一段在三连音拍里（见 split_triplet），记号带 {tu 3}。
     effects 是拍效果，挂在第一个记号上；note_effects（{弦: 音符效果}）属于音尾，挂在最后一个记号上。"""
     out = []
@@ -73,7 +74,7 @@ def beat_tokens(notes: Sequence[tuple[int, int]], length: float, effects: Iterab
     for i, (code, dotted, tu) in enumerate(parts):
         eff = (first if i == 0 else []) + (["d"] if dotted else []) + ([TUPLET] if tu else [])
         tok = notes_token(notes, tie=(tie or i > 0) and bool(notes) and not dead, dead=dead,
-                          effects=note_effects if i == len(parts) - 1 else None)
+                          effects=note_effects if i == len(parts) - 1 else None, held=held)
         out.append(f"{tok}.{code}" + (" {" + " ".join(eff) + "}" if eff else ""))
     return out
 
@@ -82,6 +83,7 @@ def beat_tokens(notes: Sequence[tuple[int, int]], length: float, effects: Iterab
 class Item:
     """一个声部一小节里的一个音 / 和弦 / 休止（小节内记谱位置，拍）。
     tie=True：没有新的起音，notes 是前面某个和弦里接着响的那几个音（连音线延续，可以只是和弦的一部分）。
+    held：tie=False 时，notes 里这些弦上的音是接着响的（连音线延续），其余照常起音；切分后的后续片段整个是连音线。
     tuplet=True：在三连音拍里（时值 1/3 或 2/3 拍，写成 {tu 3}），见 split_triplets。
     effects：拍效果，切分时留在第一段；note_effects：{弦: 音符效果}（音尾），切分时只留在最后一段。"""
     start: float
@@ -92,6 +94,7 @@ class Item:
     tie: bool = False
     tuplet: bool = False
     note_effects: NoteEffects | None = None
+    held: frozenset = frozenset()
 
 
 def _on_third(x: float) -> bool:
@@ -122,7 +125,7 @@ def split_triplets(items: Sequence[Item]) -> list[Item]:
             tuplet = int(a + 1e-6) in beats
             tail = it.note_effects if k == last else None
             if k == 0:
-                out.append(Item(a, b - a, it.notes, it.effects, it.dead, it.tie, tuplet, tail))
+                out.append(Item(a, b - a, it.notes, it.effects, it.dead, it.tie, tuplet, tail, it.held))
             else:
                 notes = [] if it.dead else it.notes
                 out.append(Item(a, b - a, notes, (), False, bool(notes), tuplet, tail if notes else None))
@@ -160,7 +163,8 @@ def split_for_swing(items: Sequence[Item], feel: str) -> list[tuple[Item, bool]]
         edges = [it.start, *inner, it.start + it.length]
         for k, (a, b) in enumerate(zip(edges, edges[1:])):
             out.append((Item(a, b - a, it.notes, list(it.effects) if k == 0 else [], it.dead, it.tie,
-                             note_effects=it.note_effects if k == len(edges) - 2 else None), k > 0))
+                             note_effects=it.note_effects if k == len(edges) - 2 else None,
+                             held=it.held if k == 0 else frozenset()), k > 0))
     return out
 
 
@@ -173,7 +177,7 @@ def voice_bar_tokens(items: Sequence[Item], feel: str) -> list[str]:
             tokens += beat_tokens([], piece.length)
         else:
             tokens += beat_tokens(piece.notes, piece.length, piece.effects, dead=piece.dead, tie=cont or piece.tie,
-                                  tuplet=piece.tuplet, note_effects=piece.note_effects)
+                                  tuplet=piece.tuplet, note_effects=piece.note_effects, held=piece.held)
     return tokens
 
 

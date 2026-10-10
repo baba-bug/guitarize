@@ -15,7 +15,7 @@
   移了不同的八度时照常拨弦。尾滑（slide_out）写成 sod / sou（连到下一个音时不写：音高的变化已经写了；
   空弦滑不出去，指法尽量按弦，还是空弦就不写）。
   效果都挂在前一个音的最后一段（连音线延续）上，紧挨着下一个音（见 atex 模块说明）。
-- 谱面：五线谱 + 六线谱、调号、力度 f；每小节第 1 拍标和弦指型（finger.shape_marks，附和弦图），
+- 谱面：五线谱 + 六线谱、调号、力度 f；每小节第 1 拍标和弦指型（layout.shape_marks，附和弦图），
   小节中间换指型再标；变调夹与指弹相同（arrange 按同样的旋律音域选）。段落名写成段落第一拍的文字（txt），
   不用 \\section：alphaTab 把段落标记和同一拍的和弦名排进同一行、叠在一起（EffectBandSlot.canBeUsed 允许
   "上一个效果的最后一拍 == 这个效果的第一拍" 共用一行）；指弹把那里的指型挂到低音声部，单声部没有别处可挂，
@@ -32,7 +32,7 @@ from ..config import Profile
 from ..verify.playability import Violation
 from . import atex
 from .capo import OctavePolicy, effective_profile, octave_plan
-from .finger import _at, _voice_lines, annotate, section_bars, shape_marks
+from .layout import _at, _voice_lines, annotate, section_bars, shape_marks
 from .fretting import FretEvent, assign_frets
 from .shapes import OPEN_STRINGS
 
@@ -168,7 +168,7 @@ def glide(a: Sung, b: Sung) -> str | None:
 
 
 def note_effects(line: list[Sung]) -> dict[float, dict[int, list[str]]]:
-    """→ {记谱音尾: {弦: [音符效果]}}（finger._voice_lines 的 note_effects）：连到下一个音的 h / sl（见 glide）；
+    """→ {记谱音尾: {弦: [音符效果]}}（layout._voice_lines 的 note_effects）：连到下一个音的 h / sl（见 glide）；
     没有连到下一个音时，尾滑写成 sod / sou（空弦滑不出去，不写；指法已尽量避开空弦，见 fretting）。"""
     out: dict[float, dict[int, list[str]]] = {}
     for n, nxt in zip(line, line[1:] + [None]):

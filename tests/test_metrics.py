@@ -59,11 +59,14 @@ def test_melody_wrong_note(demo_scores):
     score, _ = demo_scores["finger"]
     ls = demo_leadsheet()
     ls["bars"][0]["melody"][2]["midi"] = 69  # 参考第 1 小节第 3 拍改成 A4
-    bars = metrics.score_bars(score, ls, "finger")
+    bars = metrics.score_bars(score, ls, "finger", finger_style="skeleton")
     assert (bars[0].mel_hit, bars[0].mel_est) == (3, 4)
     assert (bars[0].mel_found, bars[0].mel_ref) == (3, 4)
     assert any("漏掉骨架音" in x for x in bars[0].mel_issues)
     assert any("多余/错音" in x for x in bars[0].mel_issues)
+    full = metrics.score_bars(score, ls, "finger")                   # 完整旋律：按全部参考音评
+    assert (full[0].mel_hit, full[0].mel_est, full[0].mel_found, full[0].mel_ref) == (3, 4, 3, 4)
+    assert any("漏掉旋律音" in x for x in full[0].mel_issues)
 
 
 def test_melody_octave_tolerated(demo_scores):
@@ -80,8 +83,10 @@ def test_bars_without_reference_melody_not_scored(demo_scores):
     score, _ = demo_scores["finger"]
     ls = demo_leadsheet()
     ls["bars"][0]["melody"] = []
-    bars = metrics.score_bars(score, ls, "finger")
+    bars = metrics.score_bars(score, ls, "finger", finger_style="skeleton")
     assert bars[0].mel_est == 0 and bars[0].mel_f1 is None
+    full = metrics.score_bars(score, ls, "finger")                   # 完整旋律：人声没唱的小节里谱上的音算多余音
+    assert (full[0].mel_est, full[0].mel_hit) == (4, 0) and full[0].mel_f1 is None
 
 
 def test_harmonic_similarity_self(demo_scores, tmp_path):
@@ -201,7 +206,7 @@ def test_bar_with_only_non_skeleton_reference_not_penalised(build_tex):
     # 参考第 1 个音必为骨架音，所以非骨架音放在第 2 小节：4.5 拍、半拍长、前一个音刚结束 → 非骨架
     ls = _bare_leadsheet({0: [_note(3.0, 1.0)], 1: [_note(4.5, 0.5)]}, nbars=2)
     score = build_tex(':4 r r r 0.1 |\n:8 r 0.1 :4 r :2 r |', head=TEX_HEAD)
-    bars = metrics.score_bars(score, ls, "finger")
+    bars = metrics.score_bars(score, ls, "finger", finger_style="skeleton")
     assert (bars[1].mel_ref, bars[1].mel_est, bars[1].mel_hit) == (0, 1, 1)
     assert bars[1].mel_f1 is None
     assert metrics.problem_bars(bars, [], Thresholds(), "finger") == []
@@ -212,7 +217,7 @@ def test_bar_with_only_non_skeleton_reference_flags_wrong_notes(build_tex):
 
     ls = _bare_leadsheet({0: [_note(3.0, 1.0)], 1: [_note(4.5, 0.5)]}, nbars=2)
     score = build_tex(':4 r r r 0.1 |\n:8 r 1.1 :4 r :2 r |', head=TEX_HEAD)  # 第 2 小节弹成 F 而不是 E
-    bars = metrics.score_bars(score, ls, "finger")
+    bars = metrics.score_bars(score, ls, "finger", finger_style="skeleton")
     assert (bars[1].mel_ref, bars[1].mel_est, bars[1].mel_hit) == (0, 1, 0)
     assert bars[1].mel_f1 is None
     assert metrics.problem_bars(bars, [], Thresholds(), "finger") == [2]
@@ -225,7 +230,7 @@ def test_skeleton_note_matched_by_arrangement_note_in_unreferenced_next_bar(buil
     # 编配在第 2 小节 4.0 拍弹同名音，距离 1/3 拍，在容差内，应当算作覆盖。
     ls = _bare_leadsheet({0: [_note(3 + 2 / 3, 1 / 3)]}, nbars=2)
     score = build_tex(':1 r |\n:1 0.1 |', head=TEX_HEAD)
-    bars = metrics.score_bars(score, ls, "finger")
+    bars = metrics.score_bars(score, ls, "finger", finger_style="skeleton")
     assert bars[0].mel_ref == 1 and bars[0].mel_found == bars[0].mel_ref
     assert not any("漏掉骨架音" in x for x in bars[0].mel_issues)
     # 无参考旋律的第 2 小节不计入精确率
@@ -305,3 +310,16 @@ def test_manual_n_beats_are_skipped(demo_scores):
     assert (bars[0].chord_agree, bars[0].chord_total, bars[0].low_conf_beats) == (2, 2, [])
     bars = metrics.score_bars(score, _bar1_chords((1, 4, "N", "manual")), "strum")
     assert (bars[0].chord_agree, bars[0].chord_total, bars[0].low_conf_beats) == (0, 0, [])
+
+
+def test_an_alternating_fifth_in_the_bass_is_not_heard_as_an_inversion():
+    # 指弹的"根-五"交替低音：第 3–4 拍低音弹 C 和弦的五音 G，上面 C4 + 经过音 D4——听起来仍是 C，
+    # 不该因为"低音是 G"给 G 和弦加分（加了分 G 就赢了，判成转位 / 错和弦）
+    from types import SimpleNamespace as NS
+    from guitarize.verify.metrics import BarScore, score_chords
+    notes = [NS(start=0.0, end=2.0, midi=48), NS(start=2.0, end=4.0, midi=43),   # 低音 C3（拍 1–2）、G2（拍 3–4）
+             NS(start=0.0, end=2.0, midi=64), NS(start=2.0, end=4.0, midi=62), NS(start=0.0, end=4.0, midi=60)]
+    score = NS(sounding=lambda: notes, bars=[NS(start=0.0)], capo=0)
+    bars = [BarScore(bar=1, section=None)]
+    score_chords(score, {"beats_per_bar": 4, "bars": [{"chords": [{"beat": 1, "dur_beats": 4, "label": "C"}]}]}, bars)
+    assert bars[0].chord_agree == 4 and bars[0].chord_total == 4
