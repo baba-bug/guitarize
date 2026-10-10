@@ -161,5 +161,8 @@ def format_table(rows: list[dict]) -> str:
     head = ["melody", *COLUMNS]
     cells = [[r["melody"], *("-" if r[c] is None else str(r[c]) for c in COLUMNS)] for r in rows]
     widths = [max(len(row[k]) for row in [head, *cells]) for k in range(len(head))]
-    fmt = lambda row: "  ".join(c.ljust(w) if k == 0 else c.rjust(w) for k, (c, w) in enumerate(zip(row, widths)))
+
+    def fmt(row: list[str]) -> str:   # 文件名左对齐，数字右对齐
+        return "  ".join(c.ljust(w) if k == 0 else c.rjust(w) for k, (c, w) in enumerate(zip(row, widths)))
+
     return "\n".join(fmt(row) for row in [head, *cells])

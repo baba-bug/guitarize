@@ -72,8 +72,8 @@ def lr_correlation(left: np.ndarray, right: np.ndarray) -> np.ndarray:
 
     pad = FRAME_LENGTH // 2
     fl, fr = (sliding_window_view(np.pad(x, pad), FRAME_LENGTH)[::HOP] for x in (left, right))
-    dot = lambda a, b: np.einsum("ij,ij->i", a, b)
-    return dot(fl, fr) / np.sqrt(dot(fl, fl) * dot(fr, fr) + 1e-12)
+    lr, ll, rr = (np.einsum("ij,ij->i", a, b) for a, b in ((fl, fr), (fl, fl), (fr, fr)))
+    return lr / np.sqrt(ll * rr + 1e-12)
 
 
 def _dips(db: np.ndarray, prominence: float) -> tuple[np.ndarray, np.ndarray]:
@@ -155,9 +155,14 @@ def frame_features(lead_raw: Path, backing: Path, f0_cache: Path | None = None) 
     _, midi, per = cached_vocal_pitch(lead_raw, f0_cache) if f0_cache else vocal_pitch(lead_raw)
     y = np.atleast_2d(librosa.load(str(lead_raw), sr=SR, mono=False)[0])
     yb = librosa.load(str(backing), sr=SR, mono=True)[0]
-    rms = lambda x: librosa.feature.rms(y=x, frame_length=FRAME_LENGTH, hop_length=HOP)[0]
     lrc = lr_correlation(y[0], y[1]) if len(y) > 1 else np.ones(len(midi))
-    return signal_frames(midi, per, rms(y.mean(axis=0)), rms(yb), lrc)
+    return signal_frames(midi, per, _rms(y.mean(axis=0)), _rms(yb), lrc)
+
+
+def _rms(y: np.ndarray) -> np.ndarray:
+    import librosa
+
+    return librosa.feature.rms(y=y, frame_length=FRAME_LENGTH, hop_length=HOP)[0]
 
 
 def bar_chord_labels(beats: dict, chords: dict, chord_overrides=None) -> dict[int, list[tuple[int, str]]]:
