@@ -88,6 +88,15 @@ def test_force_overwrites(demo_song):
     assert demo_song.atex("strum").read_text(encoding="utf-8") != "HAND EDITED"
 
 
+def test_strum_pattern_override_is_validated():
+    from guitarize.config import strum_pattern
+
+    assert strum_pattern({}) is None
+    assert strum_pattern({"strum_pattern": "quarter"}) == "quarter"
+    with pytest.raises(ValueError, match="strum_pattern"):
+        strum_pattern({"strum_pattern": "polka"})
+
+
 def test_section_patterns_with_stems(tmp_path):
     import numpy as np
     import soundfile as sf

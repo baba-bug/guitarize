@@ -79,6 +79,8 @@ class SongConfig:
       评旋律；"skeleton"：旧的骨架旋律 + 低音 / 填充（适合初级），verify 只考骨架音
     - finger_bass：完整旋律指弹第 3 拍（和弦没换时）的低音。默认 "root"：再弹根音（摇滚贝斯多半一直弹根音，
       なんもねえ 原曲贝斯第 3 拍 7/16 是根音、5/16 是五音）；"alternate"：根-五交替低音（民谣 / 乡村味）
+    - strum_pattern：弹唱谱整首用同一个节奏型（arrange/patterns.py 的 PATTERNS 名：whole / half / quarter / push / pop /
+      eighth）。不写时按段落取与原曲鼓 + 吉他起音最像的型；简单版用 "quarter"（每拍一下下扫）或 "half"
     - melody_source：旋律从哪条音频识别。默认 "lead"：analyze 的 lead 步骤从人声分轨分出的主唱（伴唱分离模型
       + 居中掩码；模型不可用时只用居中掩码，见 stems.separate_lead）；"vocals"：整条人声。melody 步骤把用的分轨
       记进 melody.json 的 source（lead 时还有 lead_method），旋律谱校验对照同一条（改了这一项要重跑 --steps melody）
@@ -108,6 +110,16 @@ def melody_source(value, where: str = "overrides.melody_source") -> str:
         return "lead"
     if value not in MELODY_SOURCES:
         raise ValueError(f'{where} must be "lead" or "vocals", got {value!r}')
+    return value
+
+
+def strum_pattern(overrides: dict) -> str | None:
+    """overrides.strum_pattern：弹唱谱整首用的节奏型名（PATTERNS 里的），没写是 None（按段落自动选）。"""
+    from .arrange.patterns import PATTERNS
+
+    value = overrides.get("strum_pattern")
+    if value is not None and value not in PATTERNS:
+        raise ValueError(f"overrides.strum_pattern must be one of {', '.join(PATTERNS)}, got {value!r}")
     return value
 
 
