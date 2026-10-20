@@ -1,5 +1,5 @@
 """谱面排版（指弹、旋律谱、卡祖笛谱共用）：声部的音铺成小节行（空隙补休止、跨小节线写连音线）、每小节的和弦指型标记、
-单声部谱的标记拍效果、小节注释里的位置写法与降级 / 修补说明。"""
+单声部谱的标记拍效果、小节注释里的位置写法与降级 / 修补说明、扫弦谱的节奏型说明。"""
 from __future__ import annotations
 
 from typing import Sequence
@@ -118,6 +118,18 @@ def _at(t: float) -> str:
         if abs(x - beat - k / 3) < 1e-4:
             return f"@{beat + 1}{mark}"
     return f"@{x + 1:g}"
+
+
+def pattern_remarks(leadsheet: dict, patterns: Sequence[str | None]) -> dict[int, list[str]]:
+    """扫弦谱（强力和弦、弹唱的 guitar 节奏）的节奏型说明：每个乐句（节奏型变了、或新段落）的第一小节写上节奏型名，
+    交给 annotate 接到 `// bar N` 注释行；整小节无和弦（None）不写。"""
+    remarks: dict[int, list[str]] = {}
+    shown = None
+    for i, (b, name) in enumerate(zip(leadsheet["bars"], patterns)):
+        if name is not None and (name != shown or b.get("section")):
+            remarks[i] = [f"节奏型 {name}"]
+        shown = name
+    return remarks
 
 
 def annotate(lines: list[str], remarks: dict[int, list[str]]) -> list[str]:

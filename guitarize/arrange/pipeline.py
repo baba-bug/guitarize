@@ -22,7 +22,8 @@ from .finger import generate_finger, section_bars
 from .kazoo import generate_kazoo
 from .melody import generate_melody
 from .patterns import DEFAULT, choose_pattern, slots_per_beat
-from .power import choose_patterns, generate_power
+from .power import generate_power
+from .rhythm import choose_patterns
 from .strum import beat_chords, generate_strum
 
 
@@ -56,15 +57,16 @@ def section_patterns(paths: SongPaths, leadsheet: dict) -> list[str]:
     return out
 
 
-def power_patterns_for(paths: SongPaths, leadsheet: dict, overrides: dict) -> list[str | None]:
-    """强力和弦谱逐小节的节奏型（power.choose_patterns）：只取原曲吉他分轨的起音——鼓的起音强得多，和吉他混在一起
-    选出来的是鼓的节奏型（なんもねえ 选成了 D-DU-UDU）。没有吉他分轨时用默认型；overrides.power_patterns 逐段指定。"""
+def guitar_patterns(paths: SongPaths, leadsheet: dict, overrides: dict[int, str] | None = None) -> list[str | None]:
+    """强力和弦谱、弹唱 guitar 节奏逐小节的节奏型（rhythm.choose_patterns）：只取原曲吉他分轨的起音——鼓的起音强得多，
+    和吉他混在一起选出来的是鼓的节奏型（なんもねえ 选成了 D-DU-UDU）。没有吉他分轨时用默认型；
+    overrides（config.power_patterns）逐段指定。"""
     guitar = paths.stem("guitar")
     onset = None
     if guitar.exists():
         spb = slots_per_beat(leadsheet.get("feel", "straight"))
         onset = onset_slots([guitar], [(b["t_start"], b["t_end"]) for b in leadsheet["bars"]], slots=4 * spb)
-    return choose_patterns(onset, leadsheet, power_patterns(overrides))
+    return choose_patterns(onset, leadsheet, overrides)
 
 
 def self_check(text: str, profile: Profile, kind: str) -> list[Violation]:
@@ -107,7 +109,7 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
     profile = load_profile(cfg.level)
     if arr in ("kazoo", "power"):
         text = (generate_kazoo(leadsheet, cfg.title) if arr == "kazoo" else
-                generate_power(leadsheet, profile, power_patterns_for(paths, leadsheet, cfg.overrides), cfg.title))
+                generate_power(leadsheet, profile, guitar_patterns(paths, leadsheet, power_patterns(cfg.overrides)), cfg.title))
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
         return target, None, _checked(text, profile, arr)

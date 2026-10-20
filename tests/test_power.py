@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from guitarize.arrange import power as P
+from guitarize.arrange import rhythm as R
 from guitarize.arrange.patterns import POWER_PATTERNS, accent_vector
 from guitarize.config import Thresholds, load_profile, power_patterns
 from guitarize.render import alphatab
@@ -132,25 +133,25 @@ def test_patterns_follow_the_guitar_onsets_per_section():
     rows = ["chorus"] * 4 + ["verse"] * 3 + ["verse_end"] * 5 + ["hit", None, None]
     chords = [[("B", 1, 4)]] * 12 + [[("N", 1, 4)]] + [[("E", 1, 4)]] * 2
     ls = _sheet(chords, sections={0: "サビ", 4: "Bメロ", 12: "間奏"})
-    got = P.choose_patterns(_onsets(rows), ls)
+    got = R.choose_patterns(_onsets(rows), ls)
     assert got == ["chorus"] * 4 + ["verse"] * 3 + ["verse_end"] * 5 + [None, "hit", "hit"]
     # 没有吉他分轨：整首默认型
-    assert P.choose_patterns(None, ls) == [P.POWER_DEFAULT] * 12 + [None, P.POWER_DEFAULT, P.POWER_DEFAULT]
+    assert R.choose_patterns(None, ls) == [R.POWER_DEFAULT] * 12 + [None, R.POWER_DEFAULT, R.POWER_DEFAULT]
 
 
 def test_no_split_when_both_halves_pick_the_same_pattern():
     ls = _sheet([[("B", 1, 4)]] * 8, sections={0: "サビ"})
-    assert P.choose_patterns(_onsets(["chorus"] * 8), ls) == ["chorus"] * 8
+    assert R.choose_patterns(_onsets(["chorus"] * 8), ls) == ["chorus"] * 8
 
 
 def test_pattern_overrides_run_to_the_end_of_the_phrase():
     ls = _sheet([[("B", 1, 4)]] * 6 + [[("N", 1, 4)]] + [[("B", 1, 4)]] * 2, sections={0: "A", 3: "B"})
-    got = P.choose_patterns(None, ls, {2: "hit", 4: "verse_end"})
+    got = R.choose_patterns(None, ls, {2: "hit", 4: "verse_end"})
     assert got == ["verse", "hit", "hit", "verse_end", "verse_end", "verse_end", None, "verse", "verse"]
     with pytest.raises(ValueError, match="bar 7"):
-        P.choose_patterns(None, ls, {7: "hit"})                    # 无和弦小节
+        R.choose_patterns(None, ls, {7: "hit"})                    # 无和弦小节
     with pytest.raises(ValueError, match="bar 10"):
-        P.choose_patterns(None, ls, {10: "hit"})
+        R.choose_patterns(None, ls, {10: "hit"})
 
 
 def test_power_patterns_override_is_validated():
