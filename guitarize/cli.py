@@ -10,11 +10,20 @@ from pathlib import Path
 
 import yaml
 
-from .config import ARR_NAMES, load_song_config
+from .config import ARR_NAMES, load_song_config, split_arr
 from .paths import REPO_ROOT, SongPaths
 
 ARRS = tuple(ARR_NAMES)   # strum / finger / melody / kazoo / power
 SHOW_VIOLATIONS = 5
+
+
+def _render_arr(value: str) -> str:
+    """render 的 --arr：编配名，或变体 <编配>_<标签>（arrangements/<编配>_<标签>.atex，如旧版弹唱 strum_old）。"""
+    try:
+        split_arr(value)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
+    return value
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,7 +34,10 @@ def main(argv: list[str] | None = None) -> int:
                             ("verify", "构建 + 合成 + 可弹性 + 评分 → 报告")):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("slug")
-        p.add_argument("--arr", choices=ARRS, required=True)
+        if name == "render":   # 变体（如 strum_old）只渲染，按所属编配的设置
+            p.add_argument("--arr", type=_render_arr, required=True, metavar="{" + ",".join(ARRS) + "}[_<tag>]")
+        else:
+            p.add_argument("--arr", choices=ARRS, required=True)
     p = sub.add_parser("analyze", help="分析原曲：分轨 / 主唱 / 节拍 / 和弦 / 旋律 / leadsheet")
     p.add_argument("slug")
     p.add_argument("--steps", default="stems,lead,beats,chords,melody,leadsheet",

@@ -1,6 +1,7 @@
 """song.yaml 与难度档的加载。"""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
@@ -11,6 +12,10 @@ from .paths import SongPaths
 PROFILES_PATH = Path(__file__).with_name("profiles.yaml")
 ARR_NAMES = {"strum": "弹唱", "finger": "指弹", "melody": "旋律", "kazoo": "卡祖笛",   # kazoo：卡祖笛独奏（arrange/kazoo.py）
              "power": "强力和弦"}                                                       # power：强力和弦弹唱（arrange/power.py）
+# 编配的变体 <编配>_<标签>（如 strum_old：重新生成前留下的旧版，用来对比）：arrangements/<编配>_<标签>.atex 按所属编配的
+# 设置渲染到 out/<编配>_<标签>.*，总页面里排在所属编配后面（只有 render，不 arrange / verify）。标签是小写字母 / 数字
+VARIANT_TAG = re.compile(r"[a-z0-9]+")
+VARIANT_LABELS = {"old": "旧版"}      # 标签的显示名：「弹唱（旧版）」；没列的标签照原样写
 MELODY_SOURCES = ("lead", "vocals")   # 旋律从哪条分轨识别：主唱 stems/lead.wav（去掉伴唱）、整条人声 stems/vocals.wav
 FINGER_STYLES = ("full", "skeleton")  # 指弹写法：完整旋律（默认）/ 骨架旋律，见 arrange/finger.py
 STRUM_RHYTHMS = ("guitar", "drums")   # 弹唱的节奏：吉他分轨的型 + 刷弦 / 力度 / 闷音（默认）/ 旧的鼓 + 吉他选型，见 arrange/strum.py
@@ -113,6 +118,21 @@ class SongConfig:
     sections: dict = field(default_factory=dict)  # {小节号(1-based): 段落名}
     language: str | None = None                    # 歌词语言（GAME 分音用）
     thresholds: Thresholds = Thresholds()
+
+
+def split_arr(arr: str) -> tuple[str, str | None]:
+    """编配名 → (编配, None)；变体名 <编配>_<标签> → (编配, 标签)。都不是时 ValueError。"""
+    base, sep, tag = arr.partition("_")
+    if base not in ARR_NAMES or (sep and not VARIANT_TAG.fullmatch(tag)):
+        raise ValueError(f"unknown arrangement {arr!r}: one of {', '.join(ARR_NAMES)}, "
+                         f"or a variant <arrangement>_<tag> (e.g. strum_old)")
+    return base, (tag if sep else None)
+
+
+def arr_label(arr: str) -> str:
+    """编配 / 变体的显示名：弹唱、弹唱（旧版）。"""
+    base, tag = split_arr(arr)
+    return ARR_NAMES[base] + (f"（{VARIANT_LABELS.get(tag, tag)}）" if tag else "")
 
 
 def melody_source(value, where: str = "overrides.melody_source") -> str:
