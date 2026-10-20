@@ -1,10 +1,12 @@
 """なんもねえ 的手改（在 `guitarize arrange --force` 重新生成之后重放，生成器改进时手改不会丢）。
 
-用法：python songs/nanmonee/hand_edits.py strum|finger [歌曲目录]（默认是本脚本所在的目录）
+用法：python songs/nanmonee/hand_edits.py strum|finger|power [歌曲目录]（默认是本脚本所在的目录）
 依据：贝斯分轨逐格音高 + 鼓 / 吉他分轨起音（间奏 / 尾奏 riff、37 小节 break、62 小节结尾一击），
 以及逐小节和声相似度（scores.json 的 harmonic_sim）——只保留让它变高、且不引入可弹性违规的改动。
 指弹是完整旋律写法（合音由生成器配）：只替换整小节的 riff / break / 结尾一击，旧的填充补丁（C 指型补空弦 G、
 B7 指型补顶音等）已由生成器的合音取代。
+强力和弦谱（power，实际音高、不夹变调夹）照弹唱谱的节奏改同样几个小节，和弦换成强力和弦（指型与生成器选的一致：
+B5 5 弦 2 品、E5 开放、F#5 6 弦 2 品、G#5 6 弦 4 品，另加 A#5 6 弦 6 品）。
 """
 from __future__ import annotations
 
@@ -50,6 +52,34 @@ def strum(text: str) -> str:
     })
 
 
+def _power_chord(notes: str, fx: str = "") -> str:
+    """'4.3 4.4 2.5' → '(4.3 4.4 2.5)'；fx 是每个音的音符效果（重音 ac 等），'(4.3{ac} 4.4{ac} 2.5{ac})'。"""
+    return "(" + " ".join(n + (f"{{{fx}}}" if fx else "") for n in notes.split()) + ")"
+
+
+def power(text: str) -> str:
+    b5, e5, f5, g5, a5 = "4.3 4.4 2.5", "2.4 2.5 0.6", "4.4 4.5 2.6", "6.4 6.5 4.6", "8.4 8.5 6.6"   # A5 = A#5
+    hit = "bd 60 dy f"
+
+    def stab(notes: str, name: str = "") -> str:   # 三连音四分的齐奏 hit（重音）；name：要标的指型名
+        mark = f'ch "{name}" ' if name else ""
+        return f"{_power_chord(notes, 'ac')}.4 {{{mark}tu 3 {hit}}}"
+
+    # 停顿 + 三连音 hits：G#5 → A#5 → F#5（弹唱谱 capo 4 的 E / F# / D 型，实际音高同样是 G# / A# / F#）
+    stop = f"r.2 {stab(g5)} {stab(a5)} {stab(f5)} |"
+    b_riff = f'{_power_chord(b5, "ac")}.2 {{ch "B5" {hit}}} {stab(g5, "G#5")} {stab(b5)} {stab(g5)} |'
+    # riff：拍上弹强力和弦（E5 / F#5），反拍的两个八分是 riff 的三音、五音（单音，G#3 B3 / A#3 C#4）
+    e_riff = f'{_power_chord(e5)}.4 {{ch "E5" {hit}}} 1.3.8 0.2.8 {_power_chord(f5)}.4 {{ch "F#5" {hit}}} 3.3.8 2.2.8 |'
+    return _edit(text, {
+        19: (stop, "stop + triplet hits"), 59: (stop, "stop + triplet hits"),
+        20: (b_riff, "riff hits"), 60: (b_riff, "riff hits"),
+        21: (e_riff, "riff"), 61: (e_riff, "riff"),
+        37: (f'{_power_chord(f5, "ac")}.4 {{ch "F#5" {hit}}} {_power_chord(f5, "ac")}.4 {{{hit}}} r.2 |',
+             "break before サビ"),
+        62: (f'r.4 {_power_chord(b5, "ac")}.2 {{ch "B5" bd 60 dy ff d}} |', "final hit"),
+    })
+
+
 def finger(text: str) -> str:
     head, v1, v2 = text.split("\\voice\n")
     stop = ("r.2 0.6.4 {tu 3} 2.6.4 {tu 3} 0.4.4 {tu 3} |", "riff (bass)")
@@ -73,5 +103,6 @@ def finger(text: str) -> str:
 if __name__ == "__main__":
     arr = sys.argv[1]
     path = (Path(sys.argv[2]) if len(sys.argv) > 2 else HERE) / "arrangements" / f"{arr}.atex"
-    path.write_text({"strum": strum, "finger": finger}[arr](path.read_text(encoding="utf-8")), encoding="utf-8")
+    path.write_text({"strum": strum, "finger": finger, "power": power}[arr](path.read_text(encoding="utf-8")),
+                    encoding="utf-8")
     print(f"hand edits applied: {path}")
