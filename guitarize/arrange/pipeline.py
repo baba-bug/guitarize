@@ -1,5 +1,6 @@
 """编配编排：leadsheet → 选变调夹 → 生成弹唱 / 指弹 / 旋律谱草稿 alphaTex → 自检。默认不覆盖已有编配（那是迭代修改过的成果）。
-卡祖笛谱（kazoo）按实际音高写，没有变调夹、指法，自检只查记谱。"""
+卡祖笛谱（kazoo）按实际音高写，没有变调夹、指法，自检只查记谱。
+强力和弦谱（power）按实际音高写（不夹变调夹），节奏型按段落只看原曲吉他分轨选（power_patterns）。"""
 from __future__ import annotations
 
 import json
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..config import Profile, SongConfig, finger_bass, finger_style, load_profile, strum_pattern
+from ..config import Profile, SongConfig, finger_bass, finger_style, load_profile, power_patterns, strum_pattern
 from ..paths import SongPaths
 from ..render import alphatab
 from ..render.alphatab import AlphaTexError
@@ -21,6 +22,7 @@ from .finger import generate_finger, section_bars
 from .kazoo import generate_kazoo
 from .melody import generate_melody
 from .patterns import DEFAULT, choose_pattern, slots_per_beat
+from .power import choose_patterns, generate_power
 from .strum import beat_chords, generate_strum
 
 
@@ -54,6 +56,17 @@ def section_patterns(paths: SongPaths, leadsheet: dict) -> list[str]:
     return out
 
 
+def power_patterns_for(paths: SongPaths, leadsheet: dict, overrides: dict) -> list[str | None]:
+    """强力和弦谱逐小节的节奏型（power.choose_patterns）：只取原曲吉他分轨的起音——鼓的起音强得多，和吉他混在一起
+    选出来的是鼓的节奏型（なんもねえ 选成了 D-DU-UDU）。没有吉他分轨时用默认型；overrides.power_patterns 逐段指定。"""
+    guitar = paths.stem("guitar")
+    onset = None
+    if guitar.exists():
+        spb = slots_per_beat(leadsheet.get("feel", "straight"))
+        onset = onset_slots([guitar], [(b["t_start"], b["t_end"]) for b in leadsheet["bars"]], slots=4 * spb)
+    return choose_patterns(onset, leadsheet, power_patterns(overrides))
+
+
 def self_check(text: str, profile: Profile, kind: str) -> list[Violation]:
     """草稿自检：用 alphaTab 构建后跑 verify 同一套可弹性检查。profile 用难度档本身（品位上限由检查自己按变调夹收紧）。
     卡祖笛谱（kind = kazoo）没有指法，只查记谱（check_notation）。"""
@@ -83,7 +96,7 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
             force: bool = False) -> tuple[Path, CapoOption | None, list[Violation] | str]:
     """返回 (草稿路径, 选中的变调夹, 自检结果)。自检结果是违规列表；alphaTab 构建失败或找不到 node 时
     是一行 `自检失败：<错误第一行>`。有违规、自检失败都照常写出草稿，留给审阅。
-    卡祖笛谱（kazoo）没有变调夹（选中的变调夹是 None，capo / overrides.capo 不起作用）。"""
+    卡祖笛谱（kazoo）、强力和弦谱（power）没有变调夹（选中的变调夹是 None，capo / overrides.capo 不起作用）。"""
     target = paths.atex(arr)
     if target.exists() and not force:
         raise FileExistsError(f"{target} exists; edit it directly or pass --force to regenerate")
@@ -92,8 +105,9 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
     if bpb != 4:
         raise ValueError(f"only 4/4 is supported for now (beats_per_bar={bpb})")
     profile = load_profile(cfg.level)
-    if arr == "kazoo":
-        text = generate_kazoo(leadsheet, cfg.title)
+    if arr in ("kazoo", "power"):
+        text = (generate_kazoo(leadsheet, cfg.title) if arr == "kazoo" else
+                generate_power(leadsheet, profile, power_patterns_for(paths, leadsheet, cfg.overrides), cfg.title))
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
         return target, None, _checked(text, profile, arr)

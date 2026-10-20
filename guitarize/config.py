@@ -9,7 +9,8 @@ import yaml
 from .paths import SongPaths
 
 PROFILES_PATH = Path(__file__).with_name("profiles.yaml")
-ARR_NAMES = {"strum": "弹唱", "finger": "指弹", "melody": "旋律", "kazoo": "卡祖笛"}   # kazoo：卡祖笛独奏（arrange/kazoo.py）
+ARR_NAMES = {"strum": "弹唱", "finger": "指弹", "melody": "旋律", "kazoo": "卡祖笛",   # kazoo：卡祖笛独奏（arrange/kazoo.py）
+             "power": "强力和弦"}                                                       # power：强力和弦弹唱（arrange/power.py）
 MELODY_SOURCES = ("lead", "vocals")   # 旋律从哪条分轨识别：主唱 stems/lead.wav（去掉伴唱）、整条人声 stems/vocals.wav
 FINGER_STYLES = ("full", "skeleton")  # 指弹写法：完整旋律（默认）/ 骨架旋律，见 arrange/finger.py
 
@@ -82,6 +83,9 @@ class SongConfig:
       なんもねえ 原曲贝斯第 3 拍 7/16 是根音、5/16 是五音）；"alternate"：根-五交替低音（民谣 / 乡村味）
     - strum_pattern：弹唱谱整首用同一个节奏型（arrange/patterns.py 的 PATTERNS 名：whole / half / quarter / push / pop /
       eighth）。不写时按段落取与原曲鼓 + 吉他起音最像的型；简单版用 "quarter"（每拍一下下扫）或 "half"
+    - power_patterns：强力和弦谱（arrange/power.py）的节奏型（patterns.py 的 POWER_PATTERNS 名：verse / verse_end /
+      chorus / hit），{小节: 型}，从该小节起用到它所在乐句的末尾（下一个段落标记、无和弦小节）或下一个覆盖起点；
+      没写的乐句按原曲吉他分轨的起音自动选（如 {33: verse_end}：Bメロ 从第 33 小节起换型）
     - melody_source：旋律从哪条音频识别。默认 "lead"：analyze 的 lead 步骤从人声分轨分出的主唱（伴唱分离模型
       + 居中掩码；模型不可用时只用居中掩码，见 stems.separate_lead）；"vocals"：整条人声。melody 步骤把用的分轨
       记进 melody.json 的 source（lead 时还有 lead_method），旋律谱校验对照同一条（改了这一项要重跑 --steps melody）
@@ -122,6 +126,20 @@ def strum_pattern(overrides: dict) -> str | None:
     if value is not None and value not in PATTERNS:
         raise ValueError(f"overrides.strum_pattern must be one of {', '.join(PATTERNS)}, got {value!r}")
     return value
+
+
+def power_patterns(overrides: dict) -> dict[int, str]:
+    """overrides.power_patterns → {小节号(1 起): 节奏型名}（POWER_PATTERNS 里的）；没写是空。小节是否存在、
+    是不是无和弦小节由 arrange/power.py 的 choose_patterns 查。"""
+    from .arrange.patterns import POWER_PATTERNS
+
+    out = {}
+    for bar, name in (overrides.get("power_patterns") or {}).items():
+        if name not in POWER_PATTERNS or isinstance(bar, bool) or not str(bar).isdigit():
+            raise ValueError(f"overrides.power_patterns must map bar numbers to one of "
+                             f"{', '.join(POWER_PATTERNS)}, got {bar!r}: {name!r}")
+        out[int(bar)] = name
+    return out
 
 
 FINGER_BASSES = ("root", "alternate")

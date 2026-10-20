@@ -9,7 +9,7 @@ description: 把一首歌（歌名或 B 站 / 网易云链接）做成可弹的�
 环境未装时先跑 `scripts/setup_env.sh`。设计见 `docs/specs/2026-10-09-guitarize-design.md`。
 
 ## 0. 先问清楚（一次问完）
-版本（TV size / 完整版）、水平（beginner / intermediate / advanced）、要哪些编配（弹唱 / 指弹 / 旋律谱 / 卡祖笛独奏）、输出格式。
+版本（TV size / 完整版）、水平（beginner / intermediate / advanced）、要哪些编配（弹唱 / 指弹 / 旋律谱 / 卡祖笛独奏 / 强力和弦弹唱）、输出格式。
 
 ## 1. 建歌
 `$PY -m guitarize new <slug> --title "<歌名>" --artist "<歌手>"`，再按回答改 `songs/<slug>/song.yaml` 的 `version / level / arrangements / outputs`。
@@ -51,6 +51,12 @@ description: 把一首歌（歌名或 B 站 / 网易云链接）做成可弹的�
 - 手改 atex 时：连音线延续写 `C#4{-}.4`（`-.4` 在音高谱表上是语法错误），和别的音符效果同一个花括号 `C#4{- slur s1}`；连线按 id 配对、id 不能重用；`\section "名"` 后面紧跟音名会被当成参数（写 `\section ("名")`）；alphaTab 1.8.4 的简谱画不了全休止 `r.1`（写 `r.2 r.2`）。
 - `verify --arr kazoo`：不查可弹性，只查记谱（小节时值、Shuffle 反拍）；旋律 F1（全部参考音，达标线 0.9）+ 小节数相等即达标；另报音域（最低 / 最高音、跨度）和换气提醒（连续超过 `thresholds.breath_seconds`（默认 8）秒没有休止的乐句，按小节列出）。不对照音频，没有试听片段。
 - `render --arr kazoo` 的 txt 是文本简谱（`1=B 4/4`，每行一小节，记法写在文件开头：`'` / `,` 高低八度、`-` 接着响、`0` 休止、`³` 三连音拍）；网页同样能选参考音频、从当前小节播放、光标跟随。
+
+### 强力和弦弹唱（`--arr power`，原曲是失真电吉他扫强力和弦时）
+- `$PY -m guitarize arrange <slug> --arr power`，并把 `power` 加进 `song.yaml` 的 `arrangements`。按**实际音高**、不夹变调夹：和弦按根音换成强力和弦 X5（斜杠和弦按和弦根音不按低音：D#/G → D#5、B/D# → B5；小三、七和弦一样是 X5），根音在 6 / 5 弦 0–9 品（加五音和高八度，f = 0 是开放 E5 / A5），每个和弦全曲一个指型，选换和弦时把位移动最少的一套；和弦图在 5 品以上从最低按弦品起画。
+- 节奏型按段落、**只看吉他分轨**的起音选（鼓 + 吉他一起选会被鼓带走）：`verse`（1 闷、2 空弦重音、3 闷 + 反拍短促上扫、4）、`verse_end`（1、2、2&，然后延音）、`chorus`（1 重扫 + 延音的音墙，2、3& 轻扫）、`hit`（一击 + 余音）。段落在无和弦小节处断开，段落内前后差得多时切一刀（各至少 3 小节）；最像的型相关度也不到 0.5（持续的音墙）就是 hit。选的型写在 `// bar N · 节奏型 …` 注释里；不对时用 `overrides.power_patterns: {小节: 型}`（用到该乐句末尾）。
+- 记谱：刷弦 `bd 60` / `bu 60`（只有刷弦才把各弦错开，`sd` / `su` 只是箭头）、下扫 `dy f`、上扫和轻扫 `dy mp`、空弦重音 `ac`、闷音 `pm`——`ac` / `pm` 是**音符效果**（`(4.3{pm} 4.4{pm} 2.5{pm}).4 {bd 60 dy f}`；写成拍效果 `{pm}` 报 Unrecognized property）。`dy` 会沿用到下一个写了 `dy` 的拍，手改时每下都写上。riff / break / 结尾一击照弹唱谱手改（hand_edits.py 的 `power`）。
+- `verify --arr power`：与弹唱同一套，和弦与和弦标记按根音对；节奏只对照吉他分轨、按力度加权（闷音 0.3、mp 0.66），报告末尾按段落列节奏相关度。txt 多一行 `PM` / `>`。
 
 ## 6. 校验迭代（每份编配分别进行）
 ```

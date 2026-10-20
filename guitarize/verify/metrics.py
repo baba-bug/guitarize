@@ -1,6 +1,8 @@
 """编配 vs 参考（leadsheet.json）的逐小节评分。
 弹唱 / 指弹：和弦一致率、旋律（指弹按写法：完整旋律与旋律谱一样考全部参考音，骨架写法只考骨架音）、
 与和声分轨的色度相似度、节奏（弹唱）。
+强力和弦弹唱（power）：与弹唱同一套，但和弦按根音对（X5 对 X / Xm / X7 / 根音是 X 的斜杠和弦都算一致），
+节奏只对照吉他分轨、按力度加权（闷音、轻扫的起音弱）。
 旋律谱（melody）：只评旋律（召回按全部参考音）和与人声分轨的色度相似度，并列出要人耳确认的参考音；不评和弦。
 卡祖笛谱（kazoo）：只评旋律（与旋律谱同一套评法），另报音域和换气（kazoo_stats）；不评和弦、不对照音频。"""
 from __future__ import annotations
@@ -23,6 +25,9 @@ MELODY_TOL = 1 / 3 + 1e-6  # 起音容差（拍）：指弹（骨架音按八分
 LINE_TOL = 1 / 6 + 1e-3
 SLOTS = 12                 # 4/4 小节的三连音八分格数
 LINE_ARRS = ("melody", "kazoo")   # 单旋律线的谱：不评和弦，旋律召回考全部参考音、达标线 melody_line
+STRUM_ARRS = ("strum", "power")   # 扫弦的谱：和弦标记要对、节奏对照原曲起音
+MUTED_WEIGHT = 0.3                # 力度加权的节奏向量里闷音的分量（原曲吉他分轨里闷音很暗，起音弱）
+FULL_VELOCITY = 95                # 力度加权：MIDI 力度到这里（f）记满分 1
 
 
 @dataclass
@@ -104,7 +109,18 @@ def _fifth(label: str) -> int | None:
     return None if parsed is None else (parsed[0] + 7) % 12
 
 
-def score_chords(score: Score, leadsheet: dict, bars: list[BarScore]) -> None:
+def _root(label: str) -> int | None:
+    """和弦标签的根音音名（斜杠和弦是和弦根音，不是低音；解析不了时 None）。"""
+    try:
+        parsed = theory.parse_chord(label)
+    except ValueError:
+        return None
+    return None if parsed is None else parsed[0]
+
+
+def score_chords(score: Score, leadsheet: dict, bars: list[BarScore], roots: bool = False) -> None:
+    """逐拍和弦一致：编配这一拍的音推断出的大小三和弦里有参考的那个。roots（强力和弦谱）：这一拍的最低音是参考和弦的
+    根音也算一致——强力和弦没有三音，X5 对 X、Xm、X7、根音是 X 的斜杠和弦都对。"""
     bpb = int(leadsheet.get("beats_per_bar", 4))
     sounding = score.sounding()
     prev: set[str] | None = None
@@ -112,6 +128,7 @@ def score_chords(score: Score, leadsheet: dict, bars: list[BarScore]) -> None:
         for k, (ref, conf, raw) in enumerate(_ref_beats(lbar, bpb)):
             t0 = sbar.start + k
             w, bass = _pc_weights(sounding, t0, t0 + 1)
+            lowest = bass if w.sum() > 0 else None
             if bass is not None and ref != "N" and bass == _fifth(raw):
                 bass = None   # 交替低音弹到参考和弦的五音（指弹的"根-五"低音）：不算转位，不给五音上的和弦加分
             if w.sum() > 0:
@@ -125,15 +142,20 @@ def score_chords(score: Score, leadsheet: dict, bars: list[BarScore]) -> None:
                 bs.low_conf_beats.append(k + 1)
                 continue
             bs.chord_total += 1
-            if ref in cands:
+            if ref in cands or (roots and lowest is not None and lowest == _root(raw)):
                 bs.chord_agree += 1
+            elif roots:
+                low = "—" if lowest is None else theory.pc_name(lowest)
+                bs.chord_issues.append(f"拍 {beat_label(k)}：参考 {raw}，编配的根音（最低音）是 {low}，"
+                                       f"听起来是 {'/'.join(sorted(cands))}")
             else:
                 shape = theory.transpose_label(raw, -score.capo) if score.capo else raw
                 bs.chord_issues.append(f"拍 {beat_label(k)}：参考 {raw}（指法 {shape}），编配听起来是 {'/'.join(sorted(cands))}")
 
 
-def chord_mark_issues(score: Score, bars: list[BarScore]) -> None:
-    """谱上写的和弦名（换算到实际音高）与标记处一拍内实际发声的音不符 → 记入 mark_issues。"""
+def chord_mark_issues(score: Score, bars: list[BarScore], roots: bool = False) -> None:
+    """谱上写的和弦名（换算到实际音高）与标记处一拍内实际发声的音不符 → 记入 mark_issues。
+    roots（强力和弦谱）：强力和弦名 X5 没有三音，听起来是 X 的大三或小三和弦都算相符。"""
     sounding = score.sounding()
     for e in score.events:
         if not e.chord or e.bar >= len(bars):
@@ -143,7 +165,8 @@ def chord_mark_issues(score: Score, bars: list[BarScore]) -> None:
         if expected == "N" or w.sum() == 0:
             continue
         cands = theory.infer_majmin(w, bass)
-        if expected not in cands:
+        root = expected.split(":")[0]
+        if expected not in cands and not (roots and {f"{root}:maj", f"{root}:min"} & cands):
             pos = beat_label(e.start - score.bars[e.bar].start)
             bars[e.bar].mark_issues.append(f"拍 {pos} 标记 {e.chord}，实际音听起来是 {'/'.join(sorted(cands))}")
 
@@ -297,13 +320,21 @@ def onset_slots(wavs: Iterable[Path], windows: Sequence[tuple[float, float]], sl
     return out
 
 
-def strum_vector(attacks: Sequence[Attack], bar: Bar, slots: int = SLOTS) -> np.ndarray:
+def _weight(a: Attack, dynamic: bool) -> float:
+    """一次起音在节奏向量里的分量。弹唱：下扫 1、上扫 0.6。dynamic（强力和弦谱）：按力度，f 及以上记 1，
+    闷音 MUTED_WEIGHT（与 patterns.POWER_PATTERNS 选型用的权重同一个尺度）。"""
+    if not dynamic:
+        return 0.6 if a.direction == "up" else 1.0
+    return MUTED_WEIGHT if a.palm_mute else min(1.0, a.velocity / FULL_VELOCITY)
+
+
+def strum_vector(attacks: Sequence[Attack], bar: Bar, slots: int = SLOTS, dynamic: bool = False) -> np.ndarray:
     v = np.zeros(slots)
     for a in attacks:
         if a.bar != bar.index:
             continue
         k = int((a.start - bar.start) / bar.length * slots + 0.5) % slots
-        v[k] = max(v[k], 0.6 if a.direction == "up" else 1.0)
+        v[k] = max(v[k], _weight(a, dynamic))
     return v
 
 
@@ -313,12 +344,28 @@ def pearson(a: np.ndarray, b: np.ndarray) -> float | None:
     return float(np.corrcoef(a, b)[0, 1])
 
 
-def score_rhythm(score: Score, leadsheet: dict, bars: list[BarScore], onset_wavs: Sequence[Path]) -> None:
+def score_rhythm(score: Score, leadsheet: dict, bars: list[BarScore], onset_wavs: Sequence[Path],
+                 dynamic: bool = False) -> None:
     n = len(bars)
     orig = onset_slots(onset_wavs, _ref_windows(leadsheet, n))
     attacks = score.attacks()
     for i, bs in enumerate(bars):
-        bs.rhythm_corr = pearson(strum_vector(attacks, score.bars[i]), orig[i])
+        bs.rhythm_corr = pearson(strum_vector(attacks, score.bars[i], dynamic=dynamic), orig[i])
+
+
+def section_rhythm(bars: list[BarScore]) -> list[dict]:
+    """按段落（标记延续到下一个标记）的平均节奏相关度：[{段落名, 起止小节, 相关度（没有可算的小节时 None）}]。"""
+    groups: list[list[BarScore]] = []
+    for b in bars:
+        if not groups or b.section:
+            groups.append([])
+        groups[-1].append(b)
+    out = []
+    for g in groups:
+        rc = [b.rhythm_corr for b in g if b.rhythm_corr is not None]
+        out.append({"section": g[0].section, "bars": [g[0].bar, g[-1].bar],
+                    "rhythm_correlation": float(np.mean(rc)) if rc else None})
+    return out
 
 
 # ---------- 汇总 ----------
@@ -334,7 +381,7 @@ def score_bars(score: Score, leadsheet: dict | None, arr: str, synth_wav: Path |
     if leadsheet is None:
         bars = [BarScore(bar=b.index + 1, section=b.section) for b in score.bars]
         if arr != "melody":
-            chord_mark_issues(score, bars)
+            chord_mark_issues(score, bars, roots=arr == "power")
         return bars
     n = min(len(score.bars), len(leadsheet["bars"]))
     bars = [BarScore(bar=i + 1, section=score.bars[i].section or leadsheet["bars"][i].get("section")) for i in range(n)]
@@ -347,14 +394,14 @@ def score_bars(score: Score, leadsheet: dict | None, arr: str, synth_wav: Path |
         if synth_wav is not None and vocal_wav is not None and Path(vocal_wav).exists():
             score_harmonic(score, leadsheet, bars, Path(synth_wav), Path(vocal_wav), attr="vocal_sim")
         return bars
-    chord_mark_issues(score, bars)
-    score_chords(score, leadsheet, bars)
+    chord_mark_issues(score, bars, roots=arr == "power")
+    score_chords(score, leadsheet, bars, roots=arr == "power")
     if arr == "finger":
         score_melody(score, leadsheet, bars, skeleton=finger_style == "skeleton")
     if synth_wav is not None and harmonic_wav is not None and Path(harmonic_wav).exists():
         score_harmonic(score, leadsheet, bars, Path(synth_wav), Path(harmonic_wav))
-    if arr == "strum" and onset_wavs and all(Path(w).exists() for w in onset_wavs):
-        score_rhythm(score, leadsheet, bars, [Path(w) for w in onset_wavs])
+    if arr in STRUM_ARRS and onset_wavs and all(Path(w).exists() for w in onset_wavs):
+        score_rhythm(score, leadsheet, bars, [Path(w) for w in onset_wavs], dynamic=arr == "power")
     return bars
 
 
@@ -371,7 +418,7 @@ def summarize(bars: list[BarScore], violations: list, th: Thresholds, arr: str,
     rc = [b.rhythm_corr for b in bars if b.rhythm_corr is not None]
     vs = [b.vocal_sim for b in bars if b.vocal_sim is not None]
     marks = sum(len(b.mark_issues) for b in bars)
-    target = th.chord_strum if arr == "strum" else th.chord_finger
+    target = th.chord_strum if arr in STRUM_ARRS else th.chord_finger
     line = arr in LINE_ARRS
     mel_target = th.melody_line if line else th.melody_f1
     # 卡祖笛谱没有指法：violations 是记谱问题（playability.check_notation），不是可弹性
@@ -389,7 +436,7 @@ def summarize(bars: list[BarScore], violations: list, th: Thresholds, arr: str,
         checks["reference"] = ct > 0
     if arrangement_bars is not None and reference_bars is not None:
         checks["bar_count"] = arrangement_bars == reference_bars
-    if arr == "strum":
+    if arr in STRUM_ARRS:
         checks["chord_marks"] = marks == 0
     if arr == "finger" or line:
         checks["melody"] = mel is None or mel >= mel_target
@@ -459,7 +506,7 @@ def problem_bars(bars: list[BarScore], violations: list, th: Thresholds, arr: st
                     (b.vocal_sim is not None and b.vocal_sim < th.bar_vocal_flag):
                 bad.add(b.bar)
             continue
-        if arr == "strum" and b.mark_issues:
+        if arr in STRUM_ARRS and b.mark_issues:
             bad.add(b.bar)
         if b.chord_ratio is not None and b.chord_ratio < th.bar_chord_flag:
             bad.add(b.bar)

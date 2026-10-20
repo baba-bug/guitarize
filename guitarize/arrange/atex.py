@@ -24,6 +24,7 @@ DURATIONS = [(4.0, 1, False), (3.0, 2, True), (2.0, 2, False), (1.5, 4, True), (
              (0.75, 8, True), (0.5, 8, False), (0.25, 16, False)]
 STANDARD_TUNING = "(E4 B3 G3 D3 A2 E2)"
 TUPLET = "tu 3"   # 三连音：alphaTab 1.8.4 的拍效果 {tu 3}（.8 = 1/3 拍、.4 = 2/3 拍，起音正好在 k/3）
+DIAGRAM_FRETS = 5  # alphaTab 的和弦图画 5 格品：指型的最高品超出时从最低按弦品起画（{firstfret N}）
 
 
 def split_beats(length: float) -> list[tuple[int, bool]]:
@@ -302,7 +303,9 @@ def header(title: str, tempo: float, capo: int, feel: str, staff: str,
     if capo:
         lines.append(f"\\capo {capo}")
     for name, frets in (chords or {}).items():
-        lines.append(f"\\chord {quote(name)} " + " ".join("x" if f is None else str(f) for f in frets))
+        fretted = [f for f in frets if f]
+        first = f" {{firstfret {min(fretted)}}}" if fretted and max(fretted) > DIAGRAM_FRETS else ""
+        lines.append(f"\\chord {quote(name)} " + " ".join("x" if f is None else str(f) for f in frets) + first)
     if chords:
         lines.append("\\chordDiagramsInScore")   # 每处指型标记画成和弦图（谱首仍有总表）
     lines += _meter(feel, key)

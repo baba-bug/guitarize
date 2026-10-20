@@ -13,12 +13,12 @@ import yaml
 from .config import ARR_NAMES, load_song_config
 from .paths import REPO_ROOT, SongPaths
 
-ARRS = tuple(ARR_NAMES)   # strum / finger / melody / kazoo
+ARRS = tuple(ARR_NAMES)   # strum / finger / melody / kazoo / power
 SHOW_VIOLATIONS = 5
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="guitarize", description="原曲 → 吉他谱（弹唱 / 指弹）+ 自动校验")
+    ap = argparse.ArgumentParser(prog="guitarize", description="原曲 → 吉他谱（弹唱 / 指弹 / 强力和弦……）+ 自动校验")
     ap.add_argument("--songs-dir", type=Path, default=None, help="songs 目录（默认仓库内 songs/）")
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name, help_text in (("render", "生成交付物：gp / txt / pdf / html"),
@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
 
         target, option, violations = arrange(paths, cfg, args.arr, capo=args.capo, force=args.force)
         print(target)
-        if option is not None:   # 卡祖笛谱没有变调夹
+        if option is not None:   # 卡祖笛谱、强力和弦谱没有变调夹
             names = ", ".join(f"{k}→{v.name}" for k, v in option.shapes.items())
             print(f"capo {option.capo}（代价 {option.cost}）：{names}")
         if isinstance(violations, str):   # 自检本身没跑成（alphaTab 构建失败 / 找不到 node）：草稿已写出

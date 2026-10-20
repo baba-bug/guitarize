@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 TPQ = 960  # alphaTab 每四分音符的 tick 数
+# 力度 → MIDI 力度（alphaTab MidiUtils.dynamicToVelocity 同一张表）；重音（ac）+16，强重音（hac）+32
+VELOCITY = {"PPP": 15, "PP": 31, "P": 47, "MP": 63, "MF": 79, "F": 95, "FF": 111, "FFF": 127}
+ACCENT_STEP = 16
 
 
 @dataclass(frozen=True)
@@ -19,6 +22,8 @@ class Note:
     slide: str | None = None   # 滑音：legato（连到同弦的下一个音）/ out_down / out_up；None = 没有
     slur_start: bool = False   # 连线（slur）的起点 / 终点
     slur_end: bool = False
+    palm_mute: bool = False    # 闷音（pm）
+    accent: int = 0            # 0 无，1 重音（ac），2 强重音（hac），3 保持音（不改力度）
 
 
 @dataclass(frozen=True)
@@ -37,6 +42,7 @@ class Event:
     rest: bool
     tuplet: int = 1       # 连音组数（1 = 非连音）
     text: str | None = None   # 拍上的文字（txt），旋律谱用它写段落名
+    dynamics: str | None = None   # 力度（"F"、"MP"……，见 VELOCITY）；None = 旧的模型 JSON 没有导出
 
 
 @dataclass(frozen=True)
@@ -59,6 +65,8 @@ class Attack:
     notes: tuple[Note, ...]
     strum: bool               # 带扫弦 / 刷弦标记
     direction: str | None     # "down" / "up" / None
+    velocity: int = VELOCITY["F"]   # 新拨的音里最大的 MIDI 力度（力度 + 重音，同 alphaTab）
+    palm_mute: bool = False         # 新拨的音全是闷音
 
 
 @dataclass(frozen=True)
@@ -117,12 +125,15 @@ class Score:
         for start in sorted(groups):
             evs = groups[start]
             direction = next((e.pick or e.brush for e in evs if e.pick or e.brush), None)
+            fresh = [(e, n) for e in evs for n in e.notes if not n.tie]
             out.append(Attack(
                 start=start,
                 bar=evs[0].bar,
-                notes=tuple(n for e in evs for n in e.notes if not n.tie),
+                notes=tuple(n for _, n in fresh),
                 strum=direction is not None,
                 direction=direction,
+                velocity=max(velocity(e, n) for e, n in fresh),
+                palm_mute=all(n.palm_mute for _, n in fresh),
             ))
         return out
 
@@ -163,6 +174,12 @@ class Score:
         return out
 
 
+def velocity(event: Event, note: Note) -> int:
+    """一个音的 MIDI 力度：拍的力度（没有导出时按 alphaTab 的默认 f）+ 重音。"""
+    accent = {1: 1, 2: 2}.get(note.accent, 0)
+    return min(127, VELOCITY.get(event.dynamics or "F", VELOCITY["F"]) + ACCENT_STEP * accent)
+
+
 def load_score(path: Path) -> Score:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     bars: list[Bar] = []
@@ -176,8 +193,10 @@ def load_score(path: Path) -> Score:
             raw = [(bt["start"] / TPQ, bt["duration"] / TPQ, bt["tuplet"]) for bt in voice]
             for bt, (rs, rd, _), (ps, pd) in zip(voice, raw, performed_times(raw, feel)):
                 notes = tuple(Note(n["string"], n["fret"], n["midi"], n["tie"], n["dead"], n.get("hammer", False),
-                                   n.get("slide"), n.get("slur_start", False), n.get("slur_end", False))
+                                   n.get("slide"), n.get("slur_start", False), n.get("slur_end", False),
+                                   n.get("palm_mute", False), n.get("accent", 0))
                               for n in bt["notes"])
                 events.append(Event(b["index"], vi, bar_start + ps, pd, bar_start + rs, rd, notes,
-                                    bt["chord"], bt["pick"], bt["brush"], bt["rest"], bt["tuplet"], bt.get("text")))
+                                    bt["chord"], bt["pick"], bt["brush"], bt["rest"], bt["tuplet"], bt.get("text"),
+                                    bt.get("dynamics")))
     return Score(data["title"], float(data["tempo"]), int(data["capo"]), list(data["tuning"]), bars, events)

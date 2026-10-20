@@ -1,4 +1,4 @@
-"""文本六线谱：每行若干小节，带小节号、段落、和弦名、扫弦方向。"""
+"""文本六线谱：每行若干小节，带小节号、段落、和弦名、闷音 / 重音记号（PM / >，只在有的时候出这一行）、扫弦方向。"""
 from __future__ import annotations
 
 import unicodedata
@@ -16,6 +16,7 @@ class _Col:
     frets: dict[int, str] = field(default_factory=dict)
     chord: str = ""
     strum: str = ""
+    mark: str = ""   # PM = 闷音，> = 重音
 
 
 def _display_width(text: str) -> int:
@@ -28,8 +29,9 @@ def _pad_display(text: str, width: int) -> str:
 
 
 def _widen(blk: dict[str, str], n: int, extra: int) -> None:
-    """小节块右侧补 extra 格：弦行补 '-'，和弦行与扫弦行补空格。"""
+    """小节块右侧补 extra 格：弦行补 '-'，和弦行、记号行与扫弦行补空格。"""
     blk["chord"] += " " * extra
+    blk["mark"] += " " * extra
     blk["strum"] += " " * extra
     for s in range(1, n + 1):
         blk[f"s{s}"] += "-" * extra
@@ -50,6 +52,11 @@ def _columns(score: Score, bar: Bar) -> list[_Col]:
         for n in e.notes:
             if not n.tie:
                 c.frets[n.string] = "x" if n.dead else str(n.fret)
+        fresh = [n for n in e.notes if not n.tie]
+        if fresh and all(n.palm_mute for n in fresh):
+            c.mark = "PM"
+        elif any(n.accent in (1, 2) for n in fresh):
+            c.mark = ">"
         if e.chord:
             c.chord = e.chord
         direction = e.pick or e.brush
@@ -60,11 +67,11 @@ def _columns(score: Score, bar: Bar) -> list[_Col]:
 
 def _bar_block(score: Score, bar: Bar) -> dict[str, str]:
     n = len(score.tuning)
-    rows = {"chord": "", "strum": "", **{f"s{s}": "" for s in range(1, n + 1)}}
+    rows = {"chord": "", "mark": "", "strum": "", **{f"s{s}": "" for s in range(1, n + 1)}}
     cols = _columns(score, bar)
     if not cols:
         width = round(bar.length * CHARS_PER_BEAT)
-        blank = {"chord": " " * width, "strum": " " * width}
+        blank = {"chord": " " * width, "mark": " " * width, "strum": " " * width}
         blank.update({f"s{s}": "-" * width for s in range(1, n + 1)})
         return blank
     end = bar.start + bar.length
@@ -74,9 +81,11 @@ def _bar_block(score: Score, bar: Bar) -> dict[str, str]:
             round((nxt - c.start) * CHARS_PER_BEAT),
             max((len(t) for t in c.frets.values()), default=1) + 1,
             len(c.chord) + 1,
+            len(c.mark) + 1,
             2,
         )
         rows["chord"] += c.chord.ljust(width)
+        rows["mark"] += c.mark.ljust(width)
         rows["strum"] += c.strum.ljust(width)
         for s in range(1, n + 1):
             rows[f"s{s}"] += c.frets.get(s, "").ljust(width, "-")
@@ -99,7 +108,7 @@ def render_ascii(score: Score, bars_per_line: int = 4) -> str:
     pad = " " * (label_w + 1)
     for i in range(0, len(score.bars), bars_per_line):
         group = score.bars[i:i + bars_per_line]
-        top, chords, strum = pad, pad, pad
+        top, chords, marks, strum = pad, pad, pad, pad
         strings = [names[s - 1].rjust(label_w) + "|" for s in range(1, n + 1)]
         for bar in group:
             blk = _bar_block(score, bar)
@@ -113,12 +122,15 @@ def render_ascii(score: Score, bars_per_line: int = 4) -> str:
                 width = need
             top += _pad_display(label, width + 1)
             chords += blk["chord"] + " "
+            marks += blk["mark"] + " "
             strum += blk["strum"] + " "
             for s in range(1, n + 1):
                 strings[s - 1] += blk[f"s{s}"] + "|"
         out.append(top.rstrip())
         if chords.strip():
             out.append(chords.rstrip())
+        if marks.strip():
+            out.append(marks.rstrip())
         out += strings
         if strum.strip():
             out.append(strum.rstrip())
