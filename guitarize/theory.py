@@ -6,6 +6,7 @@ import re
 import numpy as np
 
 PITCH_CLASSES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+FLAT_PITCH_CLASSES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 _ALIASES = {"DB": 1, "EB": 3, "GB": 6, "AB": 8, "BB": 10, "CB": 11, "FB": 4, "E#": 5, "B#": 0}
 _CHORD_RE = re.compile(r"^([A-Ga-g])([#b♯♭]?)([^/]*)(?:/([A-Ga-g][#b♯♭]?))?$")
 _NO_CHORD = {"", "N", "N.C.", "NC", "-"}
@@ -41,12 +42,13 @@ def pc(name: str) -> int:
     raise ValueError(f"bad note name {name!r}")
 
 
-def pc_name(p: int) -> str:
-    return PITCH_CLASSES[p % 12]
+def pc_name(p: int, flat: bool = False) -> str:
+    """音名；flat 时变音写成降号（Db、Eb……），否则升号。"""
+    return (FLAT_PITCH_CLASSES if flat else PITCH_CLASSES)[p % 12]
 
 
-def midi_name(m: int) -> str:
-    return f"{pc_name(m)}{m // 12 - 1}"
+def midi_name(m: int, flat: bool = False) -> str:
+    return f"{pc_name(m, flat)}{m // 12 - 1}"
 
 
 _NOTE_RE = re.compile(r"^([A-Ga-g])([#b♯♭]?)(-?[0-9])$")

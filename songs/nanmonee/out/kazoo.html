@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>なんもねえ · 卡祖笛</title>
+<style>
+  :root { --bg: #fafaf7; --fg: #1d1d1b; --muted: #6b6b66; --accent: #c2410c; --panel: #ffffffee; --line: #ddd; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 -apple-system, "PingFang SC", sans-serif; }
+  header { position: sticky; top: 0; z-index: 10; background: var(--panel); backdrop-filter: blur(6px);
+           border-bottom: 1px solid var(--line); padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  header h1 { font-size: 16px; margin: 0 12px 0 0; }
+  button, select { font: inherit; padding: 4px 10px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { color: var(--muted); font-size: 13px; }
+  #wrap { padding: 8px 16px 80px; }
+  .at-cursor-bar { background: rgba(194, 65, 12, .08); }
+  .at-cursor-beat { background: var(--accent); width: 3px; }
+  .at-highlight * { fill: var(--accent); stroke: var(--accent); }
+  .at-selection div { background: rgba(194, 65, 12, .15); }
+</style>
+</head>
+<body>
+<header>
+  <h1>なんもねえ · 卡祖笛</h1>
+  <button id="play" disabled>▶ 合成音</button>
+  <label>参考 <select id="ref"></select></label>
+  <button id="refplay">▶ 从当前小节播放</button>
+  <label>速度 <select id="speed"><option>0.5</option><option>0.75</option><option selected>1</option></select></label>
+  <label><input type="checkbox" id="metro"> 节拍器</label>
+  <label><input type="checkbox" id="loop"> 循环选区</label>
+  <span id="status">加载中…</span>
+</header>
+<div id="wrap"><div id="at"></div></div>
+<script id="tex" type="text/plain">\title "なんもねえ"
+\tempo 167
+\track "Kazoo"
+\instrument 59
+\staff {score numbered}
+\tuning (piano)
+\ts 4 4
+\ks B
+\tf triplet-8th
+\ottava 8vb
+// bar 1 [イントロ]
+r.4 {ch "N.C." txt "イントロ" dy f} r.8 F#4.8 F#4{-}.4 F#4.4 |
+// bar 2 [サビ]
+F#4{-}.8 {ch "B" txt "サビ"} r.8 r.4 D#4.4 F#4.8 G#4.8 |
+// bar 3
+G#4{-}.4 {ch "E"} r.4 G#4.4 G#4.4 |
+// bar 4
+G4.2 {ch "D#/G"} G#4.8 r.8 A#4.4 |
+// bar 5
+B4.8 {ch "G#m"} r.8 r.8 A#4.8 A#4{-}.8 r.8 A#4.8 {tu 3} F#4.4 {tu 3} |
+// bar 6
+G#4.8 {ch "E"} r.8 r.8 G#4{slur s1}.8 F#4{slur s1}.8 r.8 E4.4 |
+// bar 7
+F#4.4 {ch "B/D#"} r.8 E4.8 E4{-}.8 r.8 B3.4 |
+// bar 8
+C#4.8 {ch "C#"} B3.8 r.8 B3.8 B3{-}.4 B3{-}.8 {tu 3} A#3.4 {tu 3} |
+// bar 9
+E4.4 {ch "D#"} r.4 F#4.4 G4.4 |
+// bar 10
+F#4.8 {ch "B"} r.8 r.4 D#4.4 F#4.4 |
+// bar 11
+G#4.8 {ch "E"} r.8 r.4 G#4.4 G#4.4 |
+// bar 12
+G#4{-}.4 {ch "D#/G"} G4.4 G#4.4 C#5.4 |
+// bar 13
+C#5{-}.8 {ch "G#m" tu 3} B4.4 {tu 3} r.8 A#4.8 A#4.8 r.8 F#4.4 |
+// bar 14
+G#4.4 {ch "E"} r.8 {tu 3} G#4{slur s2}.4 {tu 3} F#4{slur s2}.8 r.8 E4.4 |
+// bar 15
+F#4.4 {ch "B/D#"} r.8 {tu 3} D#4.4 {tu 3} D#4{slur s3}.4 E4.8 {tu 3} F#4{slur s3}.4 {tu 3} |
+// bar 16
+D#4.8 {ch "C#m7"} C#4{slur s4}.8 C#4{-}.2 B3{slur s4}.8 r.8 |
+// bar 17
+r.4 {ch "F#"} r.8 A#3.8 A#3{-}.4 C#4.4 |
+// bar 18 [間奏]
+B3.4 {ch "B" txt "間奏"} B3{-}.8 B3.8 B3{-}.8 r.8 r.4 |
+// bar 19
+r.2 {ch "N.C."} r.2 |
+// bar 20
+r.2 {ch "B"} r.2 |
+// bar 21
+r.2 {ch "E"} r.2 {ch "F#"} |
+// bar 22 [Aメロ]
+r.4 {ch "B" txt "Aメロ"} F#3.8 r.8 F#3{slur s5}.8 D#3{slur s5}.8 r.8 G#3{slur s6}.8 |
+// bar 23
+G#3{-}.8 {ch "B"} F#3{slur s6}.8 F#3.4 F#3{slur s7}.8 D#3.8 D#3{-}.8 F#3{slur s7}.8 |
+// bar 24
+F#3{-}.8 {ch "F#"} r.8 r.8 F#3.8 F#3{-}.8 F#3.8 F#3{-}.8 E3.8 |
+// bar 25
+G#3.4 {ch "F#"} A#3.4 F#3.4 {d} r.8 |
+// bar 26
+r.4 {ch "G#m"} B3.2 G#3.8 B3.8 |
+// bar 27
+B3{-}.4 {ch "G#m"} G#3.4 B3.8 C#4.8 C#4{-}.8 D#4.8 |
+// bar 28
+D#4{-}.4 {ch "D#"} E4.4 D#4.4 E4.4 |
+// bar 29
+D#4.8 {ch "D#"} r.8 r.8 C#4.8 C#4{-}.8 B3.8 B3{-}.4 |
+// bar 30 [Bメロ]
+B3{-}.8 {ch "E" txt "Bメロ"} r.8 G#3.8 G#3.8 G#3{slur s8}.8 B3{slur s8}.8 B3{-}.8 C#4.8 |
+// bar 31
+C#4{-}.8 {ch "F#"} B3.8 B3{-}.8 B3.8 C#4.4 F#3.4 |
+// bar 32
+F#4.4 {ch "B"} E4.4 D#4.4 {ch "A"} C#4.4 |
+// bar 33
+C#4.4 {ch "G#m" d} r.8 r.8 G#3.8 G#3{-}.8 A#3.8 |
+// bar 34
+B3.4 {ch "C#"} B3{-}.8 A#3{slur s9}.8 B3{slur s9}.8 C#4.8 C#4{-}.8 {tu 3} B3.4 {tu 3} |
+// bar 35
+B3{-}.8 {ch "D#" tu 3} C#4.4 {tu 3} B3.4 B3{slur s10}.4 G#3{slur s10}.8 G#3{slur s11}.8 |
+// bar 36
+G#3{-}.8 {ch "E"} D#4.8 C#4{slur s11}.4 C#4.4 D#4.4 |
+// bar 37
+E4.8 {ch "F#"} r.8 r.8 {ch "F#7"} G#4.8 F#4.4 F#4.8 F#4.8 |
+// bar 38 [サビ]
+F#4{-}.4 {ch "B" txt "サビ" d} r.8 D#4.4 F#4.4 |
+// bar 39
+G#4.4 {ch "E"} r.4 G#4.4 G#4.4 |
+// bar 40
+G4.2 {ch "D#/G"} G#4.4 A#4.4 |
+// bar 41
+B4.8 {ch "G#m"} r.8 r.8 B4{slur s12}.8 A#4{slur s12}.8 r.8 F#4.8 F#4{slur s13}.8 |
+// bar 42
+G#4{slur s13}.8 {ch "E"} r.8 r.8 G#4{slur s14}.8 F#4{slur s14}.8 r.8 E4.4 |
+// bar 43
+F#4.8 {ch "B/D#"} r.8 r.8 F#4{slur s15}.8 D#4{slur s15}.8 r.8 B3.4 |
+// bar 44
+C#4.8 {ch "C#"} r.8 r.8 D#4{slur s16}.8 B3{slur s16}.4 A#3.4 |
+// bar 45
+E4.4 {ch "D#"} r.4 G4.4 G4.8 F#4.8 |
+// bar 46
+F#4{-}.8 {ch "B"} r.8 r.4 D#4.4 F#4.4 |
+// bar 47
+G#4.8 {ch "E"} r.8 r.4 G#4.4 G#4.4 |
+// bar 48
+G4.2 {ch "D#/G"} G#4{slur s17}.4 C#5{slur s17}.4 |
+// bar 49
+B4.8 {ch "G#m"} r.8 r.4 A#4.8 r.8 F#4.4 |
+// bar 50
+G#4.8 {ch "E"} r.8 r.8 G#4{slur s18}.8 F#4{slur s18}.8 r.8 E4.4 |
+// bar 51
+F#4.8 {ch "B/D#"} r.8 r.8 D#4.8 D#4{-}.4 F#4.4 |
+// bar 52
+D#4.8 {ch "C#7"} C#4.8 C#4{-}.2 C#4{-}.8 E4.8 |
+// bar 53
+D#4.4 {ch "D#"} r.8 B4.8 r.8 A#4{slur s19}.8 A#4{-}.8 F#4{slur s19}.8 |
+// bar 54 [アウトロ]
+G#4.4 {ch "E" txt "アウトロ"} r.8 G#4.8 G#4{-}.8 {tu 3} F#4.4 {tu 3} F#4{-}.8 {tu 3} E4.8 {tu 3} E4.8 {tu 3} |
+// bar 55
+F#4.4 {ch "B/D#"} r.8 D#4{slur s20}.8 D#4{-}.4 F#4{slur s20}.4 |
+// bar 56
+D#4.4 {ch "C#7"} C#4.2 C#4{-}.8 r.8 |
+// bar 57
+r.2 {ch "F#"} B3.4 C#4.4 |
+// bar 58
+B3.2 {ch "B"} r.2 |
+// bar 59
+r.2 {ch "N.C."} r.2 |
+// bar 60
+r.2 {ch "B"} r.2 |
+// bar 61
+r.2 {ch "E"} r.2 {ch "F#"} |
+// bar 62
+r.2 {ch "B"} r.2 |
+</script>
+<script>window.BAR_TIMES = [[-0.26, 1.2], [1.2, 2.66], [2.66, 4.08], [4.08, 5.54], [5.54, 6.98], [6.98, 8.44], [8.44, 9.86], [9.86, 11.3], [11.3, 12.76], [12.76, 14.2], [14.2, 15.64], [15.64, 17.08], [17.08, 18.54], [18.54, 19.98], [19.98, 21.44], [21.44, 22.88], [22.88, 24.32], [24.32, 25.76], [25.76, 27.18], [27.18, 28.64], [28.64, 30.1], [30.1, 31.56], [31.56, 33.0], [33.0, 34.44], [34.44, 35.88], [35.88, 37.34], [37.34, 38.78], [38.78, 40.22], [40.22, 41.66], [41.66, 43.12], [43.12, 44.56], [44.56, 46.0], [46.0, 47.46], [47.46, 48.9], [48.9, 50.36], [50.36, 51.8], [51.8, 53.24], [53.24, 54.7], [54.7, 56.14], [56.14, 57.58], [57.58, 59.02], [59.02, 60.48], [60.48, 61.9], [61.9, 63.36], [63.36, 64.8], [64.8, 66.26], [66.26, 67.7], [67.7, 69.14], [69.14, 70.6], [70.6, 72.04], [72.04, 73.48], [73.48, 74.92], [74.92, 76.36], [76.36, 77.82], [77.82, 79.28], [79.28, 80.72], [80.72, 82.14], [82.14, 83.58], [83.58, 85.04], [85.04, 86.48], [86.48, 87.94], [87.94, 89.4]];
+window.REF_AUDIO = [{"label": "原曲", "url": "../source/original.wav"}, {"label": "人声", "url": "../analysis/stems/vocals.wav"}, {"label": "主唱（模型去掉伴唱）", "url": "../analysis/stems/lead.wav"}, {"label": "伴唱", "url": "../analysis/stems/backing.wav"}, {"label": "吉他", "url": "../analysis/stems/guitar.wav"}, {"label": "贝斯", "url": "../analysis/stems/bass.wav"}, {"label": "鼓", "url": "../analysis/stems/drums.wav"}, {"label": "其他", "url": "../analysis/stems/other.wav"}, {"label": "钢琴", "url": "../analysis/stems/piano.wav"}, {"label": "和声混合", "url": "../analysis/stems/harmonic.wav"}];
+</script>
+<script src="../../../tools/alphatab/node_modules/@coderline/alphatab/dist/alphaTab.js"></script>
+<script>
+  const base = "../../../tools/alphatab/node_modules/@coderline/alphatab/dist/";
+  const api = new alphaTab.AlphaTabApi(document.getElementById("at"), {
+    core: { fontDirectory: base + "font/" },
+    player: {
+      playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
+      soundFont: base + "soundfont/sonivox.sf2",
+      scrollElement: document.scrollingElement,
+    },
+  });
+  const status = document.getElementById("status");
+  const playBtn = document.getElementById("play");
+  let currentBar = 0;
+  // 参考音频（原曲、人声、吉他、贝斯、鼓……）：下拉选一轨，从当前小节播放；同一时间只放一个
+  const refSel = document.getElementById("ref");
+  const refBtn = document.getElementById("refplay");
+  const IDLE = "▶ 从当前小节播放";
+  const refs = window.REF_AUDIO.map((r, i) => {
+    refSel.add(new Option(r.label, String(i)));
+    return { audio: null, url: r.url, label: r.label };
+  });
+  const audioOf = (r) => { if (!r.audio) { r.audio = new Audio(r.url); r.audio.preload = "auto"; } return r.audio; };
+  const stopRefs = () => { refs.forEach((r) => r.audio && r.audio.pause()); refBtn.textContent = IDLE; };
+  refSel.onchange = stopRefs;
+
+  api.tex(document.getElementById("tex").textContent);
+  api.playerReady.on(() => {
+    playBtn.disabled = false;
+    status.textContent = "就绪：点音符选定小节，拖选可设置循环区";
+  });
+  api.error.on((e) => { status.textContent = "出错：" + e.message; });
+  // 参考音频正在放时点谱面：音频跳到点中的那一拍（按原曲小节起止时间换算），光标随之跳过去
+  const playingRef = () => refs.find((r) => r.audio && !r.audio.paused);
+  function timeOfBeat(beat) {
+    const bt = window.BAR_TIMES[Math.min(beat.voice.bar.index, window.BAR_TIMES.length - 1)];
+    const frac = beat.playbackStart / beat.voice.bar.masterBar.calculateDuration();
+    return Math.max(0, bt[0] + Math.min(1, Math.max(0, frac)) * (bt[1] - bt[0]));
+  }
+  window.__timeOfBeat = timeOfBeat;   // 自检用
+  api.beatMouseDown.on((beat) => {
+    currentBar = beat.voice.bar.index;
+    const r = playingRef();
+    if (r && window.BAR_TIMES.length) r.audio.currentTime = timeOfBeat(beat);
+  });
+  api.playedBeatChanged.on((beat) => { currentBar = beat.voice.bar.index; });
+
+  playBtn.onclick = () => { stopRefs(); api.playPause(); };
+  document.getElementById("speed").onchange = (e) => {
+    const v = parseFloat(e.target.value);
+    api.playbackSpeed = v;
+    refs.forEach((r) => { if (r.audio) r.audio.playbackRate = v; });
+  };
+  document.getElementById("metro").onchange = (e) => { api.metronomeVolume = e.target.checked ? 1 : 0; };
+  document.getElementById("loop").onchange = (e) => { api.isLooping = e.target.checked; };
+
+  if (!window.BAR_TIMES.length) {
+    refBtn.disabled = true;
+    refBtn.title = "缺少原曲小节时间（leadsheet.json）";
+  }
+  // 参考音频播放时让谱面光标跟着走：按原曲小节起止时间换算成小节内比例 → alphaTab 的 tick 位置
+  function barAt(sec) {
+    const bt = window.BAR_TIMES;
+    let i = bt.findIndex((b) => sec < b[1]);
+    if (i < 0) i = bt.length - 1;
+    const [a, e] = bt[i];
+    return [i, Math.min(1, Math.max(0, (sec - a) / (e - a)))];
+  }
+  function tickAt(sec) {
+    const [i, frac] = barAt(sec);
+    const mb = api.score && api.score.masterBars[i];
+    return mb ? Math.round(mb.start + frac * mb.calculateDuration()) : null;
+  }
+  window.__tickAt = tickAt;   // 自检用
+  let follow = 0;
+  function followAudio(audio) {
+    cancelAnimationFrame(follow);
+    let last = 0;
+    const step = (now) => {
+      if (audio.paused) return;
+      if (now - last > 80) {   // 约 12 次 / 秒，足够流畅，不给合成器线程塞太多跳转
+        last = now;
+        const tick = tickAt(audio.currentTime);
+        if (tick !== null) api.tickPosition = tick;
+        currentBar = barAt(audio.currentTime)[0];
+      }
+      follow = requestAnimationFrame(step);
+    };
+    follow = requestAnimationFrame(step);
+  }
+
+  refBtn.onclick = () => {
+    const r = refs[Number(refSel.value)];
+    const audio = audioOf(r);
+    const playing = !audio.paused;
+    stopRefs();
+    if (playing) return;
+    api.pause();
+    const t = window.BAR_TIMES[Math.min(currentBar, window.BAR_TIMES.length - 1)];
+    audio.playbackRate = api.playbackSpeed;
+    audio.currentTime = Math.max(0, t[0]);
+    audio.play();
+    followAudio(audio);
+    refBtn.textContent = "⏸ 停止（" + r.label + "）";
+  };
+  if (location.hash === "#selftest") {   // 无头浏览器自检：第 5 小节中点 → 写进标题
+    api.renderFinished.on(() => {
+      const bt = window.BAR_TIMES[4];
+      document.title = "selftest " + tickAt((bt[0] + bt[1]) / 2) + " expect " +
+        (api.score.masterBars[4].start + api.score.masterBars[4].calculateDuration() / 2);
+    });
+  }
+</script>
+</body>
+</html>

@@ -32,7 +32,7 @@ from ..config import Profile
 from ..verify.playability import Violation
 from . import atex
 from .capo import OctavePolicy, effective_profile, octave_plan
-from .layout import _at, _voice_lines, annotate, section_bars, shape_marks
+from .layout import _at, _voice_lines, annotate, mark_effects, section_bars, shape_marks
 from .fretting import FretEvent, assign_frets
 from .shapes import OPEN_STRINGS
 
@@ -304,10 +304,7 @@ def generate_melody(leadsheet: dict, capo: int, profile: Profile, title: str,
     marks, diagrams = shape_marks(leadsheet, capo, profile)
     head = atex.header(title, leadsheet["tempo_bpm"], capo, feel, "score tabs", diagrams,
                        key=atex.leadsheet_key(leadsheet))
-    starts = {i * 4.0: name for i, name in enumerate(sections) if name}
-    effects = {pos: ([f"ch {atex.quote(marks[pos])}"] if pos in marks else [])
-               + ([f"txt {atex.quote(starts[pos])}"] if pos in starts else []) + (["dy f"] if pos == 0.0 else [])
-               for pos in sorted({0.0} | set(marks) | set(starts))}
+    effects = mark_effects(marks, sections)
 
     def render() -> str:
         pieces = split_at([(n.pos, n.dur, [n.where] if n.where else [], False) for n in line], effects)

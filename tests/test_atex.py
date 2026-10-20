@@ -334,3 +334,94 @@ def test_slide_out_and_chord_note_effects_build(tmp_path):
     assert [[(n.fret, n.hammer, n.slide) for n in e.notes] for e in score.events] == [
         [(5, True, None), (3, False, None)], [(7, False, None), (3, False, None)], [(3, False, "out_down")],
         [(5, False, "out_up")]]
+
+
+# ---------- 音高谱表（卡祖笛等非弦乐器）：音符写音名（C4.4），连音线是音符效果 {-} ----------
+
+def _pitched_score(tmp_path, tokens, name="p", key=("B", "major"), feel="straight", ottava=None):
+    head = atex.pitched_header("T", 120, feel, "Kazoo", 59, key=key, ottava=ottava)
+    lines = [atex.bar_line(bar, i + 1) for i, bar in enumerate(tokens)]
+    src = tmp_path / f"{name}.atex"
+    src.write_text(atex.document(head, [lines]), encoding="utf-8")
+    return load_score(alphatab.build(src, tmp_path / "b", name)["json"])
+
+
+def test_pitch_names_follow_the_key_signature():
+    # 升号调写升号、降号调写降号（与 \\ks 同一个调名约定）；B 大调里的变音全是升号
+    assert atex.key_fifths("B", "major") == 5 and atex.key_fifths("F", "major") == -1
+    assert atex.key_fifths("C#", "major") == -5          # 惯用 Db 大调
+    assert atex.key_fifths("G#", "minor") == 5 and atex.key_fifths("A#", "minor") == -5 and atex.key_fifths("D", "minor") == -1
+    assert not atex.flats(("B", "major")) and atex.flats(("Eb", "major")) and atex.flats(("D", "minor"))
+    assert not atex.flats(None)                            # 没有记调：升号
+    assert [atex.Pitch(m).name for m in (59, 61, 63, 66, 68, 70, 67)] == ["B3", "C#4", "D#4", "F#4", "G#4", "A#4", "G4"]
+    assert [atex.Pitch(m, flat=True).name for m in (63, 70, 68, 61, 66, 60)] == ["Eb4", "Bb4", "Ab4", "Db4", "Gb4", "C4"]
+
+
+def test_pitched_tokens():
+    p = atex.Pitch
+    assert atex.notes_token([p(61)]) == "C#4"
+    assert atex.notes_token([p(70, flat=True)]) == "Bb4"
+    assert atex.notes_token([p(61)], tie=True) == "C#4{-}"                         # 连音线延续：同音名 + {-}
+    assert atex.notes_token([p(61)], effects={61: ["slur s1"]}) == "C#4{slur s1}"
+    assert atex.notes_token([p(61)], tie=True, effects={61: ["slur s1"]}) == "C#4{- slur s1}"
+    assert atex.notes_token([p(60), p(64)], held={60}) == "(C4{-} E4)"
+    assert atex.beat_tokens([p(66)], 2.5, ['ch "B"']) == ['F#4.2 {ch "B"}', "F#4{-}.8"]
+    assert atex.beat_tokens([p(66)], 2 / 3, tie=True, tuplet=True) == ["F#4{-}.4 {tu 3}"]
+
+
+def test_head_note_effects_stay_on_the_onset_and_tail_effects_on_the_last_piece():
+    # 音头效果（如连线 slur 的起止）挂在起音那一个记号上；音尾效果照旧挂在最后一段（连音线延续）上
+    p = atex.Pitch
+    assert atex.beat_tokens([p(63)], 2.5, head_effects={63: ["slur s1"]}) == ["D#4{slur s1}.2", "D#4{-}.8"]
+    assert atex.beat_tokens([p(63)], 1, head_effects={63: ["slur s1"]}, note_effects={63: ["x1"]}) == [
+        "D#4{slur s1 x1}.4"]
+    assert atex.beat_tokens([p(63)], 1, tie=True, head_effects={63: ["slur s1"]}) == ["D#4{-}.4"]   # 延续不是起音
+    items = [atex.Item(0, 1.5, [p(63)], head_effects={63: ["slur s1"]}), atex.Item(1.5, 0.5, [p(66)]),
+             atex.Item(2, 2, [])]
+    pieces = atex.split_for_swing(items, "shuffle")
+    assert [dict(x.head_effects or {}) for x, _ in pieces] == [{63: ["slur s1"]}, {}, {}, {}]
+    items = [atex.Item(0, 4 / 3, [p(63)], head_effects={63: ["slur s1"]}), atex.Item(4 / 3, 8 / 3, [])]
+    assert [dict(x.head_effects or {}) for x in atex.split_triplets(items)] == [{63: ["slur s1"]}, {}, {}, {}]
+
+
+def test_pitched_ties_cross_the_bar_line_and_build(tmp_path):
+    # 音高谱表上 '-.4' 是语法错误：延续写成同一个音名 + {-}；跨小节线照样连
+    p = atex.Pitch
+    bar1 = atex.voice_bar_tokens([atex.Item(0, 2, [p(59)], ['ch "B"', "dy f"]), atex.Item(2, 2, [p(66)])], "straight")
+    bar2 = atex.voice_bar_tokens([atex.Item(0, 1, [p(66)], tie=True), atex.Item(1, 3, [])], "straight")
+    assert bar1 == ['B3.2 {ch "B" dy f}', "F#4.2"] and bar2 == ["F#4{-}.4", "r.2 {d}"]
+    score = _pitched_score(tmp_path, [bar1, bar2])
+    assert score.tuning == [] and score.capo == 0
+    assert [(round(s.start, 3), round(s.end, 3), s.midi) for s in score.sounding()] == [(0, 2, 59), (2, 5, 66)]
+    assert [e.chord for e in score.events if e.chord] == ["B"]
+    assert all(n.string is None and n.fret is None for e in score.events for n in e.notes)   # 没有弦和品
+    assert score.bars[0].key == 5 and not score.bars[0].minor and score.bars[0].ottava is None
+
+
+def test_pitched_triplets_and_shuffle_pairs_build(tmp_path):
+    p = atex.Pitch
+    items = [atex.Item(0, 0.5, [p(59)]), atex.Item(0.5, 0.5, [p(61)]),
+             atex.Item(1, 1 / 3, [p(63)]), atex.Item(4 / 3, 1 / 3, [p(64)]), atex.Item(5 / 3, 1 / 3, [p(66)]),
+             atex.Item(2, 2, [p(68)])]
+    tokens = atex.voice_bar_tokens(items, "shuffle")
+    assert tokens == ["B3.8", "C#4.8", "D#4.8 {tu 3}", "E4.8 {tu 3}", "F#4.8 {tu 3}", "G#4.2"]
+    score = _pitched_score(tmp_path, [tokens], feel="shuffle")
+    assert score.bars[0].feel == "triplet8th"
+    assert [(round(a.start, 4), a.notes[0].midi) for a in score.attacks()] == [
+        (0.0, 59), (0.6667, 61), (1.0, 63), (1.3333, 64), (1.6667, 66), (2.0, 68)]
+
+
+def test_slur_pairs_and_ottava_build(tmp_path):
+    # 连线按 id 配对（slur s1 … slur s1）；8vb 谱号只改显示（记谱高八度），播放的音高不变
+    p = atex.Pitch
+    tokens = ["D#3{slur s1}.4", "F#3.4", "G#3{slur s1}.4", "B3.4"]
+    score = _pitched_score(tmp_path, [tokens], ottava="8vb")
+    notes = [n for e in score.events for n in e.notes]
+    assert [(n.midi, n.slur_start, n.slur_end) for n in notes] == [
+        (51, True, False), (54, False, False), (56, False, True), (59, False, False)]
+    assert score.bars[0].ottava == "8vb"
+    assert "\\ottava 8vb" in atex.pitched_header("T", 120, "straight", "Kazoo", 59, ottava="8vb")
+    head = atex.pitched_header("T", 120, "shuffle", "Kazoo", 59, key=("B", "major"))
+    assert head.splitlines()[2:] == ['\\track "Kazoo"', "\\instrument 59", "\\staff {score numbered}",
+                                     "\\tuning (piano)", "\\ts 4 4", "\\ks B", "\\tf triplet-8th"]
+    assert "\\capo" not in head and "\\chord" not in head and "\\ottava" not in head

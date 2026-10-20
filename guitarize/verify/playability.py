@@ -1,4 +1,5 @@
-"""可弹性检查：硬规则（违反即不合格）+ 软统计（只报告）。"""
+"""可弹性检查：硬规则（违反即不合格）+ 软统计（只报告）。记谱检查（小节时值、Shuffle 反拍）与乐器无关，
+卡祖笛谱（没有指法）只做这一项（check_notation）。"""
 from __future__ import annotations
 
 from bisect import bisect_left, bisect_right
@@ -73,14 +74,19 @@ def _straight_offbeats(score: Score) -> list[Violation]:
     return out
 
 
-def check_playability(score: Score, profile: Profile, kind: str) -> list[Violation]:
+def check_notation(score: Score) -> list[Violation]:
+    """记谱检查：每个声部的小节时值（bar_length）、三连音感觉下会按直拍播放的反拍音（straight_offbeat）。"""
     out: list[Violation] = []
     for (bar, voice), length in sorted(score.voice_lengths().items()):
         expected = score.bars[bar].length
         if abs(length - expected) > 1e-6:
             out.append(Violation(bar + 1, score.bars[bar].start, "bar_length",
                                  f"声部 {voice + 1} 共 {length:g} 拍，应为 {expected:g} 拍"))
-    out += _straight_offbeats(score)
+    return out + _straight_offbeats(score)
+
+
+def check_playability(score: Score, profile: Profile, kind: str) -> list[Violation]:
+    out = check_notation(score)
     index = _sounding_index(score)
     neck_limit = NECK_JOIN_FRET - score.capo
     max_fret = min(profile.max_fret, neck_limit)
