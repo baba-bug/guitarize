@@ -10,13 +10,15 @@ TPQ = 960  # alphaTab 每四分音符的 tick 数
 
 @dataclass(frozen=True)
 class Note:
-    string: int  # 1 = 最高音弦
-    fret: int    # 相对变调夹
+    string: int | None  # 1 = 最高音弦；音高谱表（卡祖笛等，没有弦）是 None
+    fret: int | None    # 相对变调夹；音高谱表是 None
     midi: int    # 含变调夹的实际音高
     tie: bool
     dead: bool
     hammer: bool = False       # 击弦 / 勾弦的起点（alphaTab 找到了同弦的下一个音）
     slide: str | None = None   # 滑音：legato（连到同弦的下一个音）/ out_down / out_up；None = 没有
+    slur_start: bool = False   # 连线（slur）的起点 / 终点
+    slur_end: bool = False
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,9 @@ class Bar:
     length: float  # 拍
     section: str | None
     feel: str
+    key: int = 0                # 调号：升号数为正、降号数为负
+    minor: bool = False
+    ottava: str | None = None   # 谱号八度记号（8vb 等，只改显示）；None = 没有
 
 
 @dataclass(frozen=True)
@@ -122,14 +127,14 @@ class Score:
         return out
 
     def sounding(self) -> list[Sounding]:
-        """每个音的实际发声区间；连音线把时值并入前一个同弦同声部的音。"""
+        """每个音的实际发声区间；连音线把时值并入前一个同弦同声部的音（音高谱表没有弦：同音高同声部）。"""
         out: list[Sounding] = []
         open_notes: dict[tuple[int, int], int] = {}
         for e in sorted(self.events, key=lambda ev: (ev.start, ev.voice)):
             for n in e.notes:
                 if n.dead:
                     continue
-                key = (e.voice, n.string)
+                key = (e.voice, n.midi if n.string is None else n.string)
                 if n.tie and key in open_notes:
                     i = open_notes[key]
                     s = out[i]
@@ -165,12 +170,14 @@ def load_score(path: Path) -> Score:
     for b in data["bars"]:
         bar_start = b["start"] / TPQ
         feel = b["triplet_feel"]
-        bars.append(Bar(b["index"], bar_start, b["duration"] / TPQ, b["section"], feel))
+        bars.append(Bar(b["index"], bar_start, b["duration"] / TPQ, b["section"], feel,
+                        b.get("key_signature", 0), b.get("key_minor", False), b.get("ottava")))
         for vi, voice in enumerate(b["voices"]):
             raw = [(bt["start"] / TPQ, bt["duration"] / TPQ, bt["tuplet"]) for bt in voice]
             for bt, (rs, rd, _), (ps, pd) in zip(voice, raw, performed_times(raw, feel)):
                 notes = tuple(Note(n["string"], n["fret"], n["midi"], n["tie"], n["dead"], n.get("hammer", False),
-                                   n.get("slide")) for n in bt["notes"])
+                                   n.get("slide"), n.get("slur_start", False), n.get("slur_end", False))
+                              for n in bt["notes"])
                 events.append(Event(b["index"], vi, bar_start + ps, pd, bar_start + rs, rd, notes,
                                     bt["chord"], bt["pick"], bt["brush"], bt["rest"], bt["tuplet"], bt.get("text")))
     return Score(data["title"], float(data["tempo"]), int(data["capo"]), list(data["tuning"]), bars, events)

@@ -12,7 +12,11 @@ const BRUSH = { 0: null, 1: 'up', 2: 'down', 3: 'up', 4: 'down' };
 // SlideOutType → 名字（只导出旋律谱用到的几种；其余记 null）
 const SLIDE = { 2: 'legato', 3: 'out_up', 4: 'out_down' };
 const FEEL = { 0: 'none', 1: 'triplet16th', 2: 'triplet8th', 3: 'dotted16th', 4: 'dotted8th', 5: 'scottish16th', 6: 'scottish8th' };
+// Ottavia（谱号八度记号）→ 名字；Regular 记 null
+const OTTAVA = { 0: '15ma', 1: '8va', 3: '8vb', 4: '15mb' };
+const MINOR = 1; // KeySignatureType.Minor
 
+// 音高谱表（\tuning (piano)，如卡祖笛）没有弦：tuning 是 []，音符的 string / fret 记 null（只有 midi）
 function toModel(score) {
   const staff = score.tracks[0].staves[0];
   const nStrings = staff.tuning.length;
@@ -30,6 +34,9 @@ function toModel(score) {
         ts: [mb.timeSignatureNumerator, mb.timeSignatureDenominator],
         section: mb.section ? mb.section.text : null,
         triplet_feel: FEEL[mb.tripletFeel] ?? 'none',
+        key_signature: bar.keySignature, // 升号数为正、降号数为负
+        key_minor: bar.keySignatureType === MINOR,
+        ottava: OTTAVA[bar.clefOttava] ?? null,
         voices: bar.voices.map((voice) =>
           voice.beats
             .filter((b) => !b.isEmpty)
@@ -44,13 +51,15 @@ function toModel(score) {
               pick: PICK[b.pickStroke] ?? null,
               brush: BRUSH[b.brushType] ?? null,
               notes: b.notes.map((n) => ({
-                string: nStrings - n.string + 1,
-                fret: n.fret,
+                string: n.isStringed ? nStrings - n.string + 1 : null,
+                fret: n.isStringed ? n.fret : null,
                 midi: n.realValue,
                 tie: n.isTieDestination,
                 dead: n.isDead,
                 hammer: n.isHammerPullOrigin, // finish() 之后：同弦确有下一个音才为 true
                 slide: SLIDE[n.slideOutType] ?? null,
+                slur_start: n.isSlurOrigin, // 连线（slur）的起点 / 终点
+                slur_end: n.isSlurDestination,
               })),
             })),
         ),
