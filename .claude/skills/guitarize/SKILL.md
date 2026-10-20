@@ -9,7 +9,7 @@ description: 把一首歌（歌名或 B 站 / 网易云链接）做成可弹的�
 环境未装时先跑 `scripts/setup_env.sh`。设计见 `docs/specs/2026-10-09-guitarize-design.md`。
 
 ## 0. 先问清楚（一次问完）
-版本（TV size / 完整版）、水平（beginner / intermediate / advanced）、要哪些编配（弹唱 / 指弹）、输出格式。
+版本（TV size / 完整版）、水平（beginner / intermediate / advanced）、要哪些编配（弹唱 / 指弹 / 旋律谱 / 卡祖笛独奏）、输出格式。
 
 ## 1. 建歌
 `$PY -m guitarize new <slug> --title "<歌名>" --artist "<歌手>"`，再按回答改 `songs/<slug>/song.yaml` 的 `version / level / arrangements / outputs`。
@@ -44,6 +44,13 @@ description: 把一首歌（歌名或 B 站 / 网易云链接）做成可弹的�
 - 草稿是生成结果，`--force` 会覆盖手改：把手改写成 `songs/<slug>/hand_edits.py`（按 `// bar N` 替换行，见 なんもねえ 的例子），生成器改进后 `arrange --force` 再重放手改脚本，再 verify。
 - 指弹旋律默认整曲一个八度（保持人声高低关系；段落间换八度会让旋律在交界处"突然掉下去"）。确需分段换八度时用 `overrides.melody_octave: section` 或 `{小节: 12}`。
 - 指弹谱自动标出该按的和弦指型（指型名 + 和弦图）；伴奏 mf、旋律 f。
+
+### 卡祖笛独奏（`--arr kazoo`，"卡祖笛来独奏"）
+- `$PY -m guitarize arrange <slug> --arr kazoo`，并把 `kazoo` 加进 `song.yaml` 的 `arrangements`。卡祖笛靠哼唱发声，没有指法：谱上是确认过的旋律（leadsheet 的 melody，与旋律谱同一份、同一个节奏）按**实际音高**写——不加变调夹、不移八度，就是歌手唱的八度。所以先把旋律谱核对准。
+- 谱面：五线谱 + 简谱（`\staff {score numbered}`，音高谱表 `\tuning (piano)`，音符写音名 `C#4.4`，升降号跟调号走），音色 GM 59（Muted Trumpet）。连奏（legato）的音写连线（`slur`，不重新吐音），其余每个音重新吐音。每小节第 1 拍标和弦名（实际音高、不画和弦图，转入无和弦标 N.C.），段落名写成文字。简谱不加点的八度放在旋律最集中的八度：男声旋律用 8vb 谱号（记谱高八度，播放音高不变）。
+- 手改 atex 时：连音线延续写 `C#4{-}.4`（`-.4` 在音高谱表上是语法错误），和别的音符效果同一个花括号 `C#4{- slur s1}`；连线按 id 配对、id 不能重用；`\section "名"` 后面紧跟音名会被当成参数（写 `\section ("名")`）；alphaTab 1.8.4 的简谱画不了全休止 `r.1`（写 `r.2 r.2`）。
+- `verify --arr kazoo`：不查可弹性，只查记谱（小节时值、Shuffle 反拍）；旋律 F1（全部参考音，达标线 0.9）+ 小节数相等即达标；另报音域（最低 / 最高音、跨度）和换气提醒（连续超过 `thresholds.breath_seconds`（默认 8）秒没有休止的乐句，按小节列出）。不对照音频，没有试听片段。
+- `render --arr kazoo` 的 txt 是文本简谱（`1=B 4/4`，每行一小节，记法写在文件开头：`'` / `,` 高低八度、`-` 接着响、`0` 休止、`³` 三连音拍）；网页同样能选参考音频、从当前小节播放、光标跟随。
 
 ## 6. 校验迭代（每份编配分别进行）
 ```
