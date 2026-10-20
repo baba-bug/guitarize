@@ -9,7 +9,7 @@ import yaml
 from .paths import SongPaths
 
 PROFILES_PATH = Path(__file__).with_name("profiles.yaml")
-ARR_NAMES = {"strum": "弹唱", "finger": "指弹", "melody": "旋律"}
+ARR_NAMES = {"strum": "弹唱", "finger": "指弹", "melody": "旋律", "kazoo": "卡祖笛"}   # kazoo：卡祖笛独奏（arrange/kazoo.py）
 MELODY_SOURCES = ("lead", "vocals")   # 旋律从哪条分轨识别：主唱 stems/lead.wav（去掉伴唱）、整条人声 stems/vocals.wav
 FINGER_STYLES = ("full", "skeleton")  # 指弹写法：完整旋律（默认）/ 骨架旋律，见 arrange/finger.py
 
@@ -38,6 +38,7 @@ class Thresholds:
     bar_harmonic_flag: float = 0.60
     bar_vocal_flag: float = 0.60    # 旋律谱：与人声分轨的小节色度相似度低于它 → 问题小节
     melody_conf_flag: float = 0.50  # 旋律谱：参考旋律音的置信（平均周期性）低于它 → 需人耳确认
+    breath_seconds: float = 8.0     # 卡祖笛谱：连续发声（中间没有休止）超过这么多秒 → 换气提醒
 
 
 @dataclass(frozen=True)

@@ -1,7 +1,8 @@
 """编配 vs 参考（leadsheet.json）的逐小节评分。
 弹唱 / 指弹：和弦一致率、旋律（指弹按写法：完整旋律与旋律谱一样考全部参考音，骨架写法只考骨架音）、
 与和声分轨的色度相似度、节奏（弹唱）。
-旋律谱（melody）：只评旋律（召回按全部参考音）和与人声分轨的色度相似度，并列出要人耳确认的参考音；不评和弦。"""
+旋律谱（melody）：只评旋律（召回按全部参考音）和与人声分轨的色度相似度，并列出要人耳确认的参考音；不评和弦。
+卡祖笛谱（kazoo）：只评旋律（与旋律谱同一套评法），另报音域和换气（kazoo_stats）；不评和弦、不对照音频。"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ MELODY_TOL = 1 / 3 + 1e-6  # 起音容差（拍）：指弹（骨架音按八分
 # 差一个三连音格（1/3 拍）就不算命中。1e-3 容下 leadsheet 拍位置 4 位小数的舍入
 LINE_TOL = 1 / 6 + 1e-3
 SLOTS = 12                 # 4/4 小节的三连音八分格数
+LINE_ARRS = ("melody", "kazoo")   # 单旋律线的谱：不评和弦，旋律召回考全部参考音、达标线 melody_line
 
 
 @dataclass
@@ -212,9 +214,9 @@ def score_melody(score: Score, leadsheet: dict, bars: list[BarScore], skeleton: 
         bs.mel_ref += 1
         if j in founds:
             bs.mel_found += 1
-        else:
-            shape = theory.midi_name(m["midi"] - score.capo)
-            bs.mel_issues.append(f"{missed}：拍 {pos} {theory.midi_name(m['midi'])}（指法调 {shape}）")
+        else:   # 吉他谱附上指法调音高；音高谱表（卡祖笛，没有弦）没有指法调
+            shape = f"（指法调 {theory.midi_name(m['midi'] - score.capo)}）" if score.tuning else ""
+            bs.mel_issues.append(f"{missed}：拍 {pos} {theory.midi_name(m['midi'])}{shape}")
 
 
 def ear_check(leadsheet: dict, bars: list[BarScore], low_conf: float) -> None:
@@ -325,6 +327,7 @@ def score_bars(score: Score, leadsheet: dict | None, arr: str, synth_wav: Path |
                harmonic_wav: Path | None = None, onset_wavs: Sequence[Path] = (), vocal_wav: Path | None = None,
                low_conf: float = Thresholds.melody_conf_flag, finger_style: str = "full") -> list[BarScore]:
     """vocal_wav / low_conf 只用于旋律谱（arr = melody）：人声分轨相似度、要人耳确认的低置信参考音。
+    卡祖笛谱（kazoo）只评旋律（与旋律谱同一套：召回考全部参考音、起音容差 LINE_TOL），不对照音频。
     finger_style 只用于指弹（config.finger_style）：full 的旋律按全部参考音评（与旋律谱同一套：召回考全部音、
     起音容差 LINE_TOL、参考没有旋律的小节里谱上的音也算精确率）；skeleton 只考骨架音。
     旋律谱是单旋律线：不评和弦、也不核对谱上的和弦名（只是标出该按的指型，一条旋律线听不出和弦）。"""
@@ -335,6 +338,9 @@ def score_bars(score: Score, leadsheet: dict | None, arr: str, synth_wav: Path |
         return bars
     n = min(len(score.bars), len(leadsheet["bars"]))
     bars = [BarScore(bar=i + 1, section=score.bars[i].section or leadsheet["bars"][i].get("section")) for i in range(n)]
+    if arr == "kazoo":
+        score_melody(score, leadsheet, bars, skeleton=False)
+        return bars
     if arr == "melody":
         score_melody(score, leadsheet, bars, skeleton=False)
         ear_check(leadsheet, bars, low_conf)
@@ -366,16 +372,18 @@ def summarize(bars: list[BarScore], violations: list, th: Thresholds, arr: str,
     vs = [b.vocal_sim for b in bars if b.vocal_sim is not None]
     marks = sum(len(b.mark_issues) for b in bars)
     target = th.chord_strum if arr == "strum" else th.chord_finger
-    mel_target = th.melody_line if arr == "melody" else th.melody_f1
-    checks = {"playability": not violations}
-    if arr != "melody":   # 旋律谱是单旋律线：不评和弦
+    line = arr in LINE_ARRS
+    mel_target = th.melody_line if line else th.melody_f1
+    # 卡祖笛谱没有指法：violations 是记谱问题（playability.check_notation），不是可弹性
+    checks = {"notation" if arr == "kazoo" else "playability": not violations}
+    if not line:   # 旋律谱 / 卡祖笛谱是单旋律线：不评和弦
         checks["chord"] = chord is None or chord >= target
     # 没有任何东西被核对（无参考，或参考和弦全是低置信 / 没有旋律）时不能算通过
     if not has_reference:
         checks["reference"] = False
     elif arr == "finger":
         checks["reference"] = ct > 0 and ref > 0
-    elif arr == "melody":
+    elif line:
         checks["reference"] = ref > 0
     else:
         checks["reference"] = ct > 0
@@ -383,7 +391,7 @@ def summarize(bars: list[BarScore], violations: list, th: Thresholds, arr: str,
         checks["bar_count"] = arrangement_bars == reference_bars
     if arr == "strum":
         checks["chord_marks"] = marks == 0
-    if arr in ("finger", "melody"):
+    if arr == "finger" or line:
         checks["melody"] = mel is None or mel >= mel_target
     return {
         "violations": len(violations),
@@ -403,19 +411,50 @@ def summarize(bars: list[BarScore], violations: list, th: Thresholds, arr: str,
         "arrangement_bars": arrangement_bars,
         "reference_bars": reference_bars,
         "chord_mark_issues": marks,
-        "chord_target": None if arr == "melody" else target,
-        "melody_target": mel_target if arr in ("finger", "melody") else None,
+        "chord_target": None if line else target,
+        "melody_target": mel_target if arr == "finger" or line else None,
         "checks": checks,
         "pass": all(checks.values()),
     }
 
 
+# ---------- 卡祖笛：音域、换气 ----------
+
+def breath_runs(score: Score, limit: float) -> list[tuple[float, float]]:
+    """连续发声（中间没有休止）超过 limit 秒的乐句 → [(起点, 终点)]（演奏时间，拍）。
+    卡祖笛靠哼唱发声，只能在休止处换气；连奏、连音线、紧挨着的下一个音都算连续。"""
+    runs: list[list[float]] = []
+    for s in sorted(score.sounding(), key=lambda x: x.start):
+        if runs and s.start <= runs[-1][1] + 1e-6:
+            runs[-1][1] = max(runs[-1][1], s.end)
+        else:
+            runs.append([s.start, s.end])
+    return [(a, b) for a, b in runs if score.seconds(b - a) > limit]
+
+
+def kazoo_stats(score: Score, th: Thresholds) -> dict:
+    """卡祖笛谱的音域（最低 / 最高音、跨度半音数；降号调写降号）与换气提醒（连续超过 th.breath_seconds 秒没有休止
+    的乐句：起止小节（1 起）、秒数、起点在小节里的拍位置）。只报告，不影响达标。"""
+    pitches = [s.midi for s in score.sounding()]
+    flat = bool(score.bars) and score.bars[0].key < 0
+    low, high = (min(pitches), max(pitches)) if pitches else (None, None)
+    breaths = []
+    for a, b in breath_runs(score, th.breath_seconds):
+        first, last = _bar_of(score, a), _bar_of(score, b - 1e-3)   # 终点所在小节：结束在小节线上算前一小节
+        breaths.append({"bars": [first + 1, last + 1], "seconds": round(score.seconds(b - a), 1),
+                        "start": beat_label(a - score.bars[first].start)})
+    names = (theory.midi_name(low, flat), theory.midi_name(high, flat)) if pitches else (None, None)
+    return {"range_low": names[0], "range_high": names[1], "range_span": None if low is None else high - low,
+            "range": f"{names[0]}–{names[1]}（{high - low} 个半音）" if pitches else None,
+            "breath_seconds": th.breath_seconds, "breath_warnings": len(breaths), "breaths": breaths}
+
+
 def problem_bars(bars: list[BarScore], violations: list, th: Thresholds, arr: str) -> list[int]:
-    """旋律谱：每个音都要对上（小节旋律 F1 < melody_line 就标出；参考没有旋律、谱上却有音的小节也标出），
-    以及与人声分轨相似度低的小节。"""
+    """旋律谱 / 卡祖笛谱：每个音都要对上（小节旋律 F1 < melody_line 就标出；参考没有旋律、谱上却有音的小节也标出），
+    以及与人声分轨相似度低的小节（只有旋律谱对照人声）。"""
     bad = {v.bar for v in violations}
     for b in bars:
-        if arr == "melody":
+        if arr in LINE_ARRS:
             if (b.mel_f1 is not None and b.mel_f1 < th.melody_line) or (b.mel_ref == 0 and b.mel_est > 0) or \
                     (b.vocal_sim is not None and b.vocal_sim < th.bar_vocal_flag):
                 bad.add(b.bar)

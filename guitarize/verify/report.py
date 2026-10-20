@@ -2,7 +2,9 @@
 弹唱 / 指弹：前 MAX_SNIPPETS 个问题小节出试听片段（原曲 ↔ 合成）和色度图。
 旋律谱（melody）对照人声分轨：试听片段是人声 ↔ 合成，图是人声基频 vs 谱上的音（音高图）；列出的小节（问题小节、
 需人耳确认的小节）全部出试听片段和音高图，不受 MAX_SNIPPETS 截断——音高图是找错音的主要工具，需人耳确认的
-小节也都要能听、能看（片段与图在 .gitignore 里，只占本地空间）。"""
+小节也都要能听、能看（片段与图在 .gitignore 里，只占本地空间）。
+卡祖笛谱（kazoo）没有指法：不查可弹性，只查记谱（小节时值、Shuffle 反拍）；按全部参考音评旋律（与旋律谱同一套），
+另报音域和换气提醒（metrics.kazoo_stats）；不对照音频，没有试听片段和图（参考音频在交互谱里选来听）。"""
 from __future__ import annotations
 
 import csv
@@ -22,14 +24,15 @@ from ..render.synth import midi_to_wav
 from . import metrics
 from .positions import beat_label
 from .model import Score, load_score
-from .playability import Violation, check_playability, soft_stats
+from .playability import Violation, check_notation, check_playability, soft_stats
 
 HISTORY_FIELDS = ["iter", "time", "violations", "chord_agreement", "melody_f1",
                   "harmonic_similarity", "rhythm_correlation", "pass",
-                  "chord_mark_issues", "arrangement_bars", "reference_bars", "scored_beats", "vocal_similarity"]
+                  "chord_mark_issues", "arrangement_bars", "reference_bars", "scored_beats", "vocal_similarity",
+                  "range_span", "breath_warnings"]
 MAX_SNIPPETS = 20
 CHECK_NAMES = {"playability": "可弹性", "chord": "和弦", "melody": "旋律", "chord_marks": "和弦标记",
-               "bar_count": "小节数", "reference": "参考不足"}
+               "bar_count": "小节数", "reference": "参考不足", "notation": "记谱"}
 
 
 def next_iter_dir(root: Path) -> Path:
@@ -59,8 +62,9 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
     profile = load_profile(cfg.level)
     built = alphatab.build(paths.atex(arr), paths.build_dir, arr)
     score = load_score(built["json"])
-    synth = midi_to_wav(built["mid"], paths.build(arr, "wav"))
-    violations = check_playability(score, profile, arr)
+    kazoo = arr == "kazoo"   # 卡祖笛：没有指法、不对照音频（见模块说明），不用合成
+    synth = None if kazoo else midi_to_wav(built["mid"], paths.build(arr, "wav"))
+    violations = check_notation(score) if kazoo else check_playability(score, profile, arr)
     leadsheet = _load_json(paths.leadsheet_json)
     vocals = melody_reference(paths, cfg.overrides) if arr == "melody" else None   # 只有旋律谱对照人声
     style = finger_style(cfg.overrides)   # 指弹旋律的评法跟着写法走
@@ -78,10 +82,14 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
         summary["vocal_reference"] = vocals.name   # 相似度、试听片段、音高图对照的分轨
     if arr == "finger":
         summary["finger_style"] = style
+    if kazoo:
+        summary.update(metrics.kazoo_stats(score, cfg.thresholds))
 
     root = paths.report_root(arr)
     out = next_iter_dir(root)
-    if arr == "melody":   # 问题小节在前，再是需人耳确认的小节；全部出片段和音高图（见模块说明）
+    if kazoo:
+        snippets, plots = {}, {}
+    elif arr == "melody":   # 问题小节在前，再是需人耳确认的小节；全部出片段和音高图（见模块说明）
         listen = problems + [b.bar for b in bars if b.ear_notes and b.bar not in problems]
         snippets = _write_snippets(out, listen, score, leadsheet, synth, vocals, "vocal")
         contour = _vocal_contour(paths, leadsheet, vocals) if leadsheet and listen else None
@@ -95,7 +103,7 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
         "problems": problems,
         "bars": [b.to_dict() for b in bars],
         "violations": [asdict(v) for v in violations],
-        "soft": soft_stats(score),
+        "soft": {} if kazoo else soft_stats(score),   # 软统计是按弦的手形
     }, ensure_ascii=False, indent=1), encoding="utf-8")
     history = root / "history.csv"
     prev = _last_row(history)
@@ -336,16 +344,24 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
         lines += ["> 没有参考（leadsheet.json），只做了可弹性检查，未做差异校验。", ""]
     if s.get("vocal_reference"):
         lines += [f"> 对照的人声分轨：analysis/stems/{s['vocal_reference']}（相似度、试听片段、音高图）", ""]
+    kazoo = arr == "kazoo"
+    if kazoo:
+        lines += ["> 对照 leadsheet.json 里确认过的旋律（与旋律谱同一份，按实际音高）；卡祖笛没有指法，只查记谱，"
+                  "不对照音频。", ""]
     lines += ["| 指标 | 本轮 | 上一轮 | 达标线 |", "|---|---|---|---|"]
-    rows = [("可弹性违规", "violations", False, "0")]
-    if arr == "melody":   # 单旋律线：不评和弦；召回按全部参考音；相似度对照人声分轨
+    rows = [("记谱问题（小节时值 / Shuffle 反拍）" if kazoo else "可弹性违规", "violations", False, "0")]
+    if arr in ("melody", "kazoo"):   # 单旋律线：不评和弦；召回按全部参考音
         rows += [("旋律 F1", "melody_f1", False, f"≥ {s['melody_target']:.2f}"),
                  ("旋律精确率", "melody_precision", True, ""),
                  ("旋律召回率（全部参考音）", "melody_recall", True, ""),
-                 ("八度完全正确", "melody_octave_exact", True, ""),
-                 ("人声相似度（均值）", "vocal_similarity", False, "仅用于定位"),
+                 ("八度完全正确", "melody_octave_exact", True, "")]
+    if arr == "melody":   # 相似度对照人声分轨
+        rows += [("人声相似度（均值）", "vocal_similarity", False, "仅用于定位"),
                  ("需人耳确认（调外 / 低置信音所在小节）", "ear_check_bars", False, "转人耳确认")]
-    else:
+    if kazoo:
+        rows += [("音域", "range", False, "仅报告"),
+                 (f"换气提醒（连续超过 {s['breath_seconds']:g} 秒没有休止）", "breath_warnings", False, "仅报告")]
+    if arr in ("strum", "finger"):
         rows.append(("和弦一致率", "chord_agreement", True, f"≥ {s['chord_target']:.0%}"))
     skeleton = s.get("finger_style") == "skeleton"
     if arr == "finger":
@@ -353,12 +369,12 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
                  ("旋律精确率", "melody_precision", True, ""),
                  (f"旋律召回率（{'骨架音' if skeleton else '全部参考音'}）", "melody_recall", True, ""),
                  ("八度完全正确", "melody_octave_exact", True, "")]
-    if arr != "melody":
+    if arr in ("strum", "finger"):
         rows.append(("和弦标记不符", "chord_mark_issues", False, "0" if arr == "strum" else "仅报告"))
         rows.append(("和声相似度（均值）", "harmonic_similarity", False, "仅用于定位"))
     if arr == "strum":
         rows.append(("节奏相关度（均值）", "rhythm_correlation", False, "仅报告"))
-    if arr != "melody":
+    if arr in ("strum", "finger"):
         rows.append(("低置信参考拍", "low_conf_beats", False, "转人耳确认"))
     for name, key, pct, target in rows:
         pv = _num(prev.get(key)) if prev and key in prev else None
@@ -366,7 +382,7 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
         if key == "violations":
             lines.append(f"| 小节数（编配 / 参考） | {s['arrangement_bars']} / {s['reference_bars'] or '—'} | — | 相等 |")
 
-    lines += ["", f"## 可弹性违规（{len(violations)}）"]
+    lines += ["", f"## {'记谱问题' if kazoo else '可弹性违规'}（{len(violations)}）"]
     lines += [f"- 第 {v.bar} 小节 · 拍 {beat_label(v.start - score.bars[v.bar - 1].start)} · `{v.rule}`：{v.detail}"
               for v in violations] or ["- 无"]
 
@@ -386,7 +402,7 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
                 cover = "骨架覆盖" if arr == "finger" and skeleton else "覆盖"
                 lines.append(f"- 旋律 F1 {b.mel_f1:.2f}（命中 {b.mel_hit}/{b.mel_est}，{cover} {b.mel_found}/{b.mel_ref}）")
                 lines += [f"  - {x}" for x in b.mel_issues]
-            elif arr == "melody" and b.mel_est:   # 参考没有旋律：F1 无定义，谱上的音都列出来
+            elif arr in ("melody", "kazoo") and b.mel_est:   # 参考没有旋律：F1 无定义，谱上的音都列出来
                 lines.append(f"- 参考这一小节没有旋律，谱上却有 {b.mel_est} 个音")
                 lines += [f"  - {x}" for x in b.mel_issues]
             lines += [f"- 和弦标记不符：{x}" for x in b.mark_issues]
@@ -402,6 +418,11 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
         if plots.get(bar):
             lines.append(f"- {'音高图' if arr == 'melody' else '色度图'}：{plots[bar]}")
 
+    if kazoo:
+        lines += ["", f"## 换气提醒（连续超过 {s['breath_seconds']:g} 秒没有休止，{len(s['breaths'])} 处）"]
+        lines += [f"- 第 {a}–{z} 小节：{x['seconds']:g} 秒没有休止（第 {a} 小节拍 {x['start']} 起）"
+                  for x in s["breaths"] for a, z in [x["bars"]]] or ["- 无"]
+        return "\n".join(lines) + "\n"
     if arr == "melody":
         ear = [b for b in bars if b.ear_notes]
         lines += ["", f"## 需人耳确认（参考旋律里调外 / 低置信的音，共 {s['ear_check_notes']} 个，{len(ear)} 小节）"]

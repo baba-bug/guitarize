@@ -1,4 +1,5 @@
-"""渲染编排：alphaTex → build/ 中间产物 → out/ 交付物（gp / txt / pdf / html）。"""
+"""渲染编排：alphaTex → build/ 中间产物 → out/ 交付物（gp / txt / pdf / html）。
+txt：吉他谱是文本六线谱；音高谱表（卡祖笛谱，没有弦）是文本简谱。"""
 from __future__ import annotations
 
 import shutil
@@ -9,6 +10,7 @@ from ..paths import SongPaths
 from ..verify.model import load_score
 from . import alphatab
 from .ascii_tab import render_ascii
+from .jianpu import render_jianpu
 from .pdf import svg_to_pdf
 from .viewer import build_viewer
 
@@ -21,7 +23,7 @@ def render_all(paths: SongPaths, cfg: SongConfig, arr: str) -> dict[str, Path]:
     shutil.copyfile(built["gp"], out["gp"])
     if "txt" in cfg.outputs:
         out["txt"] = paths.out(arr, "txt")
-        out["txt"].write_text(render_ascii(score), encoding="utf-8")
+        out["txt"].write_text(render_ascii(score) if score.tuning else render_jianpu(score), encoding="utf-8")
     if "pdf" in cfg.outputs:
         out["pdf"] = svg_to_pdf(built["svg"], paths.out(arr, "pdf"), score.title)
     if "html" in cfg.outputs:

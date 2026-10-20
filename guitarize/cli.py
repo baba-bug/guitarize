@@ -10,10 +10,10 @@ from pathlib import Path
 
 import yaml
 
-from .config import load_song_config
+from .config import ARR_NAMES, load_song_config
 from .paths import REPO_ROOT, SongPaths
 
-ARRS = ("strum", "finger", "melody")
+ARRS = tuple(ARR_NAMES)   # strum / finger / melody / kazoo
 SHOW_VIOLATIONS = 5
 
 
@@ -105,8 +105,10 @@ def main(argv: list[str] | None = None) -> int:
         from .arrange.pipeline import arrange
 
         target, option, violations = arrange(paths, cfg, args.arr, capo=args.capo, force=args.force)
-        names = ", ".join(f"{k}→{v.name}" for k, v in option.shapes.items())
-        print(f"{target}\ncapo {option.capo}（代价 {option.cost}）：{names}")
+        print(target)
+        if option is not None:   # 卡祖笛谱没有变调夹
+            names = ", ".join(f"{k}→{v.name}" for k, v in option.shapes.items())
+            print(f"capo {option.capo}（代价 {option.cost}）：{names}")
         if isinstance(violations, str):   # 自检本身没跑成（alphaTab 构建失败 / 找不到 node）：草稿已写出
             print(violations)
             return 0
