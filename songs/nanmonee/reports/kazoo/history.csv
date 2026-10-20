@@ -1,0 +1,2 @@
+iter,time,violations,chord_agreement,melody_f1,harmonic_similarity,rhythm_correlation,pass,chord_mark_issues,arrangement_bars,reference_bars,scored_beats,vocal_similarity,range_span,breath_warnings
+iter-01,2026-10-20T23:28:38,0,,1.0,,,True,0,62,62,0,,22,0

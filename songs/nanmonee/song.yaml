@@ -4,7 +4,7 @@ artist: 忘れらんねえよ
 language: ja   # 歌词语言：GAME 分音用
 version: tv
 level: intermediate
-arrangements: [strum, finger, melody]
+arrangements: [strum, finger, melody, kazoo]
 outputs: [html, pdf, txt]
 source:
   url: https://www.bilibili.com/video/BV1yfTH6oEiT

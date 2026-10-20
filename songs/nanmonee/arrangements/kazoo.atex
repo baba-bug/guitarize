@@ -1,0 +1,134 @@
+\title "なんもねえ"
+\tempo 167
+\track "Kazoo"
+\instrument 59
+\staff {score numbered}
+\tuning (piano)
+\ts 4 4
+\ks B
+\tf triplet-8th
+\ottava 8vb
+// bar 1 [イントロ]
+r.4 {ch "N.C." txt "イントロ" dy f} r.8 F#4.8 F#4{-}.4 F#4.4 |
+// bar 2 [サビ]
+F#4{-}.8 {ch "B" txt "サビ"} r.8 r.4 D#4.4 F#4.8 G#4.8 |
+// bar 3
+G#4{-}.4 {ch "E"} r.4 G#4.4 G#4.4 |
+// bar 4
+G4.2 {ch "D#/G"} G#4.8 r.8 A#4.4 |
+// bar 5
+B4.8 {ch "G#m"} r.8 r.8 A#4.8 A#4{-}.8 r.8 A#4.8 {tu 3} F#4.4 {tu 3} |
+// bar 6
+G#4.8 {ch "E"} r.8 r.8 G#4{slur s1}.8 F#4{slur s1}.8 r.8 E4.4 |
+// bar 7
+F#4.4 {ch "B/D#"} r.8 E4.8 E4{-}.8 r.8 B3.4 |
+// bar 8
+C#4.8 {ch "C#"} B3.8 r.8 B3.8 B3{-}.4 B3{-}.8 {tu 3} A#3.4 {tu 3} |
+// bar 9
+E4.4 {ch "D#"} r.4 F#4.4 G4.4 |
+// bar 10
+F#4.8 {ch "B"} r.8 r.4 D#4.4 F#4.4 |
+// bar 11
+G#4.8 {ch "E"} r.8 r.4 G#4.4 G#4.4 |
+// bar 12
+G#4{-}.4 {ch "D#/G"} G4.4 G#4.4 C#5.4 |
+// bar 13
+C#5{-}.8 {ch "G#m" tu 3} B4.4 {tu 3} r.8 A#4.8 A#4.8 r.8 F#4.4 |
+// bar 14
+G#4.4 {ch "E"} r.8 {tu 3} G#4{slur s2}.4 {tu 3} F#4{slur s2}.8 r.8 E4.4 |
+// bar 15
+F#4.4 {ch "B/D#"} r.8 {tu 3} D#4.4 {tu 3} D#4{slur s3}.4 E4.8 {tu 3} F#4{slur s3}.4 {tu 3} |
+// bar 16
+D#4.8 {ch "C#m7"} C#4{slur s4}.8 C#4{-}.2 B3{slur s4}.8 r.8 |
+// bar 17
+r.4 {ch "F#"} r.8 A#3.8 A#3{-}.4 C#4.4 |
+// bar 18 [間奏]
+B3.4 {ch "B" txt "間奏"} B3{-}.8 B3.8 B3{-}.8 r.8 r.4 |
+// bar 19
+r.2 {ch "N.C."} r.2 |
+// bar 20
+r.2 {ch "B"} r.2 |
+// bar 21
+r.2 {ch "E"} r.2 {ch "F#"} |
+// bar 22 [Aメロ]
+r.4 {ch "B" txt "Aメロ"} F#3.8 r.8 F#3{slur s5}.8 D#3{slur s5}.8 r.8 G#3{slur s6}.8 |
+// bar 23
+G#3{-}.8 {ch "B"} F#3{slur s6}.8 F#3.4 F#3{slur s7}.8 D#3.8 D#3{-}.8 F#3{slur s7}.8 |
+// bar 24
+F#3{-}.8 {ch "F#"} r.8 r.8 F#3.8 F#3{-}.8 F#3.8 F#3{-}.8 E3.8 |
+// bar 25
+G#3.4 {ch "F#"} A#3.4 F#3.4 {d} r.8 |
+// bar 26
+r.4 {ch "G#m"} B3.2 G#3.8 B3.8 |
+// bar 27
+B3{-}.4 {ch "G#m"} G#3.4 B3.8 C#4.8 C#4{-}.8 D#4.8 |
+// bar 28
+D#4{-}.4 {ch "D#"} E4.4 D#4.4 E4.4 |
+// bar 29
+D#4.8 {ch "D#"} r.8 r.8 C#4.8 C#4{-}.8 B3.8 B3{-}.4 |
+// bar 30 [Bメロ]
+B3{-}.8 {ch "E" txt "Bメロ"} r.8 G#3.8 G#3.8 G#3{slur s8}.8 B3{slur s8}.8 B3{-}.8 C#4.8 |
+// bar 31
+C#4{-}.8 {ch "F#"} B3.8 B3{-}.8 B3.8 C#4.4 F#3.4 |
+// bar 32
+F#4.4 {ch "B"} E4.4 D#4.4 {ch "A"} C#4.4 |
+// bar 33
+C#4.4 {ch "G#m" d} r.8 r.8 G#3.8 G#3{-}.8 A#3.8 |
+// bar 34
+B3.4 {ch "C#"} B3{-}.8 A#3{slur s9}.8 B3{slur s9}.8 C#4.8 C#4{-}.8 {tu 3} B3.4 {tu 3} |
+// bar 35
+B3{-}.8 {ch "D#" tu 3} C#4.4 {tu 3} B3.4 B3{slur s10}.4 G#3{slur s10}.8 G#3{slur s11}.8 |
+// bar 36
+G#3{-}.8 {ch "E"} D#4.8 C#4{slur s11}.4 C#4.4 D#4.4 |
+// bar 37
+E4.8 {ch "F#"} r.8 r.8 {ch "F#7"} G#4.8 F#4.4 F#4.8 F#4.8 |
+// bar 38 [サビ]
+F#4{-}.4 {ch "B" txt "サビ" d} r.8 D#4.4 F#4.4 |
+// bar 39
+G#4.4 {ch "E"} r.4 G#4.4 G#4.4 |
+// bar 40
+G4.2 {ch "D#/G"} G#4.4 A#4.4 |
+// bar 41
+B4.8 {ch "G#m"} r.8 r.8 B4{slur s12}.8 A#4{slur s12}.8 r.8 F#4.8 F#4{slur s13}.8 |
+// bar 42
+G#4{slur s13}.8 {ch "E"} r.8 r.8 G#4{slur s14}.8 F#4{slur s14}.8 r.8 E4.4 |
+// bar 43
+F#4.8 {ch "B/D#"} r.8 r.8 F#4{slur s15}.8 D#4{slur s15}.8 r.8 B3.4 |
+// bar 44
+C#4.8 {ch "C#"} r.8 r.8 D#4{slur s16}.8 B3{slur s16}.4 A#3.4 |
+// bar 45
+E4.4 {ch "D#"} r.4 G4.4 G4.8 F#4.8 |
+// bar 46
+F#4{-}.8 {ch "B"} r.8 r.4 D#4.4 F#4.4 |
+// bar 47
+G#4.8 {ch "E"} r.8 r.4 G#4.4 G#4.4 |
+// bar 48
+G4.2 {ch "D#/G"} G#4{slur s17}.4 C#5{slur s17}.4 |
+// bar 49
+B4.8 {ch "G#m"} r.8 r.4 A#4.8 r.8 F#4.4 |
+// bar 50
+G#4.8 {ch "E"} r.8 r.8 G#4{slur s18}.8 F#4{slur s18}.8 r.8 E4.4 |
+// bar 51
+F#4.8 {ch "B/D#"} r.8 r.8 D#4.8 D#4{-}.4 F#4.4 |
+// bar 52
+D#4.8 {ch "C#7"} C#4.8 C#4{-}.2 C#4{-}.8 E4.8 |
+// bar 53
+D#4.4 {ch "D#"} r.8 B4.8 r.8 A#4{slur s19}.8 A#4{-}.8 F#4{slur s19}.8 |
+// bar 54 [アウトロ]
+G#4.4 {ch "E" txt "アウトロ"} r.8 G#4.8 G#4{-}.8 {tu 3} F#4.4 {tu 3} F#4{-}.8 {tu 3} E4.8 {tu 3} E4.8 {tu 3} |
+// bar 55
+F#4.4 {ch "B/D#"} r.8 D#4{slur s20}.8 D#4{-}.4 F#4{slur s20}.4 |
+// bar 56
+D#4.4 {ch "C#7"} C#4.2 C#4{-}.8 r.8 |
+// bar 57
+r.2 {ch "F#"} B3.4 C#4.4 |
+// bar 58
+B3.2 {ch "B"} r.2 |
+// bar 59
+r.2 {ch "N.C."} r.2 |
+// bar 60
+r.2 {ch "B"} r.2 |
+// bar 61
+r.2 {ch "E"} r.2 {ch "F#"} |
+// bar 62
+r.2 {ch "B"} r.2 |
