@@ -393,7 +393,10 @@ window.REF_AUDIO = [{"label": "原曲", "url": "../source/original.wav"}, {"labe
         last = now;
         const tick = tickAt(audio.currentTime);
         if (tick !== null) api.tickPosition = tick;
-        currentBar = barAt(audio.currentTime)[0];
+        const bar = barAt(audio.currentTime)[0];
+        // 合成器没在放时 alphaTab 不会自己翻页：每进一个新小节，等光标挪过去（下一帧）再把页面滚到光标所在那一行
+        if (bar !== currentBar) requestAnimationFrame(() => api.scrollToCursor());
+        currentBar = bar;
       }
       follow = requestAnimationFrame(step);
     };
