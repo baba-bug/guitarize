@@ -176,6 +176,7 @@ r.4 (4.3{ac} 4.4{ac} 2.5{ac}).2 {ch "B5" bd 60 dy ff d} |
 </script>
 <script>window.BAR_TIMES = [[-0.26, 1.2], [1.2, 2.66], [2.66, 4.08], [4.08, 5.54], [5.54, 6.98], [6.98, 8.44], [8.44, 9.86], [9.86, 11.3], [11.3, 12.76], [12.76, 14.2], [14.2, 15.64], [15.64, 17.08], [17.08, 18.54], [18.54, 19.98], [19.98, 21.44], [21.44, 22.88], [22.88, 24.32], [24.32, 25.76], [25.76, 27.18], [27.18, 28.64], [28.64, 30.1], [30.1, 31.56], [31.56, 33.0], [33.0, 34.44], [34.44, 35.88], [35.88, 37.34], [37.34, 38.78], [38.78, 40.22], [40.22, 41.66], [41.66, 43.12], [43.12, 44.56], [44.56, 46.0], [46.0, 47.46], [47.46, 48.9], [48.9, 50.36], [50.36, 51.8], [51.8, 53.24], [53.24, 54.7], [54.7, 56.14], [56.14, 57.58], [57.58, 59.02], [59.02, 60.48], [60.48, 61.9], [61.9, 63.36], [63.36, 64.8], [64.8, 66.26], [66.26, 67.7], [67.7, 69.14], [69.14, 70.6], [70.6, 72.04], [72.04, 73.48], [73.48, 74.92], [74.92, 76.36], [76.36, 77.82], [77.82, 79.28], [79.28, 80.72], [80.72, 82.14], [82.14, 83.58], [83.58, 85.04], [85.04, 86.48], [86.48, 87.94], [87.94, 89.4]];
 window.REF_AUDIO = [{"label": "原曲", "url": "../source/original.wav"}, {"label": "人声", "url": "../analysis/stems/vocals.wav"}, {"label": "主唱（模型去掉伴唱）", "url": "../analysis/stems/lead.wav"}, {"label": "伴唱", "url": "../analysis/stems/backing.wav"}, {"label": "吉他", "url": "../analysis/stems/guitar.wav"}, {"label": "贝斯", "url": "../analysis/stems/bass.wav"}, {"label": "鼓", "url": "../analysis/stems/drums.wav"}, {"label": "其他", "url": "../analysis/stems/other.wav"}, {"label": "钢琴", "url": "../analysis/stems/piano.wav"}, {"label": "和声混合", "url": "../analysis/stems/harmonic.wav"}];
+window.REF_DEFAULT = 0;
 </script>
 <script src="../../../tools/alphatab/node_modules/@coderline/alphatab/dist/alphaTab.js"></script>
 <script>
@@ -201,6 +202,7 @@ window.REF_AUDIO = [{"label": "原曲", "url": "../source/original.wav"}, {"labe
   });
   const audioOf = (r) => { if (!r.audio) { r.audio = new Audio(r.url); r.audio.preload = "auto"; } return r.audio; };
   const stopRefs = () => { refs.forEach((r) => r.audio && r.audio.pause()); refBtn.textContent = IDLE; };
+  refSel.value = String(Math.min(window.REF_DEFAULT, refs.length - 1));   // 旋律 / 卡祖笛默认对照主唱
   refSel.onchange = stopRefs;
 
   api.tex(document.getElementById("tex").textContent);
