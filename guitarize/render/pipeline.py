@@ -12,6 +12,7 @@ from . import alphatab
 from .ascii_tab import render_ascii
 from .jianpu import render_jianpu
 from .pdf import svg_to_pdf
+from .hub import build_hub
 from .viewer import build_viewer
 
 
@@ -28,4 +29,7 @@ def render_all(paths: SongPaths, cfg: SongConfig, arr: str) -> dict[str, Path]:
         out["pdf"] = svg_to_pdf(built["svg"], paths.out(arr, "pdf"), score.title)
     if "html" in cfg.outputs:
         out["html"] = build_viewer(paths, arr, score.title)
+        hub = build_hub(paths, cfg)   # 总页面：这首歌的全部编配放在一个网页里切换
+        if hub is not None:
+            out["index"] = hub
     return out

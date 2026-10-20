@@ -35,6 +35,7 @@
 <script id="tex" type="text/plain">{{ATEX}}</script>
 <script>window.BAR_TIMES = {{BAR_TIMES}};
 window.REF_AUDIO = {{REF_AUDIO}};
+window.REF_DEFAULT = {{REF_DEFAULT}};
 </script>
 <script src="{{ALPHATAB_BASE}}alphaTab.js"></script>
 <script>
@@ -60,6 +61,7 @@ window.REF_AUDIO = {{REF_AUDIO}};
   });
   const audioOf = (r) => { if (!r.audio) { r.audio = new Audio(r.url); r.audio.preload = "auto"; } return r.audio; };
   const stopRefs = () => { refs.forEach((r) => r.audio && r.audio.pause()); refBtn.textContent = IDLE; };
+  refSel.value = String(Math.min(window.REF_DEFAULT, refs.length - 1));   // 旋律 / 卡祖笛默认对照主唱
   refSel.onchange = stopRefs;
 
   api.tex(document.getElementById("tex").textContent);

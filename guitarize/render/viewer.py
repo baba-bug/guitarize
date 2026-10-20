@@ -15,6 +15,9 @@ STEM_LABELS = (("vocals", "人声"), ("lead", "主唱（模型去掉伴唱）"),
                ("drums", "鼓"), ("other", "其他"), ("piano", "钢琴"), ("harmonic", "和声混合"))
 
 
+SING_ALONG = ("melody", "kazoo")   # 跟着主唱哼 / 对照主唱的编配：参考音轨默认选主唱（没有就选人声）
+
+
 def _rel(target: Path, start: Path) -> str:
     return Path(os.path.relpath(target, start)).as_posix()
 
@@ -30,7 +33,12 @@ def build_viewer(paths: SongPaths, arr: str, title: str) -> Path:
     for name, label in STEM_LABELS:   # 本地有的分轨都列出来，可选来从当前小节播放（对照旋律 / 伴奏）
         if paths.stem(name).exists():
             refs.append({"label": label, "url": _rel(paths.stem(name), out.parent)})
+    default = 0
+    if arr in SING_ALONG:
+        names = ["original", *[n for n, _ in STEM_LABELS if paths.stem(n).exists()]]
+        default = next((names.index(n) for n in ("lead", "vocals") if n in names), 0)
     replacements = {
+        "{{REF_DEFAULT}}": str(default),
         "{{TITLE}}": html.escape(f"{title} · {ARR_NAMES[arr]}"),
         "{{ALPHATAB_BASE}}": _rel(ALPHATAB_DIST, out.parent) + "/",
         "{{REF_AUDIO}}": json.dumps(refs, ensure_ascii=False),

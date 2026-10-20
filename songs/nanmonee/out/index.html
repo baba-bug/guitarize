@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>なんもねえ · 全部谱子</title>
+<style>
+  :root { --bg: #fafaf7; --fg: #1d1d1b; --muted: #6b6b66; --accent: #c2410c; --line: #ddd; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 15px/1.4 -apple-system, "PingFang SC", sans-serif; }
+  body { display: flex; flex-direction: column; }
+  nav { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+  nav h1 { font-size: 16px; margin: 0 12px 0 0; }
+  nav button { font: inherit; padding: 4px 12px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+  nav button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #files { margin-left: auto; color: var(--muted); font-size: 13px; }
+  #files a { color: var(--accent); margin-left: 8px; }
+  iframe { flex: 1; width: 100%; border: 0; }
+</style>
+</head>
+<body>
+<nav><h1>なんもねえ</h1><span id="tabs"></span><span id="files"></span></nav>
+<iframe id="view" title="谱子"></iframe>
+<script>
+  const PAGES = [{"key": "strum", "label": "弹唱", "html": "strum.html", "files": [{"label": "PDF", "url": "strum.pdf"}, {"label": "文本谱", "url": "strum.txt"}, {"label": "Guitar Pro", "url": "strum.gp"}]}, {"key": "finger", "label": "指弹", "html": "finger.html", "files": [{"label": "PDF", "url": "finger.pdf"}, {"label": "文本谱", "url": "finger.txt"}, {"label": "Guitar Pro", "url": "finger.gp"}]}, {"key": "melody", "label": "旋律", "html": "melody.html", "files": [{"label": "PDF", "url": "melody.pdf"}, {"label": "文本谱", "url": "melody.txt"}, {"label": "Guitar Pro", "url": "melody.gp"}]}, {"key": "kazoo", "label": "卡祖笛", "html": "kazoo.html", "files": [{"label": "PDF", "url": "kazoo.pdf"}, {"label": "文本谱", "url": "kazoo.txt"}, {"label": "Guitar Pro", "url": "kazoo.gp"}]}];
+  const tabs = document.getElementById("tabs"), view = document.getElementById("view"), files = document.getElementById("files");
+  function show(key) {
+    const p = PAGES.find((x) => x.key === key) || PAGES[0];
+    view.src = p.html;
+    tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.key === p.key)));
+    files.innerHTML = p.files.map((f) => `<a href="${f.url}" target="_blank">${f.label}</a>`).join("");
+    history.replaceState(null, "", "#" + p.key);   // 刷新后还停在这个编配
+  }
+  PAGES.forEach((p) => {
+    const b = document.createElement("button");
+    b.textContent = p.label; b.dataset.key = p.key; b.onclick = () => show(p.key);
+    tabs.appendChild(b);
+  });
+  show(location.hash.slice(1));
+</script>
+</body>
+</html>
