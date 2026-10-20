@@ -2,7 +2,7 @@
 弹唱 / 指弹：和弦一致率、旋律（指弹按写法：完整旋律与旋律谱一样考全部参考音，骨架写法只考骨架音）、
 与和声分轨的色度相似度、节奏（弹唱）。
 强力和弦弹唱（power）：与弹唱同一套，但和弦按根音对（X5 对 X / Xm / X7 / 根音是 X 的斜杠和弦都算一致），
-节奏只对照吉他分轨、按力度加权（闷音、轻扫的起音弱）。
+节奏只对照吉他分轨、按力度加权（闷音、轻扫的起音弱）；弹唱的 guitar 节奏（默认）节奏也这样对照。
 旋律谱（melody）：只评旋律（召回按全部参考音）和与人声分轨的色度相似度，并列出要人耳确认的参考音；不评和弦。
 卡祖笛谱（kazoo）：只评旋律（与旋律谱同一套评法），另报音域和换气（kazoo_stats）；不评和弦、不对照音频。"""
 from __future__ import annotations
@@ -372,8 +372,10 @@ def section_rhythm(bars: list[BarScore]) -> list[dict]:
 
 def score_bars(score: Score, leadsheet: dict | None, arr: str, synth_wav: Path | None = None,
                harmonic_wav: Path | None = None, onset_wavs: Sequence[Path] = (), vocal_wav: Path | None = None,
-               low_conf: float = Thresholds.melody_conf_flag, finger_style: str = "full") -> list[BarScore]:
-    """vocal_wav / low_conf 只用于旋律谱（arr = melody）：人声分轨相似度、要人耳确认的低置信参考音。
+               low_conf: float = Thresholds.melody_conf_flag, finger_style: str = "full",
+               dynamic: bool | None = None) -> list[BarScore]:
+    """dynamic：扫弦谱的节奏向量按力度加权（strum_vector），None = 只有强力和弦谱（弹唱的 guitar 节奏由 verify 传 True）。
+    vocal_wav / low_conf 只用于旋律谱（arr = melody）：人声分轨相似度、要人耳确认的低置信参考音。
     卡祖笛谱（kazoo）只评旋律（与旋律谱同一套：召回考全部参考音、起音容差 LINE_TOL），不对照音频。
     finger_style 只用于指弹（config.finger_style）：full 的旋律按全部参考音评（与旋律谱同一套：召回考全部音、
     起音容差 LINE_TOL、参考没有旋律的小节里谱上的音也算精确率）；skeleton 只考骨架音。
@@ -401,7 +403,8 @@ def score_bars(score: Score, leadsheet: dict | None, arr: str, synth_wav: Path |
     if synth_wav is not None and harmonic_wav is not None and Path(harmonic_wav).exists():
         score_harmonic(score, leadsheet, bars, Path(synth_wav), Path(harmonic_wav))
     if arr in STRUM_ARRS and onset_wavs and all(Path(w).exists() for w in onset_wavs):
-        score_rhythm(score, leadsheet, bars, [Path(w) for w in onset_wavs], dynamic=arr == "power")
+        score_rhythm(score, leadsheet, bars, [Path(w) for w in onset_wavs],
+                     dynamic=arr == "power" if dynamic is None else dynamic)
     return bars
 
 

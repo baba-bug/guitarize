@@ -13,6 +13,7 @@ ARR_NAMES = {"strum": "弹唱", "finger": "指弹", "melody": "旋律", "kazoo":
              "power": "强力和弦"}                                                       # power：强力和弦弹唱（arrange/power.py）
 MELODY_SOURCES = ("lead", "vocals")   # 旋律从哪条分轨识别：主唱 stems/lead.wav（去掉伴唱）、整条人声 stems/vocals.wav
 FINGER_STYLES = ("full", "skeleton")  # 指弹写法：完整旋律（默认）/ 骨架旋律，见 arrange/finger.py
+STRUM_RHYTHMS = ("guitar", "drums")   # 弹唱的节奏：吉他分轨的型 + 刷弦 / 力度 / 闷音（默认）/ 旧的鼓 + 吉他选型，见 arrange/strum.py
 
 
 @dataclass(frozen=True)
@@ -81,8 +82,14 @@ class SongConfig:
       评旋律；"skeleton"：旧的骨架旋律 + 低音 / 填充（适合初级），verify 只考骨架音
     - finger_bass：完整旋律指弹第 3 拍（和弦没换时）的低音。默认 "root"：再弹根音（摇滚贝斯多半一直弹根音，
       なんもねえ 原曲贝斯第 3 拍 7/16 是根音、5/16 是五音）；"alternate"：根-五交替低音（民谣 / 乡村味）
-    - strum_pattern：弹唱谱整首用同一个节奏型（arrange/patterns.py 的 PATTERNS 名：whole / half / quarter / push / pop /
-      eighth）。不写时按段落取与原曲鼓 + 吉他起音最像的型；简单版用 "quarter"（每拍一下下扫）或 "half"
+    - strum_rhythm：弹唱谱的节奏（arrange/strum.py）。默认 "guitar"：节奏型按乐句只看原曲吉他分轨选（与强力和弦谱同一套
+      POWER_PATTERNS：verse / verse_end / chorus / hit），开放和弦照吉他手的弹法扫——重音 ac、闷音只闷最低 3 根弦（pm）、
+      上扫 1–3 弦时低音接着响，刷弦 bd / bu、力度逐下写；verify 的节奏也只对照吉他分轨、按力度加权。
+      "drums"：旧的弹唱（按段落取鼓 + 吉他起音选 PATTERNS 的型，sd / su 箭头，没有力度），verify 对照鼓 + 吉他分轨
+    - strum_pattern：弹唱谱整首用同一个节奏型（不再按段落 / 乐句自动选）。guitar 节奏两套型都能写：吉他分轨的型
+      （verse / verse_end / chorus / hit），或旧的型（arrange/patterns.py 的 PATTERNS：whole / half / quarter / push /
+      pop / eighth，同样写刷弦和力度，上扫让低音接着响）；drums 节奏只有旧的型。简单版用 "quarter"（每拍一下下扫）
+      或 "half"
     - power_patterns：强力和弦谱（arrange/power.py）的节奏型（patterns.py 的 POWER_PATTERNS 名：verse / verse_end /
       chorus / hit），{小节: 型}，从该小节起用到它所在乐句的末尾（下一个段落标记、无和弦小节）或下一个覆盖起点；
       没写的乐句按原曲吉他分轨的起音自动选（如 {33: verse_end}：Bメロ 从第 33 小节起换型）
@@ -118,13 +125,24 @@ def melody_source(value, where: str = "overrides.melody_source") -> str:
     return value
 
 
-def strum_pattern(overrides: dict) -> str | None:
-    """overrides.strum_pattern：弹唱谱整首用的节奏型名（PATTERNS 里的），没写是 None（按段落自动选）。"""
-    from .arrange.patterns import PATTERNS
+def strum_rhythm(overrides: dict) -> str:
+    """overrides.strum_rhythm（默认 "guitar"）：弹唱谱的节奏。arrange 写弹唱、verify 对照节奏共用这一份。"""
+    value = overrides.get("strum_rhythm", "guitar")
+    if value not in STRUM_RHYTHMS:
+        raise ValueError(f'overrides.strum_rhythm must be "guitar" or "drums", got {value!r}')
+    return value
 
-    value = overrides.get("strum_pattern")
-    if value is not None and value not in PATTERNS:
-        raise ValueError(f"overrides.strum_pattern must be one of {', '.join(PATTERNS)}, got {value!r}")
+
+def strum_pattern(overrides: dict) -> str | None:
+    """overrides.strum_pattern：弹唱谱整首用的节奏型名，没写是 None（按段落自动选）。guitar 节奏两套型都能用
+    （ALL_PATTERNS：吉他分轨的型和旧的型，都写刷弦和力度），drums 节奏只有旧的型（PATTERNS）。"""
+    from .arrange.patterns import ALL_PATTERNS, PATTERNS
+
+    value, rhythm = overrides.get("strum_pattern"), strum_rhythm(overrides)
+    names = ALL_PATTERNS if rhythm == "guitar" else PATTERNS
+    if value is not None and value not in names:
+        raise ValueError(f"overrides.strum_pattern must be one of {', '.join(names)} (strum_rhythm: {rhythm}), "
+                         f"got {value!r}")
     return value
 
 
