@@ -277,6 +277,16 @@ def test_chord_diagrams_drawn_above_the_beats(tmp_path):
     assert "\\chordDiagramsInScore" not in atex.header("T", 120, 0, "straight", "tabs")   # 没有和弦图时不加
 
 
+def test_chord_diagrams_up_the_neck_start_at_their_lowest_fret(tmp_path):
+    # 和弦图只画 5 格品：最高品超出 5 品的指型从最低按弦品起画（不然点画到图外面）
+    head = atex.header("T", 120, 0, "straight", "tabs", {"D#5": (None, None, 8, 8, 6, None), "B5": (None, None, 4, 4, 2, None)})
+    assert '\\chord "D#5" x x 8 8 6 x {firstfret 6}' in head and '\\chord "B5" x x 4 4 2 x\n' in head
+    src = tmp_path / "f.atex"
+    src.write_text(atex.document(head, [[atex.bar_line(atex.beat_tokens([(3, 8), (4, 8), (5, 6)], 4, ['ch "D#5"']), 1)]]),
+                   encoding="utf-8")
+    alphatab.build(src, tmp_path / "b", "f")
+
+
 # ---------- 音符效果（击勾弦 h、连奏滑音 sl、滑出 sod / sou）：挂在音尾，即这个音最后一个记号上 ----------
 
 def test_note_effects_follow_the_note_inside_and_outside_chords():

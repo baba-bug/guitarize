@@ -63,6 +63,23 @@ def test_capo_in_midi_and_attack_flags(build_tex):
     assert not attacks[2].strum and attacks[2].direction is None
 
 
+def test_dynamics_palm_mute_and_accent_give_the_attack_velocity(build_tex):
+    # 力度沿用到下一个写了 dy 的拍（alphaTab 的 alphaTex 导入如此）；重音 +16、强重音 +32，同 alphaTab 的 MIDI。
+    # 音符效果要调弦写在括号里的文件头（TEX_HEAD 的旧写法下 '2.5{pm}' 解析不了）
+    from guitarize.arrange.atex import header
+
+    head = header("T", 120, 0, "straight", "tabs")
+    score = build_tex("(2.5{pm} 4.4{pm}).4 {bd 60 dy mp} (2.5{ac} 4.4).4 {bu 40 dy f} (2.5 4.4{hac}).2 {bd 60} |",
+                      head=head)
+    attacks = score.attacks()
+    assert [a.velocity for a in attacks] == [63, 111, 127]
+    assert [a.palm_mute for a in attacks] == [True, False, False]
+    assert [a.direction for a in attacks] == ["down", "up", "down"]
+    first, second = score.events[0], score.events[1]
+    assert first.dynamics == "MP" and first.notes[0].palm_mute and second.notes[0].accent == 1
+    assert build_tex("(2.5 4.4).1 |", head=head).attacks()[0].velocity == 95   # 没写力度：alphaTab 默认 f
+
+
 def test_voice_lengths_detect_overfull_bar(build_tex):
     score = build_tex(":4 0.1 0.1 0.1 0.1 0.1 |")
     assert score.voice_lengths()[(0, 0)] == pytest.approx(5)

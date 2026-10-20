@@ -15,6 +15,7 @@ const FEEL = { 0: 'none', 1: 'triplet16th', 2: 'triplet8th', 3: 'dotted16th', 4:
 // Ottavia（谱号八度记号）→ 名字；Regular 记 null
 const OTTAVA = { 0: '15ma', 1: '8va', 3: '8vb', 4: '15mb' };
 const MINOR = 1; // KeySignatureType.Minor
+const DYNAMIC = alphaTab.model.DynamicValue; // 力度（PPP…FFF）→ 名字，Python 端按 alphaTab 的表换算 MIDI 力度
 
 // 音高谱表（\tuning (piano)，如卡祖笛）没有弦：tuning 是 []，音符的 string / fret 记 null（只有 midi）
 function toModel(score) {
@@ -50,6 +51,7 @@ function toModel(score) {
               text: b.text ?? null,
               pick: PICK[b.pickStroke] ?? null,
               brush: BRUSH[b.brushType] ?? null,
+              dynamics: DYNAMIC[b.dynamics] ?? null,
               notes: b.notes.map((n) => ({
                 string: n.isStringed ? nStrings - n.string + 1 : null,
                 fret: n.isStringed ? n.fret : null,
@@ -60,6 +62,8 @@ function toModel(score) {
                 slide: SLIDE[n.slideOutType] ?? null,
                 slur_start: n.isSlurOrigin, // 连线（slur）的起点 / 终点
                 slur_end: n.isSlurDestination,
+                palm_mute: n.isPalmMute, // 闷音（pm）
+                accent: n.accentuated, // 0 无，1 重音（ac），2 强重音（hac），3 保持音
               })),
             })),
         ),

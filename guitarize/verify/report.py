@@ -4,7 +4,8 @@
 需人耳确认的小节）全部出试听片段和音高图，不受 MAX_SNIPPETS 截断——音高图是找错音的主要工具，需人耳确认的
 小节也都要能听、能看（片段与图在 .gitignore 里，只占本地空间）。
 卡祖笛谱（kazoo）没有指法：不查可弹性，只查记谱（小节时值、Shuffle 反拍）；按全部参考音评旋律（与旋律谱同一套），
-另报音域和换气提醒（metrics.kazoo_stats）；不对照音频，没有试听片段和图（参考音频在交互谱里选来听）。"""
+另报音域和换气提醒（metrics.kazoo_stats）；不对照音频，没有试听片段和图（参考音频在交互谱里选来听）。
+强力和弦谱（power）与弹唱同一套报告，和弦按根音对，节奏只对照吉他分轨（按力度加权）；弹唱 / 强力和弦都按段落列节奏相关度。"""
 from __future__ import annotations
 
 import csv
@@ -68,8 +69,10 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
     leadsheet = _load_json(paths.leadsheet_json)
     vocals = melody_reference(paths, cfg.overrides) if arr == "melody" else None   # 只有旋律谱对照人声
     style = finger_style(cfg.overrides)   # 指弹旋律的评法跟着写法走
+    # 节奏对照的起音：弹唱是鼓 + 吉他分轨；强力和弦只看吉他分轨（鼓的起音强得多，会盖过吉他）
+    onsets = (paths.stem("guitar"),) if arr == "power" else (paths.stem("drums"), paths.stem("guitar"))
     bars = metrics.score_bars(score, leadsheet, arr, synth_wav=synth, harmonic_wav=paths.stem("harmonic"),
-                              onset_wavs=(paths.stem("drums"), paths.stem("guitar")), vocal_wav=vocals,
+                              onset_wavs=onsets, vocal_wav=vocals,
                               low_conf=cfg.thresholds.melody_conf_flag, finger_style=style)
     summary = metrics.summarize(
         bars, violations, cfg.thresholds, arr,
@@ -82,6 +85,8 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
         summary["vocal_reference"] = vocals.name   # 相似度、试听片段、音高图对照的分轨
     if arr == "finger":
         summary["finger_style"] = style
+    if arr in metrics.STRUM_ARRS:
+        summary["rhythm_by_section"] = metrics.section_rhythm(bars)
     if kazoo:
         summary.update(metrics.kazoo_stats(score, cfg.thresholds))
 
@@ -361,20 +366,21 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
     if kazoo:
         rows += [("音域", "range", False, "仅报告"),
                  (f"换气提醒（连续超过 {s['breath_seconds']:g} 秒没有休止）", "breath_warnings", False, "仅报告")]
-    if arr in ("strum", "finger"):
-        rows.append(("和弦一致率", "chord_agreement", True, f"≥ {s['chord_target']:.0%}"))
+    if arr in ("strum", "finger", "power"):
+        name = "和弦一致率（按根音）" if arr == "power" else "和弦一致率"
+        rows.append((name, "chord_agreement", True, f"≥ {s['chord_target']:.0%}"))
     skeleton = s.get("finger_style") == "skeleton"
     if arr == "finger":
         rows += [("旋律 F1", "melody_f1", False, f"≥ {s['melody_target']:.2f}"),
                  ("旋律精确率", "melody_precision", True, ""),
                  (f"旋律召回率（{'骨架音' if skeleton else '全部参考音'}）", "melody_recall", True, ""),
                  ("八度完全正确", "melody_octave_exact", True, "")]
-    if arr in ("strum", "finger"):
-        rows.append(("和弦标记不符", "chord_mark_issues", False, "0" if arr == "strum" else "仅报告"))
+    if arr in ("strum", "finger", "power"):
+        rows.append(("和弦标记不符", "chord_mark_issues", False, "0" if arr in metrics.STRUM_ARRS else "仅报告"))
         rows.append(("和声相似度（均值）", "harmonic_similarity", False, "仅用于定位"))
-    if arr == "strum":
+    if arr in metrics.STRUM_ARRS:
         rows.append(("节奏相关度（均值）", "rhythm_correlation", False, "仅报告"))
-    if arr in ("strum", "finger"):
+    if arr in ("strum", "finger", "power"):
         rows.append(("低置信参考拍", "low_conf_beats", False, "转人耳确认"))
     for name, key, pct, target in rows:
         pv = _num(prev.get(key)) if prev and key in prev else None
@@ -434,6 +440,12 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
             lines.append("- 无")
         return "\n".join(lines) + "\n"
 
+    sections = s.get("rhythm_by_section") or []
+    if any(x["rhythm_correlation"] is not None for x in sections):
+        source = "吉他分轨" if arr == "power" else "鼓 + 吉他分轨"
+        lines += ["", f"## 节奏相关度（按段落，对照{source}）", "", "| 段落 | 小节 | 相关度 |", "|---|---|---|"]
+        lines += [f"| {x['section'] or '—'} | {a}–{z} | {_fmt(x['rhythm_correlation'])} |"
+                  for x in sections for a, z in [x["bars"]]]
     low = [b for b in bars if b.low_conf_beats]
     lines += ["", f"## 需人耳确认（参考和弦低置信，共 {s['low_conf_beats']} 拍）"]
     lines += [f"- 第 {b.bar} 小节：拍 {', '.join(map(str, b.low_conf_beats))}" for b in low] or ["- 无"]
