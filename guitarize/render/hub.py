@@ -34,6 +34,13 @@ PAGE = """<!doctype html>
 <iframe id="view" title="谱子"></iframe>
 <script>
   const PAGES = {pages};
+  if (location.protocol === "file:") {{   // 直接双击打开的文件：里面的谱子页面出不来，提示改用本地服务
+    const m = location.pathname.match(new RegExp("/songs/.*$"));
+    const url = "http://localhost:8766" + (m ? m[0] : "/");
+    document.body.insertAdjacentHTML("afterbegin", '<div style="padding:12px 16px;background:#fde7dc;color:#7c2d12;' +
+      'border-bottom:1px solid #f4b8a0">要通过本地服务打开才能看谱、播放：双击仓库里的「打开谱子.command」，或在终端运行 ' +
+      '<code>python -m guitarize serve --port 8766</code>，然后打开 <a href="' + url + location.hash + '">' + url + '</a></div>');
+  }}
   const tabs = document.getElementById("tabs"), view = document.getElementById("view"), files = document.getElementById("files");
   function show(key) {{
     const p = PAGES.find((x) => x.key === key) || PAGES[0];

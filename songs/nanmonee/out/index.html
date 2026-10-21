@@ -22,6 +22,13 @@
 <iframe id="view" title="谱子"></iframe>
 <script>
   const PAGES = [{"key": "strum", "label": "弹唱", "html": "strum.html", "files": [{"label": "PDF", "url": "strum.pdf"}, {"label": "文本谱", "url": "strum.txt"}, {"label": "Guitar Pro", "url": "strum.gp"}]}, {"key": "strum_old", "label": "弹唱（旧版）", "html": "strum_old.html", "files": [{"label": "PDF", "url": "strum_old.pdf"}, {"label": "文本谱", "url": "strum_old.txt"}, {"label": "Guitar Pro", "url": "strum_old.gp"}]}, {"key": "finger", "label": "指弹", "html": "finger.html", "files": [{"label": "PDF", "url": "finger.pdf"}, {"label": "文本谱", "url": "finger.txt"}, {"label": "Guitar Pro", "url": "finger.gp"}]}, {"key": "melody", "label": "旋律", "html": "melody.html", "files": [{"label": "PDF", "url": "melody.pdf"}, {"label": "文本谱", "url": "melody.txt"}, {"label": "Guitar Pro", "url": "melody.gp"}]}, {"key": "kazoo", "label": "卡祖笛", "html": "kazoo.html", "files": [{"label": "PDF", "url": "kazoo.pdf"}, {"label": "文本谱", "url": "kazoo.txt"}, {"label": "Guitar Pro", "url": "kazoo.gp"}]}, {"key": "power", "label": "强力和弦", "html": "power.html", "files": [{"label": "PDF", "url": "power.pdf"}, {"label": "文本谱", "url": "power.txt"}, {"label": "Guitar Pro", "url": "power.gp"}]}];
+  if (location.protocol === "file:") {   // 直接双击打开的文件：里面的谱子页面出不来，提示改用本地服务
+    const m = location.pathname.match(new RegExp("/songs/.*$"));
+    const url = "http://localhost:8766" + (m ? m[0] : "/");
+    document.body.insertAdjacentHTML("afterbegin", '<div style="padding:12px 16px;background:#fde7dc;color:#7c2d12;' +
+      'border-bottom:1px solid #f4b8a0">要通过本地服务打开才能看谱、播放：双击仓库里的「打开谱子.command」，或在终端运行 ' +
+      '<code>python -m guitarize serve --port 8766</code>，然后打开 <a href="' + url + location.hash + '">' + url + '</a></div>');
+  }
   const tabs = document.getElementById("tabs"), view = document.getElementById("view"), files = document.getElementById("files");
   function show(key) {
     const p = PAGES.find((x) => x.key === key) || PAGES[0];
