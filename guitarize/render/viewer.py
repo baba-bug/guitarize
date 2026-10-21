@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 
-from ..config import ARR_NAMES
+from ..config import arr_label, split_arr
 from ..paths import REPO_ROOT, SongPaths
 from .synth import ALPHATAB_DIST
 
@@ -23,6 +23,7 @@ def _rel(target: Path, start: Path) -> str:
 
 
 def build_viewer(paths: SongPaths, arr: str, title: str) -> Path:
+    """arr 可以是变体（config.split_arr，如 strum_old）：按所属编配的设置，标题写「弹唱（旧版）」。"""
     out = paths.out(arr, "html")
     out.parent.mkdir(parents=True, exist_ok=True)
     bar_times: list[list[float]] = []
@@ -34,12 +35,12 @@ def build_viewer(paths: SongPaths, arr: str, title: str) -> Path:
         if paths.stem(name).exists():
             refs.append({"label": label, "url": _rel(paths.stem(name), out.parent)})
     default = 0
-    if arr in SING_ALONG:
+    if split_arr(arr)[0] in SING_ALONG:
         names = ["original", *[n for n, _ in STEM_LABELS if paths.stem(n).exists()]]
         default = next((names.index(n) for n in ("lead", "vocals") if n in names), 0)
     replacements = {
         "{{REF_DEFAULT}}": str(default),
-        "{{TITLE}}": html.escape(f"{title} · {ARR_NAMES[arr]}"),
+        "{{TITLE}}": html.escape(f"{title} · {arr_label(arr)}"),
         "{{ALPHATAB_BASE}}": _rel(ALPHATAB_DIST, out.parent) + "/",
         "{{REF_AUDIO}}": json.dumps(refs, ensure_ascii=False),
         "{{BAR_TIMES}}": json.dumps(bar_times),

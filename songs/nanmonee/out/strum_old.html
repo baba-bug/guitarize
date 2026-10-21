@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>なんもねえ · 弹唱（旧版）</title>
+<style>
+  :root { --bg: #fafaf7; --fg: #1d1d1b; --muted: #6b6b66; --accent: #c2410c; --panel: #ffffffee; --line: #ddd; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.4 -apple-system, "PingFang SC", sans-serif; }
+  header { position: sticky; top: 0; z-index: 10; background: var(--panel); backdrop-filter: blur(6px);
+           border-bottom: 1px solid var(--line); padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  header h1 { font-size: 16px; margin: 0 12px 0 0; }
+  button, select { font: inherit; padding: 4px 10px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { color: var(--muted); font-size: 13px; }
+  #wrap { padding: 8px 16px 80px; }
+  .at-cursor-bar { background: rgba(194, 65, 12, .08); }
+  .at-cursor-beat { background: var(--accent); width: 3px; }
+  .at-highlight * { fill: var(--accent); stroke: var(--accent); }
+  .at-selection div { background: rgba(194, 65, 12, .15); }
+</style>
+</head>
+<body>
+<header>
+  <h1>なんもねえ · 弹唱（旧版）</h1>
+  <button id="play" disabled>▶ 合成音</button>
+  <label>参考 <select id="ref"></select></label>
+  <button id="refplay">▶ 从当前小节播放</button>
+  <label>速度 <select id="speed"><option>0.5</option><option>0.75</option><option selected>1</option></select></label>
+  <label><input type="checkbox" id="metro"> 节拍器</label>
+  <label><input type="checkbox" id="loop"> 循环选区</label>
+  <span id="status">加载中…</span>
+</header>
+<div id="wrap"><div id="at"></div></div>
+<script id="tex" type="text/plain">\title "なんもねえ"
+\tempo 167
+\track "Guitar"
+\instrument 25
+\staff {tabs}
+\tuning (E4 B3 G3 D3 A2 E2)
+\capo 4
+\chord "G" 3 0 0 0 2 3
+\chord "C" 0 1 0 2 3 x
+\chord "B7/D#" 2 0 2 1 x x
+\chord "Em" 0 0 0 2 2 0
+\chord "G/B" 3 0 0 0 2 x
+\chord "A" 0 2 2 2 0 x
+\chord "B7" 2 0 2 1 2 x
+\chord "Am7" 0 1 0 2 0 x
+\chord "D" 2 3 2 0 x x
+\chord "F" 1 1 2 3 3 1
+\chord "D7" 2 1 2 0 x x
+\chord "A7" 0 2 0 2 0 x
+\chordDiagramsInScore
+\ts 4 4
+\ks B
+\tf triplet-8th
+// bar 1 [イントロ]
+\section "イントロ" r.1 |
+// bar 2 [サビ]
+\section "サビ" (3.1 0.2 0.3 0.4 2.5 3.6).4 {ch "G" sd} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (3.1 0.2 0.3).8 {su} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} |
+// bar 3
+(0.1 1.2 0.3 2.4 3.5).4 {ch "C" sd} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 1.2 0.3).8 {su} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} |
+// bar 4
+(2.1 0.2 2.3 1.4).4 {ch "B7/D#" sd} (2.1 0.2 2.3 1.4).8 {sd} (2.1 0.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 0.2 2.3).8 {su} (2.1 0.2 2.3 1.4).8 {sd} (2.1 0.2 2.3).8 {su} |
+// bar 5
+(0.1 0.2 0.3 2.4 2.5 0.6).4 {ch "Em" sd} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 0.2 0.3).8 {su} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} |
+// bar 6
+(0.1 1.2 0.3 2.4 3.5).4 {ch "C" sd} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 1.2 0.3).8 {su} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} |
+// bar 7
+(3.1 0.2 0.3 0.4 2.5).4 {ch "G/B" sd} (3.1 0.2 0.3 0.4 2.5).8 {sd} (3.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (3.1 0.2 0.3).8 {su} (3.1 0.2 0.3 0.4 2.5).8 {sd} (3.1 0.2 0.3).8 {su} |
+// bar 8
+(0.1 2.2 2.3 2.4 0.5).4 {ch "A" sd} (0.1 2.2 2.3 2.4 0.5).8 {sd} (0.1 2.2 2.3).8 {su} (-.1 -.2 -.3).8 (0.1 2.2 2.3).8 {su} (0.1 2.2 2.3 2.4 0.5).8 {sd} (0.1 2.2 2.3).8 {su} |
+// bar 9
+(2.1 0.2 2.3 1.4 2.5).4 {ch "B7" sd} (2.1 0.2 2.3 1.4 2.5).8 {sd} (2.1 0.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 0.2 2.3).8 {su} (2.1 0.2 2.3 1.4 2.5).8 {sd} (2.1 0.2 2.3).8 {su} |
+// bar 10
+(3.1 0.2 0.3 0.4 2.5 3.6).4 {ch "G" sd} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (3.1 0.2 0.3).8 {su} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} |
+// bar 11
+(0.1 1.2 0.3 2.4 3.5).4 {ch "C" sd} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 1.2 0.3).8 {su} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} |
+// bar 12
+(2.1 0.2 2.3 1.4).4 {ch "B7/D#" sd} (2.1 0.2 2.3 1.4).8 {sd} (2.1 0.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 0.2 2.3).8 {su} (2.1 0.2 2.3 1.4).8 {sd} (2.1 0.2 2.3).8 {su} |
+// bar 13
+(0.1 0.2 0.3 2.4 2.5 0.6).4 {ch "Em" sd} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 0.2 0.3).8 {su} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} |
+// bar 14
+(0.1 1.2 0.3 2.4 3.5).4 {ch "C" sd} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 1.2 0.3).8 {su} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} |
+// bar 15
+(3.1 0.2 0.3 0.4 2.5).4 {ch "G/B" sd} (3.1 0.2 0.3 0.4 2.5).8 {sd} (3.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (3.1 0.2 0.3).8 {su} (3.1 0.2 0.3 0.4 2.5).8 {sd} (3.1 0.2 0.3).8 {su} |
+// bar 16
+(0.1 1.2 0.3 2.4 0.5).4 {ch "Am7" sd} (0.1 1.2 0.3 2.4 0.5).8 {sd} (0.1 1.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 1.2 0.3).8 {su} (0.1 1.2 0.3 2.4 0.5).8 {sd} (0.1 1.2 0.3).8 {su} |
+// bar 17
+(2.1 3.2 2.3 0.4).4 {ch "D" sd} (2.1 3.2 2.3 0.4).8 {sd} (2.1 3.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 3.2 2.3).8 {su} (2.1 3.2 2.3 0.4).8 {sd} (2.1 3.2 2.3).8 {su} |
+// bar 18 [間奏]
+\section "間奏" (3.1 0.2 0.3 0.4 2.5 3.6).4 {ch "G" sd} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (3.1 0.2 0.3).8 {su} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} |
+// bar 19 · hand: stop + triplet hits
+r.2 (0.6 2.5).4 {tu 3} (2.6 4.5).4 {tu 3} (0.4 2.3).4 {tu 3} |
+// bar 20 · hand: riff hits
+(3.1 0.2 0.3 0.4 2.5 3.6).2 {ch "G" sd} (0.6 2.5).4 {tu 3} (3.6 5.5).4 {tu 3} (0.6 2.5).4 {tu 3} |
+// bar 21 · hand: riff
+3.5.4 {ch "C"} 2.4.8 0.3.8 0.4.4 {ch "D"} 4.4.8 2.3.8 |
+// bar 22 [Aメロ]
+\section "Aメロ" (3.1 0.2 0.3 0.4 2.5 3.6).4 {ch "G" sd} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (3.1 0.2 0.3).8 {su} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} |
+// bar 23
+(3.1 0.2 0.3 0.4 2.5 3.6).4 {ch "G" sd} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (3.1 0.2 0.3).8 {su} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} |
+// bar 24
+(2.1 3.2 2.3 0.4).4 {ch "D" sd} (2.1 3.2 2.3 0.4).8 {sd} (2.1 3.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 3.2 2.3).8 {su} (2.1 3.2 2.3 0.4).8 {sd} (2.1 3.2 2.3).8 {su} |
+// bar 25
+(2.1 3.2 2.3 0.4).4 {ch "D" sd} (2.1 3.2 2.3 0.4).8 {sd} (2.1 3.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 3.2 2.3).8 {su} (2.1 3.2 2.3 0.4).8 {sd} (2.1 3.2 2.3).8 {su} |
+// bar 26
+(0.1 0.2 0.3 2.4 2.5 0.6).4 {ch "Em" sd} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 0.2 0.3).8 {su} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} |
+// bar 27
+(0.1 0.2 0.3 2.4 2.5 0.6).4 {ch "Em" sd} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 0.2 0.3).8 {su} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} |
+// bar 28
+(2.1 0.2 2.3 1.4 2.5).4 {ch "B7" sd} (2.1 0.2 2.3 1.4 2.5).8 {sd} (2.1 0.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 0.2 2.3).8 {su} (2.1 0.2 2.3 1.4 2.5).8 {sd} (2.1 0.2 2.3).8 {su} |
+// bar 29
+(2.1 0.2 2.3 1.4 2.5).4 {ch "B7" sd} (2.1 0.2 2.3 1.4 2.5).8 {sd} (2.1 0.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 0.2 2.3).8 {su} (2.1 0.2 2.3 1.4 2.5).8 {sd} (2.1 0.2 2.3).8 {su} |
+// bar 30 [Bメロ]
+\section "Bメロ" (0.1 1.2 0.3 2.4 3.5).4 {ch "C" sd} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 1.2 0.3).8 {su} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} |
+// bar 31
+(2.1 3.2 2.3 0.4).4 {ch "D" sd} (2.1 3.2 2.3 0.4).8 {sd} (2.1 3.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 3.2 2.3).8 {su} (2.1 3.2 2.3 0.4).8 {sd} (2.1 3.2 2.3).8 {su} |
+// bar 32
+(3.1 0.2 0.3 0.4 2.5 3.6).4 {ch "G" sd} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} (1.1 1.2 2.3 3.4 3.5 1.6).8 {ch "F" sd} (1.1 1.2 2.3).8 {su} (1.1 1.2 2.3 3.4 3.5 1.6).8 {sd} (1.1 1.2 2.3).8 {su} |
+// bar 33
+(0.1 0.2 0.3 2.4 2.5 0.6).4 {ch "Em" sd} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 0.2 0.3).8 {su} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} |
+// bar 34
+(0.1 2.2 2.3 2.4 0.5).4 {ch "A" sd} (0.1 2.2 2.3 2.4 0.5).8 {sd} (0.1 2.2 2.3).8 {su} (-.1 -.2 -.3).8 (0.1 2.2 2.3).8 {su} (0.1 2.2 2.3 2.4 0.5).8 {sd} (0.1 2.2 2.3).8 {su} |
+// bar 35
+(2.1 0.2 2.3 1.4 2.5).4 {ch "B7" sd} (2.1 0.2 2.3 1.4 2.5).8 {sd} (2.1 0.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 0.2 2.3).8 {su} (2.1 0.2 2.3 1.4 2.5).8 {sd} (2.1 0.2 2.3).8 {su} |
+// bar 36
+(0.1 1.2 0.3 2.4 3.5).4 {ch "C" sd} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 1.2 0.3).8 {su} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} |
+// bar 37 · hand: break before サビ
+(2.1 3.2 2.3 0.4).4 {ch "D" sd} (2.1 1.2 2.3 0.4).4 {ch "D7" sd} r.2 |
+// bar 38 [サビ]
+\section "サビ" (3.1 0.2 0.3 0.4 2.5 3.6).4 {ch "G" sd} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (3.1 0.2 0.3).8 {su} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} |
+// bar 39
+(0.1 1.2 0.3 2.4 3.5).4 {ch "C" sd} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 1.2 0.3).8 {su} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} |
+// bar 40
+(2.1 0.2 2.3 1.4).4 {ch "B7/D#" sd} (2.1 0.2 2.3 1.4).8 {sd} (2.1 0.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 0.2 2.3).8 {su} (2.1 0.2 2.3 1.4).8 {sd} (2.1 0.2 2.3).8 {su} |
+// bar 41
+(0.1 0.2 0.3 2.4 2.5 0.6).4 {ch "Em" sd} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 0.2 0.3).8 {su} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} |
+// bar 42
+(0.1 1.2 0.3 2.4 3.5).4 {ch "C" sd} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 1.2 0.3).8 {su} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} |
+// bar 43
+(3.1 0.2 0.3 0.4 2.5).4 {ch "G/B" sd} (3.1 0.2 0.3 0.4 2.5).8 {sd} (3.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (3.1 0.2 0.3).8 {su} (3.1 0.2 0.3 0.4 2.5).8 {sd} (3.1 0.2 0.3).8 {su} |
+// bar 44
+(0.1 2.2 2.3 2.4 0.5).4 {ch "A" sd} (0.1 2.2 2.3 2.4 0.5).8 {sd} (0.1 2.2 2.3).8 {su} (-.1 -.2 -.3).8 (0.1 2.2 2.3).8 {su} (0.1 2.2 2.3 2.4 0.5).8 {sd} (0.1 2.2 2.3).8 {su} |
+// bar 45
+(2.1 0.2 2.3 1.4 2.5).4 {ch "B7" sd} (2.1 0.2 2.3 1.4 2.5).8 {sd} (2.1 0.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 0.2 2.3).8 {su} (2.1 0.2 2.3 1.4 2.5).8 {sd} (2.1 0.2 2.3).8 {su} |
+// bar 46
+(3.1 0.2 0.3 0.4 2.5 3.6).4 {ch "G" sd} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (3.1 0.2 0.3).8 {su} (3.1 0.2 0.3 0.4 2.5 3.6).8 {sd} (3.1 0.2 0.3).8 {su} |
+// bar 47
+(0.1 1.2 0.3 2.4 3.5).4 {ch "C" sd} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 1.2 0.3).8 {su} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} |
+// bar 48
+(2.1 0.2 2.3 1.4).4 {ch "B7/D#" sd} (2.1 0.2 2.3 1.4).8 {sd} (2.1 0.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 0.2 2.3).8 {su} (2.1 0.2 2.3 1.4).8 {sd} (2.1 0.2 2.3).8 {su} |
+// bar 49
+(0.1 0.2 0.3 2.4 2.5 0.6).4 {ch "Em" sd} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 0.2 0.3).8 {su} (0.1 0.2 0.3 2.4 2.5 0.6).8 {sd} (0.1 0.2 0.3).8 {su} |
+// bar 50
+(0.1 1.2 0.3 2.4 3.5).4 {ch "C" sd} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 1.2 0.3).8 {su} (0.1 1.2 0.3 2.4 3.5).8 {sd} (0.1 1.2 0.3).8 {su} |
+// bar 51
+(3.1 0.2 0.3 0.4 2.5).4 {ch "G/B" sd} (3.1 0.2 0.3 0.4 2.5).8 {sd} (3.1 0.2 0.3).8 {su} (-.1 -.2 -.3).8 (3.1 0.2 0.3).8 {su} (3.1 0.2 0.3 0.4 2.5).8 {sd} (3.1 0.2 0.3).8 {su} |
+// bar 52
+(0.1 2.2 0.3 2.4 0.5).4 {ch "A7" sd} (0.1 2.2 0.3 2.4 0.5).8 {sd} (0.1 2.2 0.3).8 {su} (-.1 -.2 -.3).8 (0.1 2.2 0.3).8 {su} (0.1 2.2 0.3 2.4 0.5).8 {sd} (0.1 2.2 0.3).8 {su} |
+// bar 53
+(2.1 0.2 2.3 1.4 2.5).4 {ch "B7" sd} (2.1 0.2 2.3 1.4 2.5).8 {sd} (2.1 0.2 2.3).8 {su} (-.1 -.2 -.3).8 (2.1 0.2 2.3).8 {su} (2.1 0.2 2.3 1.4 2.5).8 {sd} (2.1 0.2 2.3).8 {su} |
+// bar 54 [アウトロ]
+\section "アウトロ" (0.1 1.2 0.3 2.4 3.5).4 {ch "C" sd} (0.1 1.2 0.3 2.4 3.5).4 {sd} (0.1 1.2 0.3 2.4 3.5).4 {sd} (0.1 1.2 0.3 2.4 3.5).4 {sd} |
+// bar 55
+(3.1 0.2 0.3 0.4 2.5).4 {ch "G/B" sd} (3.1 0.2 0.3 0.4 2.5).4 {sd} (3.1 0.2 0.3 0.4 2.5).4 {sd} (3.1 0.2 0.3 0.4 2.5).4 {sd} |
+// bar 56
+(0.1 2.2 0.3 2.4 0.5).4 {ch "A7" sd} (0.1 2.2 0.3 2.4 0.5).4 {sd} (0.1 2.2 0.3 2.4 0.5).4 {sd} (0.1 2.2 0.3 2.4 0.5).4 {sd} |
+// bar 57
+(2.1 3.2 2.3 0.4).4 {ch "D" sd} (2.1 3.2 2.3 0.4).4 {sd} (2.1 3.2 2.3 0.4).4 {sd} (2.1 3.2 2.3 0.4).4 {sd} |
+// bar 58
+(3.1 0.2 0.3 0.4 2.5 3.6).4 {ch "G" sd} (3.1 0.2 0.3 0.4 2.5 3.6).4 {sd} (3.1 0.2 0.3 0.4 2.5 3.6).4 {sd} (3.1 0.2 0.3 0.4 2.5 3.6).4 {sd} |
+// bar 59 · hand: stop + triplet hits
+r.2 (0.6 2.5).4 {tu 3} (2.6 4.5).4 {tu 3} (0.4 2.3).4 {tu 3} |
+// bar 60 · hand: riff hits
+(3.1 0.2 0.3 0.4 2.5 3.6).2 {ch "G" sd} (0.6 2.5).4 {tu 3} (3.6 5.5).4 {tu 3} (0.6 2.5).4 {tu 3} |
+// bar 61 · hand: riff
+3.5.4 {ch "C"} 2.4.8 0.3.8 0.4.4 {ch "D"} 4.4.8 2.3.8 |
+// bar 62 · hand: final hit
+r.4 (3.1 0.2 0.3 0.4 2.5 3.6).2 {ch "G" sd d} |
+</script>
+<script>window.BAR_TIMES = [[-0.26, 1.2], [1.2, 2.66], [2.66, 4.08], [4.08, 5.54], [5.54, 6.98], [6.98, 8.44], [8.44, 9.86], [9.86, 11.3], [11.3, 12.76], [12.76, 14.2], [14.2, 15.64], [15.64, 17.08], [17.08, 18.54], [18.54, 19.98], [19.98, 21.44], [21.44, 22.88], [22.88, 24.32], [24.32, 25.76], [25.76, 27.18], [27.18, 28.64], [28.64, 30.1], [30.1, 31.56], [31.56, 33.0], [33.0, 34.44], [34.44, 35.88], [35.88, 37.34], [37.34, 38.78], [38.78, 40.22], [40.22, 41.66], [41.66, 43.12], [43.12, 44.56], [44.56, 46.0], [46.0, 47.46], [47.46, 48.9], [48.9, 50.36], [50.36, 51.8], [51.8, 53.24], [53.24, 54.7], [54.7, 56.14], [56.14, 57.58], [57.58, 59.02], [59.02, 60.48], [60.48, 61.9], [61.9, 63.36], [63.36, 64.8], [64.8, 66.26], [66.26, 67.7], [67.7, 69.14], [69.14, 70.6], [70.6, 72.04], [72.04, 73.48], [73.48, 74.92], [74.92, 76.36], [76.36, 77.82], [77.82, 79.28], [79.28, 80.72], [80.72, 82.14], [82.14, 83.58], [83.58, 85.04], [85.04, 86.48], [86.48, 87.94], [87.94, 89.4]];
+window.REF_AUDIO = [{"label": "原曲", "url": "../source/original.wav"}, {"label": "人声", "url": "../analysis/stems/vocals.wav"}, {"label": "主唱（模型去掉伴唱）", "url": "../analysis/stems/lead.wav"}, {"label": "伴唱", "url": "../analysis/stems/backing.wav"}, {"label": "吉他", "url": "../analysis/stems/guitar.wav"}, {"label": "贝斯", "url": "../analysis/stems/bass.wav"}, {"label": "鼓", "url": "../analysis/stems/drums.wav"}, {"label": "其他", "url": "../analysis/stems/other.wav"}, {"label": "钢琴", "url": "../analysis/stems/piano.wav"}, {"label": "和声混合", "url": "../analysis/stems/harmonic.wav"}];
+window.REF_DEFAULT = 0;
+</script>
+<script src="../../../tools/alphatab/node_modules/@coderline/alphatab/dist/alphaTab.js"></script>
+<script>
+  const base = "../../../tools/alphatab/node_modules/@coderline/alphatab/dist/";
+  const api = new alphaTab.AlphaTabApi(document.getElementById("at"), {
+    core: { fontDirectory: base + "font/" },
+    player: {
+      playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
+      soundFont: base + "soundfont/sonivox.sf2",
+      scrollElement: document.scrollingElement,
+    },
+  });
+  const status = document.getElementById("status");
+  const playBtn = document.getElementById("play");
+  let currentBar = 0;
+  // 参考音频（原曲、人声、吉他、贝斯、鼓……）：下拉选一轨，从当前小节播放；同一时间只放一个
+  const refSel = document.getElementById("ref");
+  const refBtn = document.getElementById("refplay");
+  const IDLE = "▶ 从当前小节播放";
+  const refs = window.REF_AUDIO.map((r, i) => {
+    refSel.add(new Option(r.label, String(i)));
+    return { audio: null, url: r.url, label: r.label };
+  });
+  const audioOf = (r) => { if (!r.audio) { r.audio = new Audio(r.url); r.audio.preload = "auto"; } return r.audio; };
+  const stopRefs = () => { refs.forEach((r) => r.audio && r.audio.pause()); refBtn.textContent = IDLE; };
+  refSel.value = String(Math.min(window.REF_DEFAULT, refs.length - 1));   // 旋律 / 卡祖笛默认对照主唱
+  refSel.onchange = stopRefs;
+
+  api.tex(document.getElementById("tex").textContent);
+  api.playerReady.on(() => {
+    playBtn.disabled = false;
+    status.textContent = "就绪：点音符选定小节，拖选可设置循环区";
+  });
+  api.error.on((e) => { status.textContent = "出错：" + e.message; });
+  // 参考音频正在放时点谱面：音频跳到点中的那一拍（按原曲小节起止时间换算），光标随之跳过去
+  const playingRef = () => refs.find((r) => r.audio && !r.audio.paused);
+  function timeOfBeat(beat) {
+    const bt = window.BAR_TIMES[Math.min(beat.voice.bar.index, window.BAR_TIMES.length - 1)];
+    const frac = beat.playbackStart / beat.voice.bar.masterBar.calculateDuration();
+    return Math.max(0, bt[0] + Math.min(1, Math.max(0, frac)) * (bt[1] - bt[0]));
+  }
+  window.__timeOfBeat = timeOfBeat;   // 自检用
+  api.beatMouseDown.on((beat) => {
+    currentBar = beat.voice.bar.index;
+    const r = playingRef();
+    if (r && window.BAR_TIMES.length) r.audio.currentTime = timeOfBeat(beat);
+  });
+  api.playedBeatChanged.on((beat) => { currentBar = beat.voice.bar.index; });
+
+  playBtn.onclick = () => { stopRefs(); api.playPause(); };
+  document.getElementById("speed").onchange = (e) => {
+    const v = parseFloat(e.target.value);
+    api.playbackSpeed = v;
+    refs.forEach((r) => { if (r.audio) r.audio.playbackRate = v; });
+  };
+  document.getElementById("metro").onchange = (e) => { api.metronomeVolume = e.target.checked ? 1 : 0; };
+  document.getElementById("loop").onchange = (e) => { api.isLooping = e.target.checked; };
+
+  if (!window.BAR_TIMES.length) {
+    refBtn.disabled = true;
+    refBtn.title = "缺少原曲小节时间（leadsheet.json）";
+  }
+  // 参考音频播放时让谱面光标跟着走：按原曲小节起止时间换算成小节内比例 → alphaTab 的 tick 位置
+  function barAt(sec) {
+    const bt = window.BAR_TIMES;
+    let i = bt.findIndex((b) => sec < b[1]);
+    if (i < 0) i = bt.length - 1;
+    const [a, e] = bt[i];
+    return [i, Math.min(1, Math.max(0, (sec - a) / (e - a)))];
+  }
+  function tickAt(sec) {
+    const [i, frac] = barAt(sec);
+    const mb = api.score && api.score.masterBars[i];
+    return mb ? Math.round(mb.start + frac * mb.calculateDuration()) : null;
+  }
+  window.__tickAt = tickAt;   // 自检用
+  let follow = 0;
+  function followAudio(audio) {
+    cancelAnimationFrame(follow);
+    let last = 0;
+    const step = (now) => {
+      if (audio.paused) return;
+      if (now - last > 80) {   // 约 12 次 / 秒，足够流畅，不给合成器线程塞太多跳转
+        last = now;
+        const tick = tickAt(audio.currentTime);
+        if (tick !== null) api.tickPosition = tick;
+        const bar = barAt(audio.currentTime)[0];
+        // 合成器没在放时 alphaTab 不会自己翻页：每进一个新小节，等光标挪过去（下一帧）再把页面滚到光标所在那一行
+        if (bar !== currentBar) requestAnimationFrame(() => api.scrollToCursor());
+        currentBar = bar;
+      }
+      follow = requestAnimationFrame(step);
+    };
+    follow = requestAnimationFrame(step);
+  }
+
+  refBtn.onclick = () => {
+    const r = refs[Number(refSel.value)];
+    const audio = audioOf(r);
+    const playing = !audio.paused;
+    stopRefs();
+    if (playing) return;
+    api.pause();
+    const t = window.BAR_TIMES[Math.min(currentBar, window.BAR_TIMES.length - 1)];
+    audio.playbackRate = api.playbackSpeed;
+    audio.currentTime = Math.max(0, t[0]);
+    audio.play();
+    followAudio(audio);
+    refBtn.textContent = "⏸ 停止（" + r.label + "）";
+  };
+  if (location.hash === "#selftest") {   // 无头浏览器自检：第 5 小节中点 → 写进标题
+    api.renderFinished.on(() => {
+      const bt = window.BAR_TIMES[4];
+      document.title = "selftest " + tickAt((bt[0] + bt[1]) / 2) + " expect " +
+        (api.score.masterBars[4].start + api.score.masterBars[4].calculateDuration() / 2);
+    });
+  }
+</script>
+</body>
+</html>

@@ -5,7 +5,8 @@
 小节也都要能听、能看（片段与图在 .gitignore 里，只占本地空间）。
 卡祖笛谱（kazoo）没有指法：不查可弹性，只查记谱（小节时值、Shuffle 反拍）；按全部参考音评旋律（与旋律谱同一套），
 另报音域和换气提醒（metrics.kazoo_stats）；不对照音频，没有试听片段和图（参考音频在交互谱里选来听）。
-强力和弦谱（power）与弹唱同一套报告，和弦按根音对，节奏只对照吉他分轨（按力度加权）；弹唱 / 强力和弦都按段落列节奏相关度。"""
+强力和弦谱（power）与弹唱同一套报告，和弦按根音对，节奏只对照吉他分轨（按力度加权）；弹唱的 guitar 节奏（默认）节奏也
+这样对照，drums 节奏对照鼓 + 吉他分轨。弹唱 / 强力和弦都按段落列节奏相关度。"""
 from __future__ import annotations
 
 import csv
@@ -18,7 +19,7 @@ import numpy as np
 import soundfile as sf
 
 from .. import theory
-from ..config import ARR_NAMES, SongConfig, finger_style, load_profile, melody_source
+from ..config import ARR_NAMES, SongConfig, finger_style, load_profile, melody_source, strum_rhythm
 from ..paths import SongPaths
 from ..render import alphatab
 from ..render.synth import midi_to_wav
@@ -69,11 +70,13 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
     leadsheet = _load_json(paths.leadsheet_json)
     vocals = melody_reference(paths, cfg.overrides) if arr == "melody" else None   # 只有旋律谱对照人声
     style = finger_style(cfg.overrides)   # 指弹旋律的评法跟着写法走
-    # 节奏对照的起音：弹唱是鼓 + 吉他分轨；强力和弦只看吉他分轨（鼓的起音强得多，会盖过吉他）
-    onsets = (paths.stem("guitar"),) if arr == "power" else (paths.stem("drums"), paths.stem("guitar"))
+    # 节奏对照的起音：强力和弦、弹唱的 guitar 节奏只看吉他分轨、按力度加权（鼓的起音强得多，会盖过吉他）；
+    # 弹唱的 drums 节奏是鼓 + 吉他分轨
+    guitar = arr == "power" or (arr == "strum" and strum_rhythm(cfg.overrides) == "guitar")
+    onsets = (paths.stem("guitar"),) if guitar else (paths.stem("drums"), paths.stem("guitar"))
     bars = metrics.score_bars(score, leadsheet, arr, synth_wav=synth, harmonic_wav=paths.stem("harmonic"),
                               onset_wavs=onsets, vocal_wav=vocals,
-                              low_conf=cfg.thresholds.melody_conf_flag, finger_style=style)
+                              low_conf=cfg.thresholds.melody_conf_flag, finger_style=style, dynamic=guitar)
     summary = metrics.summarize(
         bars, violations, cfg.thresholds, arr,
         arrangement_bars=len(score.bars),
@@ -87,6 +90,7 @@ def run_verify(paths: SongPaths, cfg: SongConfig, arr: str) -> Path:
         summary["finger_style"] = style
     if arr in metrics.STRUM_ARRS:
         summary["rhythm_by_section"] = metrics.section_rhythm(bars)
+        summary["rhythm_reference"] = "guitar" if guitar else "drums+guitar"
     if kazoo:
         summary.update(metrics.kazoo_stats(score, cfg.thresholds))
 
@@ -442,7 +446,7 @@ def render_report(arr: str, iter_name: str, s: dict, prev: dict | None, violatio
 
     sections = s.get("rhythm_by_section") or []
     if any(x["rhythm_correlation"] is not None for x in sections):
-        source = "吉他分轨" if arr == "power" else "鼓 + 吉他分轨"
+        source = "鼓 + 吉他分轨" if s.get("rhythm_reference") == "drums+guitar" else "吉他分轨"
         lines += ["", f"## 节奏相关度（按段落，对照{source}）", "", "| 段落 | 小节 | 相关度 |", "|---|---|---|"]
         lines += [f"| {x['section'] or '—'} | {a}–{z} | {_fmt(x['rhythm_correlation'])} |"
                   for x in sections for a, z in [x["bars"]]]

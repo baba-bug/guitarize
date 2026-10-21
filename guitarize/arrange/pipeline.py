@@ -1,6 +1,7 @@
 """编配编排：leadsheet → 选变调夹 → 生成弹唱 / 指弹 / 旋律谱草稿 alphaTex → 自检。默认不覆盖已有编配（那是迭代修改过的成果）。
 卡祖笛谱（kazoo）按实际音高写，没有变调夹、指法，自检只查记谱。
-强力和弦谱（power）按实际音高写（不夹变调夹），节奏型按段落只看原曲吉他分轨选（power_patterns）。"""
+强力和弦谱（power）按实际音高写（不夹变调夹），节奏型按段落只看原曲吉他分轨选（guitar_patterns）；
+弹唱默认（overrides.strum_rhythm: guitar）也这样选，strum_rhythm: drums 是旧的鼓 + 吉他选型（section_patterns）。"""
 from __future__ import annotations
 
 import json
@@ -10,7 +11,8 @@ from pathlib import Path
 
 import numpy as np
 
-from ..config import Profile, SongConfig, finger_bass, finger_style, load_profile, power_patterns, strum_pattern
+from ..config import (Profile, SongConfig, finger_bass, finger_style, load_profile, power_patterns, strum_pattern,
+                      strum_rhythm)
 from ..paths import SongPaths
 from ..render import alphatab
 from ..render.alphatab import AlphaTexError
@@ -22,7 +24,8 @@ from .finger import generate_finger, section_bars
 from .kazoo import generate_kazoo
 from .melody import generate_melody
 from .patterns import DEFAULT, choose_pattern, slots_per_beat
-from .power import choose_patterns, generate_power
+from .power import generate_power
+from .rhythm import choose_patterns
 from .strum import beat_chords, generate_strum
 
 
@@ -36,7 +39,7 @@ def chord_beats(leadsheet: dict) -> dict[str, float]:
 
 
 def section_patterns(paths: SongPaths, leadsheet: dict) -> list[str]:
-    """按段落（section 标记延续到下一个标记）取原曲鼓 + 吉他分轨的平均起音向量，选节奏型。"""
+    """弹唱的 drums 节奏：按段落（section 标记延续到下一个标记）取原曲鼓 + 吉他分轨的平均起音向量，选节奏型。"""
     bars = leadsheet["bars"]
     stems = [paths.stem("drums"), paths.stem("guitar")]
     if not all(p.exists() for p in stems):
@@ -56,15 +59,16 @@ def section_patterns(paths: SongPaths, leadsheet: dict) -> list[str]:
     return out
 
 
-def power_patterns_for(paths: SongPaths, leadsheet: dict, overrides: dict) -> list[str | None]:
-    """强力和弦谱逐小节的节奏型（power.choose_patterns）：只取原曲吉他分轨的起音——鼓的起音强得多，和吉他混在一起
-    选出来的是鼓的节奏型（なんもねえ 选成了 D-DU-UDU）。没有吉他分轨时用默认型；overrides.power_patterns 逐段指定。"""
+def guitar_patterns(paths: SongPaths, leadsheet: dict, overrides: dict[int, str] | None = None) -> list[str | None]:
+    """强力和弦谱、弹唱 guitar 节奏逐小节的节奏型（rhythm.choose_patterns）：只取原曲吉他分轨的起音——鼓的起音强得多，
+    和吉他混在一起选出来的是鼓的节奏型（なんもねえ 选成了 D-DU-UDU）。没有吉他分轨时用默认型；
+    overrides（config.power_patterns）逐段指定。"""
     guitar = paths.stem("guitar")
     onset = None
     if guitar.exists():
         spb = slots_per_beat(leadsheet.get("feel", "straight"))
         onset = onset_slots([guitar], [(b["t_start"], b["t_end"]) for b in leadsheet["bars"]], slots=4 * spb)
-    return choose_patterns(onset, leadsheet, power_patterns(overrides))
+    return choose_patterns(onset, leadsheet, overrides)
 
 
 def self_check(text: str, profile: Profile, kind: str) -> list[Violation]:
@@ -107,7 +111,7 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
     profile = load_profile(cfg.level)
     if arr in ("kazoo", "power"):
         text = (generate_kazoo(leadsheet, cfg.title) if arr == "kazoo" else
-                generate_power(leadsheet, profile, power_patterns_for(paths, leadsheet, cfg.overrides), cfg.title))
+                generate_power(leadsheet, profile, guitar_patterns(paths, leadsheet, power_patterns(cfg.overrides)), cfg.title))
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
         return target, None, _checked(text, profile, arr)
@@ -135,8 +139,10 @@ def arrange(paths: SongPaths, cfg: SongConfig, arr: str, capo: int | None = None
         return found if isinstance(found, list) else []
 
     if arr == "strum":
-        text = generate_strum(leadsheet, chosen.capo, profile, ([fixed] * len(leadsheet["bars"]) if (fixed := strum_pattern(cfg.overrides)) else section_patterns(paths, leadsheet)), cfg.title,
-                              check=check)
+        rhythm, fixed = strum_rhythm(cfg.overrides), strum_pattern(cfg.overrides)
+        patterns = ([fixed] * len(leadsheet["bars"]) if fixed else
+                    guitar_patterns(paths, leadsheet) if rhythm == "guitar" else section_patterns(paths, leadsheet))
+        text = generate_strum(leadsheet, chosen.capo, profile, patterns, cfg.title, check=check, rhythm=rhythm)
     elif arr == "melody":
         text = generate_melody(leadsheet, chosen.capo, profile, cfg.title, check=check, octave=octave)
     else:

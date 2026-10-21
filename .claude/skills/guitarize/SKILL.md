@@ -41,6 +41,7 @@ description: 把一首歌（歌名或 B 站 / 网易云链接）做成可弹的�
 `$PY -m guitarize arrange <slug> --arr strum` 与 `--arr finger`（记下选中的变调夹与指型）。
 - 每份草稿都会用 alphaTab 构建 + 可弹性检查自检，命令输出 `自检：0 处违规`；指弹草稿会自动修复（先丢 / 截短合音，再截短按住的低音、丢低音；旋律的音高和时值不动，换把只给旋律音换弦），修复与降级写在对应 `// bar N` 注释行里。
 - 指弹默认是完整旋律（`overrides.finger_style: full`）：旋律声部就是旋律谱的每一个音（同样的节奏、三连音、h / sl，只有指法可以不同）；伴奏声部第 1 拍弹和弦低音、第 3 拍换和弦弹新低音、不换弹五音（交替低音），第 2、4 拍旋律不在拍上起音时弹两个和弦内音的短音，拍上 / 摇摆反拍唱满 1 拍的长音下面加三度 / 六度的双音。所以先把旋律谱核对准再编指弹。verify 按全部参考音评指弹旋律；第 3、4 拍低音是五音时逐拍和弦推断常听成属和弦，和弦一致率会比旧写法低，以和声相似度和人耳为准。旧的骨架写法（骨架旋律 + 低音 / 填充，适合初级）用 `finger_style: skeleton`。
+- 弹唱默认 `overrides.strum_rhythm: guitar`：变调夹、开放和弦指型照旧，节奏型与强力和弦谱同一套、按乐句只看吉他分轨选（`verse` / `verse_end` / `chorus` / `hit`，写在 `// bar N · 节奏型 …` 注释里）；D / A 扫整个指型（A 加重音 `ac`），M 只闷指型最低 3 根发声弦（`pm`），U 上扫 1–3 弦、低音弦用连音线接着响，d 轻扫；刷弦 `bd 60` / `bu 60`、下扫 `dy f`、上扫 / 轻扫 `dy mp`。verify 的节奏只对照吉他分轨、按力度加权。旧的弹唱（鼓 + 吉他选型、`sd` / `su`、没有力度）用 `strum_rhythm: drums`。`strum_pattern` 整首一个型：guitar 节奏两套型名都能写（旧的型也刷弦、写力度），drums 只有旧的型。
 - 草稿是生成结果，`--force` 会覆盖手改：把手改写成 `songs/<slug>/hand_edits.py`（按 `// bar N` 替换行，见 なんもねえ 的例子），生成器改进后 `arrange --force` 再重放手改脚本，再 verify。
 - 指弹旋律默认整曲一个八度（保持人声高低关系；段落间换八度会让旋律在交界处"突然掉下去"）。确需分段换八度时用 `overrides.melody_octave: section` 或 `{小节: 12}`。
 - 指弹谱自动标出该按的和弦指型（指型名 + 和弦图）；伴奏 mf、旋律 f。
@@ -76,6 +77,7 @@ $PY -m guitarize verify <slug> --arr <arr>
 
 ## 7. 出谱与交付
 - `$PY -m guitarize render <slug> --arr strum` / `--arr finger`
+- 重新生成前想留旧版对比：把 `arrangements/<arr>.atex` 复制成 `<arr>_old.atex`，`render <slug> --arr <arr>_old`（变体 `<编配>_<标签>` 按所属编配的设置渲染到 `out/<arr>_old.*`，总页面里排在所属编配后面，叫「弹唱（旧版）」；只有 render 认变体）。
 - 后台运行 `$PY -m guitarize serve`，用浏览器打开 `http://localhost:8765/songs/<slug>/out/<arr>.html`（本地服务支持 Range，可按小节跳到原曲）；若无浏览器面板，用无头 Chrome 截图（必须带临时 --user-data-dir）。确认谱面、点播放无报错；用 Read 看 PDF 第 1 页。
 - 交给用户：网页链接（本地）、PDF / txt 路径、每份编配的汇总分数、"需人耳确认"清单（附 A/B 片段路径）。
 - 若预览面板起的 serve 不监听端口，改在后台直接运行 `$PY -u -m guitarize serve --port <port>`。没有 pdftoppm 时用 macOS `sips -s format png x.pdf --out x.png` 看 PDF 第 1 页。

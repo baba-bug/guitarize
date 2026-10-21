@@ -1,12 +1,13 @@
 """一首歌的总页面 out/index.html：顶上一排按钮切换这首歌已生成的各个编配页面（弹唱 / 指弹 / 旋律 / 卡祖笛……），
-下面用 iframe 显示选中的那个，旁边给 PDF / 文本谱的链接。每次渲染任何一个编配都会重写它，新编配自动出现。"""
+下面用 iframe 显示选中的那个，旁边给 PDF / 文本谱的链接。每次渲染任何一个编配都会重写它，新编配自动出现；
+编配的变体（如旧版弹唱 strum_old，见 config.split_arr）排在所属编配后面。"""
 from __future__ import annotations
 
 import html
 import json
 from pathlib import Path
 
-from ..config import ARR_NAMES, SongConfig
+from ..config import ARR_NAMES, VARIANT_TAG, SongConfig, arr_label
 from ..paths import SongPaths
 
 PAGE = """<!doctype html>
@@ -54,16 +55,21 @@ PAGE = """<!doctype html>
 FILE_LABELS = (("pdf", "PDF"), ("txt", "文本谱"), ("gp", "Guitar Pro"))
 
 
+def _variants(paths: SongPaths, arr: str) -> list[str]:
+    """out/ 里 arr 的变体页面名（out/<arr>_<标签>.html），按名字排序。"""
+    return sorted(p.stem for p in paths.out_dir.glob(f"{arr}_*.html") if VARIANT_TAG.fullmatch(p.stem[len(arr) + 1:]))
+
+
 def hub_pages(paths: SongPaths, cfg: SongConfig) -> list[dict]:
-    """已经生成了网页的编配，按 song.yaml 的 arrangements 顺序（其余的按 ARR_NAMES 顺序排在后面）。"""
+    """已经生成了网页的编配，按 song.yaml 的 arrangements 顺序（其余的按 ARR_NAMES 顺序排在后面），每个编配的变体紧跟在它后面。"""
     order = [a for a in cfg.arrangements if a in ARR_NAMES] + [a for a in ARR_NAMES if a not in cfg.arrangements]
     pages = []
-    for arr in order:
-        if not paths.out(arr, "html").exists():
+    for name in (n for arr in order for n in (arr, *_variants(paths, arr))):
+        if not paths.out(name, "html").exists():
             continue
-        pages.append({"key": arr, "label": ARR_NAMES[arr], "html": paths.out(arr, "html").name,
-                      "files": [{"label": label, "url": paths.out(arr, ext).name}
-                                for ext, label in FILE_LABELS if paths.out(arr, ext).exists()]})
+        pages.append({"key": name, "label": arr_label(name), "html": paths.out(name, "html").name,
+                      "files": [{"label": label, "url": paths.out(name, ext).name}
+                                for ext, label in FILE_LABELS if paths.out(name, ext).exists()]})
     return pages
 
 

@@ -113,3 +113,44 @@ def test_hub_page_switches_between_every_rendered_arrangement(demo_song):
     assert "finger" in keys and "melody" in keys and hub.name == "index.html"
     mel = next(p for p in pages if p["key"] == "melody")
     assert mel["html"] == "melody.html" and {"label": "PDF", "url": "melody.pdf"} in mel["files"]
+
+
+def test_variant_names_and_labels():
+    import pytest
+
+    from guitarize.config import arr_label, split_arr
+    assert split_arr("strum_old") == ("strum", "old") and split_arr("power") == ("power", None)
+    assert arr_label("strum_old") == "弹唱（旧版）" and arr_label("finger_v2") == "指弹（v2）" and arr_label("strum") == "弹唱"
+    for bad in ("nope_old", "strum_", "strum_Old", "_old", "strum_old_2"):
+        with pytest.raises(ValueError, match="arrangement"):
+            split_arr(bad)
+
+
+def test_variant_renders_like_its_arrangement_and_follows_it_in_the_hub(demo_song):
+    # 用户要求：重新生成前的旧版弹唱留着对比——arrangements/strum_old.atex 按弹唱的设置渲染成 out/strum_old.*，
+    # 总页面里排在弹唱后面，叫「弹唱（旧版）」
+    import shutil
+
+    import pytest
+
+    from guitarize.cli import main
+    songs = str(demo_song.root.parent)
+    shutil.copyfile(demo_song.atex("strum"), demo_song.atex("strum_old"))
+    assert main(["--songs-dir", songs, "render", "demo", "--arr", "strum_old"]) == 0
+    assert all(demo_song.out("strum_old", ext).exists() for ext in ("gp", "txt", "pdf", "html"))
+    assert "<title>Demo Twinkle · 弹唱（旧版）</title>" in demo_song.out("strum_old", "html").read_text(encoding="utf-8")
+    for arr in ("strum", "finger", "power_x"):
+        demo_song.out(arr, "html").write_text("<html></html>", encoding="utf-8")
+    demo_song.out("strum_Bad", "html").write_text("<html></html>", encoding="utf-8")   # 不是变体名：不列
+    from guitarize.render.hub import build_hub
+    page = build_hub(demo_song, load_song_config(demo_song)).read_text(encoding="utf-8")
+    pages = json.loads(page.split("const PAGES = ")[1].split(";\n")[0])
+    assert [(p["key"], p["label"]) for p in pages] == [("strum", "弹唱"), ("strum_old", "弹唱（旧版）"), ("finger", "指弹"),
+                                                      ("power_x", "强力和弦（x）")]
+    old = pages[1]
+    assert old["html"] == "strum_old.html" and {"label": "PDF", "url": "strum_old.pdf"} in old["files"]
+    for bad in ("nope_old", "strum_"):                                              # render 之外不认变体
+        with pytest.raises(SystemExit):
+            main(["--songs-dir", songs, "render", "demo", "--arr", bad])
+    with pytest.raises(SystemExit):
+        main(["--songs-dir", songs, "verify", "demo", "--arr", "strum_old"])
