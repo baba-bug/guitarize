@@ -7,6 +7,8 @@
 B7 指型补顶音等）已由生成器的合音取代。
 强力和弦谱（power，实际音高、不夹变调夹）照弹唱谱的节奏改同样几个小节，和弦换成强力和弦（指型与生成器选的一致：
 B5 5 弦 2 品、E5 开放、F#5 6 弦 2 品、G#5 6 弦 4 品，另加 A#5 6 弦 6 品）。
+弹唱谱（strum，capo 4 的开放和弦）与强力和弦谱同样写：扫弦刷弦 bd + 力度（dy 沿用到下一个写了 dy 的拍，每下都写上），
+hits、break、结尾一击加重音 ac；强力和弦谱的这几处手改没有闷音，弹唱谱也不闷。
 """
 from __future__ import annotations
 
@@ -15,7 +17,8 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-G = "(3.1 0.2 0.3 0.4 2.5 3.6)"
+G = "3.1 0.2 0.3 0.4 2.5 3.6"   # 弹唱谱 capo 4 的 G 指型（实际音高 B）
+HIT = "bd 60 dy f"              # 手改的下扫：刷弦 + 力度
 
 
 def _edit(voice: str, edits: dict[int, tuple[str, str]]) -> str:
@@ -39,44 +42,45 @@ def _edit(voice: str, edits: dict[int, tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def strum(text: str) -> str:
-    stop = "r.2 (0.6 2.5).4 {tu 3} (2.6 4.5).4 {tu 3} (0.4 2.3).4 {tu 3} |"
-    b_riff = f'{G}.2 {{ch "G" sd}} (0.6 2.5).4 {{tu 3}} (3.6 5.5).4 {{tu 3}} (0.6 2.5).4 {{tu 3}} |'
-    e_riff = '3.5.4 {ch "C"} 2.4.8 0.3.8 0.4.4 {ch "D"} 4.4.8 2.3.8 |'
-    return _edit(text, {
-        19: (stop, "stop + triplet hits"), 59: (stop, "stop + triplet hits"),
-        20: (b_riff, "riff hits"), 60: (b_riff, "riff hits"),
-        21: (e_riff, "riff"), 61: (e_riff, "riff"),
-        37: ('(2.1 3.2 2.3 0.4).4 {ch "D" sd} (2.1 1.2 2.3 0.4).4 {ch "D7" sd} r.2 |', "break before サビ"),
-        62: (f'r.4 {G}.2 {{ch "G" sd d}} |', "final hit"),
-    })
-
-
-def _power_chord(notes: str, fx: str = "") -> str:
+def _chord(notes: str, fx: str = "") -> str:
     """'4.3 4.4 2.5' → '(4.3 4.4 2.5)'；fx 是每个音的音符效果（重音 ac 等），'(4.3{ac} 4.4{ac} 2.5{ac})'。"""
     return "(" + " ".join(n + (f"{{{fx}}}" if fx else "") for n in notes.split()) + ")"
 
 
-def power(text: str) -> str:
-    b5, e5, f5, g5, a5 = "4.3 4.4 2.5", "2.4 2.5 0.6", "4.4 4.5 2.6", "6.4 6.5 4.6", "8.4 8.5 6.6"   # A5 = A#5
-    hit = "bd 60 dy f"
+def _stab(notes: str, name: str = "") -> str:
+    """三连音四分的齐奏 hit（重音）；name：要标的指型名。"""
+    mark = f'ch "{name}" ' if name else ""
+    return f"{_chord(notes, 'ac')}.4 {{{mark}tu 3 {HIT}}}"
 
-    def stab(notes: str, name: str = "") -> str:   # 三连音四分的齐奏 hit（重音）；name：要标的指型名
-        mark = f'ch "{name}" ' if name else ""
-        return f"{_power_chord(notes, 'ac')}.4 {{{mark}tu 3 {hit}}}"
 
-    # 停顿 + 三连音 hits：G#5 → A#5 → F#5（弹唱谱 capo 4 的 E / F# / D 型，实际音高同样是 G# / A# / F#）
-    stop = f"r.2 {stab(g5)} {stab(a5)} {stab(f5)} |"
-    b_riff = f'{_power_chord(b5, "ac")}.2 {{ch "B5" {hit}}} {stab(g5, "G#5")} {stab(b5)} {stab(g5)} |'
-    # riff：拍上弹强力和弦（E5 / F#5），反拍的两个八分是 riff 的三音、五音（单音，G#3 B3 / A#3 C#4）
-    e_riff = f'{_power_chord(e5)}.4 {{ch "E5" {hit}}} 1.3.8 0.2.8 {_power_chord(f5)}.4 {{ch "F#5" {hit}}} 3.3.8 2.2.8 |'
+def strum(text: str) -> str:
+    # 停顿 + 三连音 hits：capo 4 的 E / F# / D 型双音（实际音高 G# / A# / F#，与强力和弦谱同样几下）
+    stop = f"r.2 {_stab('0.6 2.5')} {_stab('2.6 4.5')} {_stab('0.4 2.3')} |"
+    b_riff = f'{_chord(G, "ac")}.2 {{ch "G" {HIT}}} {_stab("0.6 2.5")} {_stab("3.6 5.5")} {_stab("0.6 2.5")} |'
+    e_riff = '3.5.4 {ch "C" dy f} 2.4.8 0.3.8 0.4.4 {ch "D" dy f} 4.4.8 2.3.8 |'   # 单音 riff：不刷弦
+    d, d7 = _chord("2.1 3.2 2.3 0.4", "ac"), _chord("2.1 1.2 2.3 0.4", "ac")
     return _edit(text, {
         19: (stop, "stop + triplet hits"), 59: (stop, "stop + triplet hits"),
         20: (b_riff, "riff hits"), 60: (b_riff, "riff hits"),
         21: (e_riff, "riff"), 61: (e_riff, "riff"),
-        37: (f'{_power_chord(f5, "ac")}.4 {{ch "F#5" {hit}}} {_power_chord(f5, "ac")}.4 {{{hit}}} r.2 |',
-             "break before サビ"),
-        62: (f'r.4 {_power_chord(b5, "ac")}.2 {{ch "B5" bd 60 dy ff d}} |', "final hit"),
+        37: (f'{d}.4 {{ch "D" {HIT}}} {d7}.4 {{ch "D7" {HIT}}} r.2 |', "break before サビ"),
+        62: (f'r.4 {_chord(G, "ac")}.2 {{ch "G" bd 60 dy ff d}} |', "final hit"),
+    })
+
+
+def power(text: str) -> str:
+    b5, e5, f5, g5, a5 = "4.3 4.4 2.5", "2.4 2.5 0.6", "4.4 4.5 2.6", "6.4 6.5 4.6", "8.4 8.5 6.6"   # A5 = A#5
+    # 停顿 + 三连音 hits：G#5 → A#5 → F#5（弹唱谱 capo 4 的 E / F# / D 型，实际音高同样是 G# / A# / F#）
+    stop = f"r.2 {_stab(g5)} {_stab(a5)} {_stab(f5)} |"
+    b_riff = f'{_chord(b5, "ac")}.2 {{ch "B5" {HIT}}} {_stab(g5, "G#5")} {_stab(b5)} {_stab(g5)} |'
+    # riff：拍上弹强力和弦（E5 / F#5），反拍的两个八分是 riff 的三音、五音（单音，G#3 B3 / A#3 C#4）
+    e_riff = f'{_chord(e5)}.4 {{ch "E5" {HIT}}} 1.3.8 0.2.8 {_chord(f5)}.4 {{ch "F#5" {HIT}}} 3.3.8 2.2.8 |'
+    return _edit(text, {
+        19: (stop, "stop + triplet hits"), 59: (stop, "stop + triplet hits"),
+        20: (b_riff, "riff hits"), 60: (b_riff, "riff hits"),
+        21: (e_riff, "riff"), 61: (e_riff, "riff"),
+        37: (f'{_chord(f5, "ac")}.4 {{ch "F#5" {HIT}}} {_chord(f5, "ac")}.4 {{{HIT}}} r.2 |', "break before サビ"),
+        62: (f'r.4 {_chord(b5, "ac")}.2 {{ch "B5" bd 60 dy ff d}} |', "final hit"),
     })
 
 
