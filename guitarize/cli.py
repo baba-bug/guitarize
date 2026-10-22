@@ -169,6 +169,11 @@ class RangeRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_error(404, "No permission to list directory")
         return None
 
+    def end_headers(self):
+        # 谱子页面重新生成后浏览器要马上拿到新版：每次都先问一下服务（没变时回 304，不重传）
+        self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def send_head(self):
         header = self.headers.get("Range")
         path = self.translate_path(self.path)

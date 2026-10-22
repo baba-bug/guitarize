@@ -74,7 +74,9 @@ def hub_pages(paths: SongPaths, cfg: SongConfig) -> list[dict]:
     for name in (n for arr in order for n in (arr, *_variants(paths, arr))):
         if not paths.out(name, "html").exists():
             continue
-        pages.append({"key": name, "label": arr_label(name), "html": paths.out(name, "html").name,
+        page = paths.out(name, "html")
+        stamp = page.stat().st_mtime_ns // 1_000_000   # 页面改过就换一个地址：iframe 不会拿浏览器缓存里的旧页面
+        pages.append({"key": name, "label": arr_label(name), "html": f"{page.name}?v={stamp}",
                       "files": [{"label": label, "url": paths.out(name, ext).name}
                                 for ext, label in FILE_LABELS if paths.out(name, ext).exists()]})
     return pages

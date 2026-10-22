@@ -61,3 +61,12 @@ def test_directory_listing_disabled(server):
         with pytest.raises(urllib.error.HTTPError) as exc:
             urllib.request.urlopen(f"{server}{path}")
         assert exc.value.code == 404
+
+
+def test_pages_are_revalidated_so_a_regenerated_tab_shows_up_at_once(server):
+    # 用户重新生成谱子后刷新看到的还是旧页面（浏览器缓存）：服务要求每次先问一下
+    with urllib.request.urlopen(f"{server}/a.bin") as r:
+        assert r.headers["Cache-Control"] == "no-cache"
+    req = urllib.request.Request(f"{server}/a.bin", headers={"Range": "bytes=0-9"})
+    with urllib.request.urlopen(req) as r:
+        assert r.status == 206 and r.headers["Cache-Control"] == "no-cache"

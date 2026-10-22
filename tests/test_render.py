@@ -112,7 +112,7 @@ def test_hub_page_switches_between_every_rendered_arrangement(demo_song):
     keys = [p["key"] for p in pages]
     assert "finger" in keys and "melody" in keys and hub.name == "index.html"
     mel = next(p for p in pages if p["key"] == "melody")
-    assert mel["html"] == "melody.html" and {"label": "PDF", "url": "melody.pdf"} in mel["files"]
+    assert mel["html"].startswith("melody.html?v=") and {"label": "PDF", "url": "melody.pdf"} in mel["files"]   # ?v=：改过就换地址，不用缓存
 
 
 def test_variant_names_and_labels():
@@ -148,7 +148,7 @@ def test_variant_renders_like_its_arrangement_and_follows_it_in_the_hub(demo_son
     assert [(p["key"], p["label"]) for p in pages] == [("strum", "弹唱"), ("strum_old", "弹唱（旧版）"), ("finger", "指弹"),
                                                       ("power_x", "强力和弦（x）")]
     old = pages[1]
-    assert old["html"] == "strum_old.html" and {"label": "PDF", "url": "strum_old.pdf"} in old["files"]
+    assert old["html"].startswith("strum_old.html?v=") and {"label": "PDF", "url": "strum_old.pdf"} in old["files"]
     for bad in ("nope_old", "strum_"):                                              # render 之外不认变体
         with pytest.raises(SystemExit):
             main(["--songs-dir", songs, "render", "demo", "--arr", bad])
