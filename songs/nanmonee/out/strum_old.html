@@ -193,8 +193,30 @@ window.REF_DEFAULT = 0;
       playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
       soundFont: base + "soundfont/sonivox.sf2",
       scrollElement: document.scrollingElement,
+      scrollMode: alphaTab.ScrollMode.Off,   // 翻页自己做（keepInView）：合成音和参考音轨用同一个位置
     },
   });
+  // 跟随播放翻页：换到新的一行时，把这一行（连同上面的和弦图）的顶放到吸顶工具栏下面、窗口约 FOLLOW_AT 高处，
+  // 下面还看得到下一行。按小节号查 alphaTab 的排版位置，不量光标元素（光标有动画，量出来会差一行）
+  const FOLLOW_AT = 0.2;
+  let lastRowY = null;
+  function keepInView() {
+    const mb = api.renderer.boundsLookup && api.renderer.boundsLookup.findMasterBarByIndex(currentBar);
+    if (!mb) return;
+    const rowY = Math.round(mb.realBounds.y + document.getElementById("at").getBoundingClientRect().top + window.scrollY);
+    if (rowY === lastRowY) return;   // 同一行里不动
+    lastRowY = rowY;
+    const header = document.querySelector("header").getBoundingClientRect().height;
+    const at = Math.max(header + 8, window.innerHeight * FOLLOW_AT);
+    const top = Math.max(0, rowY - at);   // 跳得远（点了别的小节）直接到位，逐行往下时平滑滚
+    window.scrollTo({ top, behavior: Math.abs(top - window.scrollY) > window.innerHeight ? "auto" : "smooth" });
+  }
+  // 正在播放（合成音或参考音轨）时每 150 毫秒看一眼当前小节在哪一行，换行了才翻
+  setInterval(() => {
+    const synth = api.playerState === alphaTab.synth.PlayerState.Playing;
+    const ref = refs.some((r) => r.audio && !r.audio.paused);
+    if (synth || ref) keepInView(); else lastRowY = null;
+  }, 150);
   const status = document.getElementById("status");
   if (location.protocol === "file:") {   // 直接双击打开的文件：浏览器不让读字体 / 音色库，谱子出不来
     const m = location.pathname.match(/\/songs\/.*$/);
@@ -277,8 +299,6 @@ window.REF_DEFAULT = 0;
         const tick = tickAt(audio.currentTime);
         if (tick !== null) api.tickPosition = tick;
         const bar = barAt(audio.currentTime)[0];
-        // 合成器没在放时 alphaTab 不会自己翻页：每进一个新小节，等光标挪过去（下一帧）再把页面滚到光标所在那一行
-        if (bar !== currentBar) requestAnimationFrame(() => api.scrollToCursor());
         currentBar = bar;
       }
       follow = requestAnimationFrame(step);
